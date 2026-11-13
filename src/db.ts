@@ -1,7 +1,7 @@
-import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
 import { ensureConfigDir } from './config.ts';
+import { restrictPrivateFileBestEffort } from './permissions.ts';
 
 export type Db = Database.Database;
 
@@ -191,11 +191,7 @@ export function openDb(configDir: string): Db {
   ensureConfigDir(configDir);
   const file = dbPath(configDir);
   const db = new Database(file);
-  try {
-    fs.chmodSync(file, 0o600);
-  } catch {
-    /* best effort */
-  }
+  restrictPrivateFileBestEffort(file);
   db.pragma('journal_mode = WAL');
   db.pragma('busy_timeout = 5000');
   db.pragma('foreign_keys = ON');

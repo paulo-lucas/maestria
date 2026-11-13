@@ -360,7 +360,7 @@ describe('interactive @inquirer/prompts wizard, flags, and fake TTY flows', () =
     });
 
     const tty = new FakeTtyHarness();
-    const run = runInitCommand([], { configDir, homeDir, io: tty.io, servicePlatform: 'win32' });
+    const run = runInitCommand([], { configDir, homeDir, io: tty.io, servicePlatform: 'freebsd' });
 
     await tty.waitFor('Configuration');
     await tty.pressEnter(); // Keep existing config
@@ -402,7 +402,7 @@ describe('interactive @inquirer/prompts wizard, flags, and fake TTY flows', () =
       configDir: env.configDir,
       homeDir: env.homeDir,
       io: tty.io,
-      servicePlatform: 'win32',
+      servicePlatform: 'freebsd',
     });
 
     await tty.waitFor('Maestri data directory:');

@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { expandHome } from './config.ts';
+import { ensurePrivateDir } from './permissions.ts';
 
 export interface MappedWindow {
   id: string;
@@ -285,8 +286,13 @@ export function mapProviderOutput(mapSpec: Obj, rawDoc: unknown, notes: string[]
 
 function buildMinimalEnv(source: Obj, cacheDir: string | null): NodeJS.ProcessEnv {
   const home = os.homedir();
-  const extraPath = [path.join(home, '.local', 'bin'), '/opt/homebrew/bin', '/usr/local/bin'];
-  const basePath = process.env.PATH ? `${extraPath.join(':')}:${process.env.PATH}` : `${extraPath.join(':')}:/usr/bin:/bin`;
+  const isWin = process.platform === 'win32';
+  const extraPath = isWin
+    ? [path.join(home, '.local', 'bin')]
+    : [path.join(home, '.local', 'bin'), '/opt/homebrew/bin', '/usr/local/bin'];
+  const currentPath = process.env.PATH || process.env.Path || '';
+  const defaultFallbackPath = isWin ? '' : '/usr/bin:/bin';
+  const basePath = [...extraPath, currentPath || defaultFallbackPath].filter(Boolean).join(path.delimiter);
   const env: NodeJS.ProcessEnv = {
     PATH: basePath,
     HOME: home,
@@ -294,13 +300,16 @@ function buildMinimalEnv(source: Obj, cacheDir: string | null): NodeJS.ProcessEn
     NO_COLOR: '1',
     LANG: process.env.LANG || 'en_US.UTF-8',
   };
-  for (const key of ['USER', 'LOGNAME', 'LC_ALL', 'TMPDIR', 'SHELL', 'SSH_AUTH_SOCK']) {
+  const passthroughKeys = isWin
+    ? ['USER', 'USERNAME', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'TEMP', 'TMP', 'SystemRoot', 'COMSPEC', 'PATHEXT']
+    : ['USER', 'LOGNAME', 'LC_ALL', 'TMPDIR', 'SHELL', 'SSH_AUTH_SOCK'];
+  for (const key of passthroughKeys) {
     if (process.env[key]) env[key] = process.env[key];
   }
   if (isObj(source.env)) {
     for (const [k, v] of Object.entries(source.env)) {
       if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(k) && typeof v === 'string') {
-        env[k] = v.startsWith('~/') ? expandHome(v, home) : v;
+        env[k] = v.startsWith('~/') || v.startsWith('~\\') ? expandHome(v, home) : v;
       }
     }
   }
@@ -311,7 +320,18 @@ function buildMinimalEnv(source: Obj, cacheDir: string | null): NodeJS.ProcessEn
 }
 
 function resolveExecutable(execSpec: string): string {
-  return execSpec.startsWith('~/') ? expandHome(execSpec) : execSpec;
+  return execSpec.startsWith('~/') || execSpec.startsWith('~\\') ? expandHome(execSpec) : execSpec;
+}
+
+function spawnOptionsFor<T extends readonly ('ignore' | 'pipe')[]>(
+  executable: string,
+  cwd: string,
+  env: NodeJS.ProcessEnv,
+  stdio: [...T],
+) {
+  // On Windows, npm global CLIs (claude.cmd / codex.cmd) are .cmd/.bat shims that require shell: true.
+  const useShell = process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(executable);
+  return { cwd, env, stdio, windowsHide: true, ...(useShell ? { shell: true } : {}) };
 }
 
 async function runCommandSource(source: Obj, executable: string, args: string[], cwd: string, env: NodeJS.ProcessEnv): Promise<unknown> {
@@ -319,14 +339,14 @@ async function runCommandSource(source: Obj, executable: string, args: string[],
   const maxBytes = typeof source.maxOutputBytes === 'number' ? source.maxOutputBytes : 1048576;
 
   return new Promise((resolve, reject) => {
-    const child = spawn(executable, args, { cwd, env, stdio: ['ignore', 'pipe', 'ignore'] });
+    const child = spawn(executable, args, spawnOptionsFor(executable, cwd, env, ['ignore', 'pipe', 'ignore']));
     const chunks: Buffer[] = [];
     let total = 0;
     let settled = false;
     const timer = setTimeout(() => {
       if (!settled) {
         settled = true;
-        child.kill('SIGKILL');
+        child.kill();
         reject(new Error('Provider command timed out'));
       }
     }, timeoutMs);
@@ -344,7 +364,7 @@ async function runCommandSource(source: Obj, executable: string, args: string[],
         if (!settled) {
           settled = true;
           clearTimeout(timer);
-          child.kill('SIGKILL');
+          child.kill();
           reject(new Error('Provider output exceeded limit'));
         }
         return;
@@ -401,7 +421,7 @@ async function runStdioSource(source: Obj, executable: string, args: string[], c
   const outputKey = typeof source.output === 'string' ? source.output : '';
 
   return new Promise((resolve, reject) => {
-    const child = spawn(executable, args, { cwd, env, stdio: ['pipe', 'pipe', 'ignore'] });
+    const child = spawn(executable, args, spawnOptionsFor(executable, cwd, env, ['pipe', 'pipe', 'ignore']));
     const captures = new Map<string, unknown>();
     let stepIdx = 0;
     let buf = Buffer.alloc(0);
@@ -413,7 +433,7 @@ async function runStdioSource(source: Obj, executable: string, args: string[], c
       settled = true;
       clearTimeout(timer);
       try {
-        child.kill('SIGKILL');
+        child.kill();
       } catch {
         /* ignore */
       }
@@ -624,7 +644,7 @@ export async function executeProviderFile(
   let cacheDir: string | null = null;
   if (typeof spec.source.cacheVariable === 'string' && typeof spec.id === 'string') {
     cacheDir = path.join(cacheRoot, spec.id.replace(/[^a-z0-9._-]/gi, '_'));
-    fs.mkdirSync(cacheDir, { recursive: true, mode: 0o700 });
+    ensurePrivateDir(cacheDir);
   }
   const env = buildMinimalEnv(spec.source, cacheDir);
 

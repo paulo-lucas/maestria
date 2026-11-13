@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { hashPassword, verifyPassword } from '../src/auth/password.ts';
 import { loadSecrets, saveSecrets, SecretsError, authFile } from '../src/auth/secrets.ts';
 import { ConfigError, defaultConfig, parseConfig } from '../src/config.ts';
+import { checkPrivateFilePermissions } from '../src/permissions.ts';
 
 describe('password', () => {
   it('hashes with argon2id and verifies', () => {
@@ -28,20 +29,30 @@ describe('secrets file', () => {
   const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'maestria-'));
   const secrets = { passwordHash: 'h', totpSecret: 'S', createdAt: '2026-01-01T00:00:00Z' };
 
-  it('is written with 0600 inside a 0700 directory', () => {
+  it('is written with 0600 inside a 0700 directory on POSIX and loads safely across platforms', () => {
     const dir = path.join(tmp(), 'cfg');
     saveSecrets(dir, secrets);
-    expect(fs.statSync(authFile(dir)).mode & 0o777).toBe(0o600);
-    expect(fs.statSync(dir).mode & 0o777).toBe(0o700);
+    if (process.platform !== 'win32') {
+      expect(fs.statSync(authFile(dir)).mode & 0o777).toBe(0o600);
+      expect(fs.statSync(dir).mode & 0o777).toBe(0o700);
+    }
     expect(loadSecrets(dir)).toEqual(secrets);
   });
 
-  it('returns null when absent and refuses loose permissions', () => {
+  it('returns null when absent, enforces 0600 on POSIX, and skips POSIX mode checks on Windows', () => {
     const dir = tmp();
     expect(loadSecrets(dir)).toBeNull();
     saveSecrets(dir, secrets);
-    fs.chmodSync(authFile(dir), 0o644);
-    expect(() => loadSecrets(dir)).toThrow(SecretsError);
+    if (process.platform !== 'win32') {
+      fs.chmodSync(authFile(dir), 0o644);
+      expect(() => loadSecrets(dir)).toThrow(SecretsError);
+    }
+    expect(() =>
+      checkPrivateFilePermissions('C:\\Users\\alice\\AppData\\Roaming\\maestria\\auth.json', 0o100666, (m) => new SecretsError(m), 'win32'),
+    ).not.toThrow();
+    expect(() =>
+      checkPrivateFilePermissions('/home/alice/.config/maestria/auth.json', 0o100644, (m) => new SecretsError(m), 'linux'),
+    ).toThrow(SecretsError);
   });
 });
 

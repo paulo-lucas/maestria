@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { ensurePrivateDir, writePrivateFileAtomic } from './permissions.ts';
 
 export interface Config {
   /** Directory holding config.json, auth.json and the SQLite database. */
@@ -53,13 +54,34 @@ export interface Config {
   };
 }
 
-export function defaultConfigDir(env: NodeJS.ProcessEnv = process.env): string {
-  return env.MAESTRIA_CONFIG_DIR || path.join(os.homedir(), '.config', 'maestria');
+function pathLibFor(platform: NodeJS.Platform): typeof path.posix | typeof path.win32 {
+  return platform === 'win32' ? path.win32 : path.posix;
 }
 
-export function expandHome(rawPath: string, homeDir: string = os.homedir()): string {
+export function defaultConfigDir(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
+  homeDir: string = os.homedir(),
+): string {
+  const explicit = env.MAESTRIA_CONFIG_DIR?.trim();
+  if (explicit) return explicit;
+  const p = pathLibFor(platform);
+  if (platform === 'win32') {
+    const appData = env.APPDATA?.trim() || p.join(homeDir, 'AppData', 'Roaming');
+    return p.join(appData, 'maestria');
+  }
+  return p.join(homeDir, '.config', 'maestria');
+}
+
+export function expandHome(
+  rawPath: string,
+  homeDir: string = os.homedir(),
+  platform: NodeJS.Platform = process.platform,
+): string {
   if (rawPath === '~') return homeDir;
-  if (rawPath.startsWith('~/')) return path.join(homeDir, rawPath.slice(2));
+  if (rawPath.startsWith('~/') || rawPath.startsWith('~\\')) {
+    return pathLibFor(platform).join(homeDir, rawPath.slice(2));
+  }
   return rawPath;
 }
 
@@ -67,19 +89,32 @@ export function expandHome(rawPath: string, homeDir: string = os.homedir()): str
  * Resolve Maestri's data directory cleanly:
  *   1. `maestriDir` from `config.json` (if provided)
  *   2. `MAESTRI_HOME` environment variable (if non-empty)
- *   3. `~/.maestri`
+ *   3. Default location: `~/.maestri` (or `%APPDATA%\Maestri` on Windows if `~/.maestri` is absent and it has `usage/providers`)
  */
 export function resolveMaestriDir(
   configured?: string,
   env: NodeJS.ProcessEnv = process.env,
   homeDir: string = os.homedir(),
+  platform: NodeJS.Platform = process.platform,
 ): string {
-  const pick = configured?.trim() || env.MAESTRI_HOME?.trim() || path.join(homeDir, '.maestri');
-  const expanded = expandHome(pick, homeDir);
-  if (!path.isAbsolute(expanded)) {
+  const p = pathLibFor(platform);
+  const defaultHomeDot = p.join(homeDir, '.maestri');
+  let pick = configured?.trim() || env.MAESTRI_HOME?.trim() || '';
+  if (!pick) {
+    if (platform === 'win32' && !isDir(defaultHomeDot)) {
+      const appData = env.APPDATA?.trim() || p.join(homeDir, 'AppData', 'Roaming');
+      const winCandidate = p.join(appData, 'Maestri');
+      if (isDir(p.join(winCandidate, 'usage', 'providers')) || isDir(winCandidate)) {
+        pick = winCandidate;
+      }
+    }
+    if (!pick) pick = defaultHomeDot;
+  }
+  const expanded = expandHome(pick, homeDir, platform);
+  if (!p.isAbsolute(expanded)) {
     throw new ConfigError(`config: "maestriDir" must resolve to an absolute path (got "${pick}")`);
   }
-  return path.resolve(expanded);
+  return p.resolve(expanded);
 }
 
 export interface MaestriDirStatus {
@@ -295,9 +330,8 @@ export function parseConfig(
   return cfg;
 }
 
-export function ensureConfigDir(configDir: string): void {
-  fs.mkdirSync(configDir, { recursive: true, mode: 0o700 });
-  fs.chmodSync(configDir, 0o700);
+export function ensureConfigDir(configDir: string, platform: NodeJS.Platform = process.platform): void {
+  ensurePrivateDir(configDir, platform);
 }
 
 export function configFilePath(configDir: string): string {
@@ -317,14 +351,15 @@ export function loadRawConfig(configDir: string = defaultConfigDir()): Record<st
   }
 }
 
-export function saveRawConfig(configDir: string, raw: Record<string, unknown>, env: NodeJS.ProcessEnv = process.env): void {
+export function saveRawConfig(
+  configDir: string,
+  raw: Record<string, unknown>,
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
+): void {
   parseConfig(raw, configDir, env);
-  ensureConfigDir(configDir);
-  const file = configFilePath(configDir);
-  const tmp = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(raw, null, 2) + '\n', { mode: 0o600 });
-  fs.chmodSync(tmp, 0o600);
-  fs.renameSync(tmp, file);
+  ensureConfigDir(configDir, platform);
+  writePrivateFileAtomic(configFilePath(configDir), JSON.stringify(raw, null, 2) + '\n', platform);
 }
 
 export function loadConfig(configDir: string = defaultConfigDir(), env: NodeJS.ProcessEnv = process.env): Config {

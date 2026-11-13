@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ensureConfigDir } from '../config.ts';
+import { checkPrivateFilePermissions, writePrivateFileAtomic } from '../permissions.ts';
 
 export interface AuthSecrets {
   passwordHash: string;
@@ -14,18 +15,14 @@ export function authFile(configDir: string): string {
 
 export class SecretsError extends Error {}
 
-/** Write auth.json atomically with 0600 permissions. */
-export function saveSecrets(configDir: string, secrets: AuthSecrets): void {
-  ensureConfigDir(configDir);
-  const file = authFile(configDir);
-  const tmp = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(secrets, null, 2) + '\n', { mode: 0o600 });
-  fs.chmodSync(tmp, 0o600);
-  fs.renameSync(tmp, file);
+/** Write auth.json atomically with 0600 permissions on POSIX. */
+export function saveSecrets(configDir: string, secrets: AuthSecrets, platform: NodeJS.Platform = process.platform): void {
+  ensureConfigDir(configDir, platform);
+  writePrivateFileAtomic(authFile(configDir), JSON.stringify(secrets, null, 2) + '\n', platform);
 }
 
-/** Read auth.json. Refuses files readable by group/others and malformed contents. Returns null if absent. */
-export function loadSecrets(configDir: string): AuthSecrets | null {
+/** Read auth.json. Refuses loose permissions on POSIX and malformed contents. Returns null if absent. */
+export function loadSecrets(configDir: string, platform: NodeJS.Platform = process.platform): AuthSecrets | null {
   const file = authFile(configDir);
   let st: fs.Stats;
   try {
@@ -34,9 +31,7 @@ export function loadSecrets(configDir: string): AuthSecrets | null {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null;
     throw err;
   }
-  if (st.mode & 0o077) {
-    throw new SecretsError(`${file} has permissions ${(st.mode & 0o777).toString(8)}; it must be 600 (run: chmod 600 ${file})`);
-  }
+  checkPrivateFilePermissions(file, st.mode, (msg) => new SecretsError(msg), platform);
   let parsed: unknown;
   try {
     parsed = JSON.parse(fs.readFileSync(file, 'utf8'));

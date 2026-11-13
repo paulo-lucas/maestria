@@ -16,7 +16,7 @@ export function defaultCommandRunner(argv: readonly string[]): Promise<CommandRe
   const [cmd, ...args] = argv;
   if (!cmd) return Promise.resolve({ ok: true, code: 0, stderr: '' });
   return new Promise((resolve) => {
-    execFile(cmd, args, { timeout: 15_000, maxBuffer: 64 * 1024 }, (err, _stdout, stderr) => {
+    execFile(cmd, args, { timeout: 15_000, maxBuffer: 64 * 1024, windowsHide: true }, (err, _stdout, stderr) => {
       if (!err) {
         resolve({ ok: true, code: 0, stderr: String(stderr ?? '').trim() });
         return;

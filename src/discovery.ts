@@ -85,8 +85,9 @@ export function discoverMaestriWorkspaces(maestriDir: string, homeDir: string = 
     if (!name || !rawDir) continue;
 
     const absDir = path.resolve(expandHome(rawDir, homeDir));
-    if (!path.isAbsolute(absDir) || seenPaths.has(absDir)) continue;
-    seenPaths.add(absDir);
+    const dedupKey = process.platform === 'win32' ? absDir.toLowerCase() : absDir;
+    if (!path.isAbsolute(absDir) || seenPaths.has(dedupKey)) continue;
+    seenPaths.add(dedupKey);
 
     let id = slugifyWorkspaceId(name) || `ws-${found.length + 1}`;
     let suffix = 2;

@@ -29,7 +29,7 @@ Usage:
                                     Detect Maestri workspaces, set up auth, and install Maestro skill
   maestria serve                    Start the panel (127.0.0.1 only)
   maestria service install|uninstall|start|stop|restart|status [--json]
-                                    Manage the background user service (launchd / systemd --user)
+                                    Manage the background user service (launchd / systemd --user / Task Scheduler)
   maestria auth setup [--force]     Set the password and enrol an authenticator app (TOTP)
   maestria auth logout-all          Invalidate every panel session
   maestria tunnel on|off|status     Enable/disable the tunnel locally or inspect kill-switch state
@@ -42,7 +42,7 @@ Usage:
   maestria wait [--workspace|-w <ws>] [--cursor <name>] [--since <id>] [--from-now] [--timeout <sec>] [--json]
   maestria status [--workspace|-w <ws>] [--json]
 
-Config directory: $MAESTRIA_CONFIG_DIR or ~/.config/maestria
+Config directory: $MAESTRIA_CONFIG_DIR, %APPDATA%\\maestria (Windows), or ~/.config/maestria
 `;
 
 async function serve(): Promise<void> {

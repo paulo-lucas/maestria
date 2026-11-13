@@ -31,13 +31,13 @@ Re-running `maestria init` is idempotent: existing config, workspaces, auth cred
 
 What `maestria init` does:
 
-1. Creates your config directory (`$MAESTRIA_CONFIG_DIR` or `~/.config/maestria`, mode `0700`).
-2. Detects and validates Maestri's data directory (priority order: `maestriDir` in `config.json` > `MAESTRI_HOME` env > `~/.maestri`), verifying that `usage/providers` exists.
-3. Discovers your Maestri workspaces and roadmaps (`docs/roadmap.md`, `ROADMAP.md`, etc.) and writes `~/.config/maestria/workspaces.json`.
+1. Creates your config directory (`$MAESTRIA_CONFIG_DIR`, `%APPDATA%\maestria` on Windows, or `~/.config/maestria` with mode `0700` on macOS/Linux; files inside are restricted to `0600` on POSIX and inherit your user profile ACL on Windows).
+2. Detects and validates Maestri's data directory (priority order: `maestriDir` in `config.json` > `MAESTRI_HOME` env > `~/.maestri`, plus `%APPDATA%\Maestri` on Windows), verifying that `usage/providers` exists.
+3. Discovers your Maestri workspaces and roadmaps (`docs/roadmap.md`, `ROADMAP.md`, etc.) and writes `workspaces.json` in your config directory.
 4. Runs `maestria auth setup` (argon2id password + TOTP authenticator QR code).
 5. Optionally installs the Maestro protocol skill (`SKILL.md`) for Claude Code (`~/.claude/skills/maestria/`) and/or Antigravity (`~/.gemini/.../skills/maestria/`).
 
-For local HTTP testing without HTTPS (never use this when exposed on the internet), create `~/.config/maestria/config.json` with:
+For local HTTP testing without HTTPS (never use this when exposed on the internet), create `config.json` in your config directory with:
 
 ```json
 {
@@ -58,16 +58,17 @@ Then open `http://127.0.0.1:4777` (only listens on `127.0.0.1`).
 `maestria init` offers at the end to install and start a background user service so the panel starts automatically on login and restarts if it crashes. You can manage it anytime with:
 
 ```sh
-maestria service install    # install LaunchAgent (macOS) or systemd --user unit (Linux)
+maestria service install    # install LaunchAgent (macOS), systemd --user unit (Linux), or Task Scheduler task (Windows)
 maestria service start      # start the background service
 maestria service stop       # stop the background service
 maestria service restart    # reload/restart (e.g. after updating maestria)
 maestria service status     # inspect service state and panel reachability
-maestria service uninstall  # remove the LaunchAgent / systemd unit
+maestria service uninstall  # remove the service registration and generated script/unit
 ```
 
 - **macOS (`launchd`):** Installs `~/Library/LaunchAgents/dev.maestria.panel.plist` (`RunAtLoad` + `KeepAlive`) pointing to your current `node` and `dist/cli.js` paths, with logs in `~/Library/Logs/maestria/panel.{out,err}.log` (or customize [`docs/launchd.plist.example`](docs/launchd.plist.example)).
 - **Linux (`systemd --user`):** Installs `~/.config/systemd/user/maestria.service` (`Restart=always`) and enables it for user login sessions.
+- **Windows (Task Scheduler):** Generates `%APPDATA%\maestria\maestria-service.cmd` and registers user-level Scheduled Task `MaestriaPanel` (`ONLOGON`, limited privileges — no Administrator prompt required), writing logs to `%APPDATA%\maestria\logs\panel.log`. Alternatively, wrap `node <path-to-dist>\cli.js serve` with [NSSM](https://nssm.cc/) or run `maestria serve` inside Windows Terminal.
 - You can also check whether the panel is reachable from any workspace via `maestria status`.
 
 ## Secure Remote Exposure (Cloudflare Tunnel + Access)
@@ -76,7 +77,7 @@ Maestria binds strictly to `127.0.0.1` (`port` defaults to `4777`). To reach it 
 
 1. Point a **Cloudflare Tunnel** (`cloudflared`) hostname (e.g. `panel.example.com`) at `http://127.0.0.1:4777`.
 2. Protect that hostname with **Cloudflare Access** (an email/identity policy at Cloudflare's edge before traffic ever hits your Mac).
-3. Configure `~/.config/maestria/config.json`:
+3. Configure `config.json` in your config directory (`~/.config/maestria/config.json` on macOS/Linux, `%APPDATA%\maestria\config.json` on Windows):
 
 ```json
 {
@@ -150,6 +151,27 @@ maestria tunnel on
 ## Maestro Protocol
 
 See [`docs/protocol.md`](docs/protocol.md) and [`skills/maestria-maestro/SKILL.md`](skills/maestria-maestro/SKILL.md).
+
+## Cross-Platform CI Matrix
+
+If you run CI for forks or contributions, test Maestria across macOS, Linux, and Windows using a matrix on Node 24:
+
+```yaml
+strategy:
+  matrix:
+    os: [ubuntu-latest, macos-latest, windows-latest]
+steps:
+  - uses: actions/checkout@v4
+  - uses: pnpm/action-setup@v4
+  - uses: actions/setup-node@v4
+    with:
+      node-version: 24
+      cache: pnpm
+  - run: pnpm install --frozen-lockfile
+  - run: pnpm typecheck
+  - run: pnpm test
+  - run: pnpm build
+```
 
 ## License
 

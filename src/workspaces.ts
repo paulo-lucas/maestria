@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ensureConfigDir } from './config.ts';
+import { writePrivateFileAtomic } from './permissions.ts';
 
 export interface Workspace {
   id: string;
@@ -72,6 +73,7 @@ export function parseWorkspaces(raw: unknown): Workspace[] {
       throw new WorkspaceError(`workspaces[${i}].path: must be an absolute path`);
     }
     const resolvedPath = path.resolve(rawPath);
+    const dedupPathKey = process.platform === 'win32' ? resolvedPath.toLowerCase() : resolvedPath;
 
     let id: string;
     if (item.id !== undefined) {
@@ -84,9 +86,9 @@ export function parseWorkspaces(raw: unknown): Workspace[] {
       throw new WorkspaceError(`workspaces[${i}].id: must match ${ID_RE.source}`);
     }
     if (seenIds.has(id)) throw new WorkspaceError(`workspaces: duplicate id "${id}"`);
-    if (seenPaths.has(resolvedPath)) throw new WorkspaceError(`workspaces: duplicate path "${resolvedPath}"`);
+    if (seenPaths.has(dedupPathKey)) throw new WorkspaceError(`workspaces: duplicate path "${resolvedPath}"`);
     seenIds.add(id);
-    seenPaths.add(resolvedPath);
+    seenPaths.add(dedupPathKey);
 
     let roadmapPath: string | null = null;
     if (item.roadmapPath !== undefined && item.roadmapPath !== null) {
@@ -143,11 +145,7 @@ export function loadWorkspaces(configDir: string): Workspace[] {
 export function saveWorkspaces(configDir: string, workspaces: readonly Partial<Workspace>[]): void {
   const validated = parseWorkspaces(workspaces);
   ensureConfigDir(configDir);
-  const file = workspacesFile(configDir);
-  const tmp = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(validated, null, 2) + '\n', { mode: 0o600 });
-  fs.chmodSync(tmp, 0o600);
-  fs.renameSync(tmp, file);
+  writePrivateFileAtomic(workspacesFile(configDir), JSON.stringify(validated, null, 2) + '\n');
 }
 
 function safeRealpath(p: string): string {
@@ -158,8 +156,13 @@ function safeRealpath(p: string): string {
   }
 }
 
-function isInsideDir(target: string, dir: string): boolean {
-  return target === dir || target.startsWith(dir.endsWith(path.sep) ? dir : dir + path.sep);
+export function isInsideDir(target: string, dir: string, platform: NodeJS.Platform = process.platform): boolean {
+  const t = platform === 'win32' ? target.toLowerCase() : target;
+  const d = platform === 'win32' ? dir.toLowerCase() : dir;
+  const sep = platform === 'win32' ? '\\' : '/';
+  if (t === d) return true;
+  const prefix = d.endsWith(sep) || d.endsWith('/') ? d : d + sep;
+  return t.startsWith(prefix);
 }
 
 export function resolveWorkspace(

@@ -51,20 +51,23 @@ export async function defaultCliNotifier(
       ? `${top.providerName} ${top.windowTitle} reached ${Math.round(top.usedPercent)}% (threshold ${top.thresholdPercent}%)`
       : 'Usage threshold reached';
     try {
-      await execFileAsync('maestri', ['notify', `Maestria standby: ${summary}`], { timeout: 10_000 });
+      await execFileAsync('maestri', ['notify', `Maestria standby: ${summary}`], { timeout: 10_000, windowsHide: true });
     } catch {
       /* maestri CLI optional */
     }
     for (const agent of agents) {
       try {
-        await execFileAsync('maestri', ['ask', agent, '--raw', '\\e'], { timeout: 10_000 });
+        await execFileAsync('maestri', ['ask', agent, '--raw', '\\e'], { timeout: 10_000, windowsHide: true });
       } catch {
         /* best effort */
       }
     }
   } else {
     try {
-      await execFileAsync('maestri', ['notify', 'Maestria: usage dropped below standby threshold; resuming.'], { timeout: 10_000 });
+      await execFileAsync('maestri', ['notify', 'Maestria: usage dropped below standby threshold; resuming.'], {
+        timeout: 10_000,
+        windowsHide: true,
+      });
     } catch {
       /* maestri CLI optional */
     }

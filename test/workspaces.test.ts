@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  isInsideDir,
   loadWorkspaces,
   parseWorkspaces,
   resolveWorkspace,
@@ -20,8 +21,8 @@ describe('workspaces config', () => {
       { id: 'docs', name: 'Docs Site', path: '/tmp/docs', roadmapPath: 'ROADMAP.md', maestroAgent: 'Bulbasaur', color: '#2563EB' },
     ]);
     expect(list).toEqual([
-      { id: 'my-app', name: 'My App', path: '/tmp/my-app', roadmapPath: null, maestroAgent: 'Maestro', color: WORKSPACE_PALETTE[0] },
-      { id: 'docs', name: 'Docs Site', path: '/tmp/docs', roadmapPath: 'ROADMAP.md', maestroAgent: 'Bulbasaur', color: '#2563eb' },
+      { id: 'my-app', name: 'My App', path: path.resolve('/tmp/my-app'), roadmapPath: null, maestroAgent: 'Maestro', color: WORKSPACE_PALETTE[0] },
+      { id: 'docs', name: 'Docs Site', path: path.resolve('/tmp/docs'), roadmapPath: 'ROADMAP.md', maestroAgent: 'Bulbasaur', color: '#2563eb' },
     ]);
   });
 
@@ -53,7 +54,9 @@ describe('workspaces config', () => {
     expect(reg.list()).toEqual([]);
 
     saveWorkspaces(dir, [{ id: 'app', name: 'App', path: '/tmp/app', roadmapPath: null, maestroAgent: 'Maestro' }]);
-    expect(fs.statSync(workspacesFile(dir)).mode & 0o777).toBe(0o600);
+    if (process.platform !== 'win32') {
+      expect(fs.statSync(workspacesFile(dir)).mode & 0o777).toBe(0o600);
+    }
     expect(reg.list()).toHaveLength(1);
     expect(reg.get('app')?.name).toBe('App');
     expect(reg.get('app')?.color).toBe(WORKSPACE_PALETTE[0]);
@@ -78,5 +81,8 @@ describe('workspace resolution', () => {
     expect(resolveWorkspace(list, { cwd: '/Users/dev/work/sub/app' }).id).toBe('nested');
     expect(resolveWorkspace(list, { cwd: '/Users/dev/work/sub/app/src' }).id).toBe('nested');
     expect(() => resolveWorkspace(list, { cwd: '/Users/dev/workspace' })).toThrow(WorkspaceError);
+
+    expect(isInsideDir('c:\\Users\\Alice\\Repo\\src', 'C:\\Users\\Alice\\Repo', 'win32')).toBe(true);
+    expect(isInsideDir('C:\\Users\\Alice\\Repo2', 'C:\\Users\\Alice\\Repo', 'win32')).toBe(false);
   });
 });

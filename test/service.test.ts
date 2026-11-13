@@ -15,8 +15,11 @@ import {
   launchdPlistPath,
   renderLaunchdPlist,
   renderSystemdUnit,
+  renderWindowsServiceScript,
   ServiceError,
   systemdUnitPath,
+  WINDOWS_TASK_NAME,
+  windowsServiceScriptPath,
 } from '../src/service.ts';
 
 function makeCaptureStream() {
@@ -192,11 +195,96 @@ describe('maestria service unit generation, lifecycle, and server reachability',
       runServiceCommand(['install'], {
         configDir,
         homeDir,
-        platform: 'win32',
+        platform: 'freebsd',
         cliPath,
         stdout: makeCaptureStream().stream,
       }),
     ).rejects.toThrow(ServiceError);
+  });
+
+  it('renders and manages Windows Task Scheduler script and lifecycle via mocked schtasks', async () => {
+    const scriptBody = renderWindowsServiceScript({
+      nodePath: 'C:\\Program Files\\nodejs\\node.exe',
+      cliPath: 'C:\\tools\\maestria\\dist\\cli.js',
+      configDir: 'C:\\Users\\alice\\AppData\\Roaming\\maestria',
+      env: { PATH: 'C:\\Windows\\System32', MAESTRI_HOME: 'C:\\Users\\alice\\.maestri' },
+    });
+    expect(scriptBody).toContain('set "MAESTRIA_CONFIG_DIR=C:\\Users\\alice\\AppData\\Roaming\\maestria"');
+    expect(scriptBody).toContain('set "MAESTRI_HOME=C:\\Users\\alice\\.maestri"');
+    expect(scriptBody).toContain('"C:\\Program Files\\nodejs\\node.exe" "C:\\tools\\maestria\\dist\\cli.js" serve');
+    expect(scriptBody).toContain('C:\\Users\\alice\\AppData\\Roaming\\maestria\\logs\\panel.log');
+
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'maestria-svc-win-'));
+    const configDir = path.join(tmp, 'cfg');
+    const cliPath = path.join(tmp, 'cli.js');
+    fs.writeFileSync(cliPath, '// cli\n');
+
+    const calls: string[][] = [];
+    let taskExists = false;
+    let taskRunning = false;
+    const runner = async (argv: readonly string[]) => {
+      calls.push([...argv]);
+      const action = argv[1];
+      if (action === '/Create') {
+        taskExists = true;
+        return { ok: true, code: 0, stdout: '', stderr: '' };
+      }
+      if (action === '/Run') {
+        taskRunning = true;
+        return { ok: true, code: 0, stdout: '', stderr: '' };
+      }
+      if (action === '/End') {
+        taskRunning = false;
+        return { ok: true, code: 0, stdout: '', stderr: '' };
+      }
+      if (action === '/Delete') {
+        taskExists = false;
+        taskRunning = false;
+        return { ok: true, code: 0, stdout: '', stderr: '' };
+      }
+      if (action === '/Query') {
+        if (!taskExists) return { ok: false, code: 1, stdout: '', stderr: 'ERROR: cannot find the file' };
+        return {
+          ok: true,
+          code: 0,
+          stdout: `TaskName: \\${WINDOWS_TASK_NAME}\nStatus: ${taskRunning ? 'Running' : 'Ready'}\n`,
+          stderr: '',
+        };
+      }
+      return { ok: false, code: 1, stdout: '', stderr: 'unexpected' };
+    };
+
+    const opts = {
+      configDir,
+      platform: 'win32' as const,
+      nodePath: 'C:\\Program Files\\nodejs\\node.exe',
+      cliPath,
+      runner,
+      reachabilityCheck: async (h: string, p: number) => ({ reachable: taskRunning, url: `http://${h}:${p}` }),
+      stdout: makeCaptureStream().stream,
+    };
+
+    await runServiceCommand(['install'], opts);
+    const scriptFile = windowsServiceScriptPath(configDir);
+    expect(fs.existsSync(scriptFile)).toBe(true);
+    expect(calls[0]).toContain('/Create');
+    expect(calls[0]).toContain(WINDOWS_TASK_NAME);
+
+    await runServiceCommand(['start'], opts);
+    const statusOut = makeCaptureStream();
+    await runServiceCommand(['status'], { ...opts, stdout: statusOut.stream });
+    expect(statusOut.read()).toContain('Service (task-scheduler): installed');
+    expect(statusOut.read()).toContain('State: running');
+
+    await runServiceCommand(['stop'], opts);
+    expect(taskRunning).toBe(false);
+
+    await runServiceCommand(['restart'], opts);
+    expect(taskRunning).toBe(true);
+
+    await runServiceCommand(['uninstall'], opts);
+    expect(fs.existsSync(scriptFile)).toBe(false);
+    expect(taskExists).toBe(false);
   });
 
   it('checkServerReachable and maestria status report live vs down panel server accurately', async () => {

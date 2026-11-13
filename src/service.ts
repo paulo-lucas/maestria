@@ -10,6 +10,7 @@ export class ServiceError extends Error {}
 
 export const LAUNCHD_LABEL = 'dev.maestria.panel';
 export const SYSTEMD_UNIT = 'maestria.service';
+export const WINDOWS_TASK_NAME = 'MaestriaPanel';
 
 export interface ServiceCmdResult {
   ok: boolean;
@@ -24,7 +25,7 @@ export function defaultServiceRunner(argv: readonly string[]): Promise<ServiceCm
   const [cmd, ...args] = argv;
   if (!cmd) return Promise.resolve({ ok: true, code: 0, stdout: '', stderr: '' });
   return new Promise((resolve) => {
-    execFile(cmd, args, { timeout: 15_000, maxBuffer: 128 * 1024 }, (err, stdout, stderr) => {
+    execFile(cmd, args, { timeout: 15_000, maxBuffer: 128 * 1024, windowsHide: true }, (err, stdout, stderr) => {
       if (!err) {
         resolve({
           ok: true,
@@ -77,6 +78,14 @@ export function systemdUnitPath(homeDir: string = os.homedir(), env: NodeJS.Proc
   return path.join(base, 'systemd', 'user', SYSTEMD_UNIT);
 }
 
+export function windowsServiceScriptPath(configDir: string): string {
+  return path.join(configDir, 'maestria-service.cmd');
+}
+
+export function windowsLogDir(configDir: string): string {
+  return path.join(configDir, 'logs');
+}
+
 function escapeXml(raw: string): string {
   return raw
     .replaceAll('&', '&amp;')
@@ -89,19 +98,20 @@ function escapeXml(raw: string): string {
 function buildServiceEnv(opts: {
   nodePath: string;
   configDir: string;
+  platform: SupportedPlatform;
   env?: NodeJS.ProcessEnv;
 }): Record<string, string> {
   const src = opts.env ?? process.env;
-  const nodeDir = path.dirname(opts.nodePath);
+  const p = opts.platform === 'win32' ? path.win32 : path.posix;
+  const delim = opts.platform === 'win32' ? ';' : ':';
+  const nodeDir = p.dirname(opts.nodePath);
+  const rawPath = src.PATH || src.Path || '';
   const pathParts = [
     nodeDir,
-    ...(src.PATH ? src.PATH.split(path.delimiter) : []),
-    '/opt/homebrew/bin',
-    '/usr/local/bin',
-    '/usr/bin',
-    '/bin',
+    ...(rawPath ? rawPath.split(delim) : []),
+    ...(opts.platform === 'win32' ? [] : ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin']),
   ].filter(Boolean);
-  const uniquePath = Array.from(new Set(pathParts)).join(':');
+  const uniquePath = Array.from(new Set(pathParts)).join(delim);
 
   const out: Record<string, string> = {
     PATH: uniquePath,
@@ -122,7 +132,7 @@ export function renderLaunchdPlist(opts: {
 }): string {
   const homeDir = opts.homeDir ?? os.homedir();
   const logDir = launchdLogDir(homeDir);
-  const envVars = buildServiceEnv({ nodePath: opts.nodePath, configDir: opts.configDir, env: opts.env });
+  const envVars = buildServiceEnv({ nodePath: opts.nodePath, configDir: opts.configDir, platform: 'darwin', env: opts.env });
   const envEntries = Object.entries(envVars)
     .map(([k, v]) => `    <key>${escapeXml(k)}</key>\n    <string>${escapeXml(v)}</string>`)
     .join('\n');
@@ -168,7 +178,7 @@ export function renderSystemdUnit(opts: {
   configDir: string;
   env?: NodeJS.ProcessEnv;
 }): string {
-  const envVars = buildServiceEnv({ nodePath: opts.nodePath, configDir: opts.configDir, env: opts.env });
+  const envVars = buildServiceEnv({ nodePath: opts.nodePath, configDir: opts.configDir, platform: 'linux', env: opts.env });
   const envLines = Object.entries(envVars).map(([k, v]) => `Environment=${escapeSystemdArg(`${k}=${v}`)}`);
 
   return [
@@ -187,6 +197,33 @@ export function renderSystemdUnit(opts: {
     'WantedBy=default.target',
     '',
   ].join('\n');
+}
+
+function escapeCmdValue(raw: string): string {
+  return raw.replaceAll('%', '%%').replaceAll('"', '');
+}
+
+export function renderWindowsServiceScript(opts: {
+  nodePath: string;
+  cliPath: string;
+  configDir: string;
+  logDir?: string;
+  env?: NodeJS.ProcessEnv;
+}): string {
+  const logDir = opts.logDir ?? windowsLogDir(opts.configDir);
+  const envVars = buildServiceEnv({ nodePath: opts.nodePath, configDir: opts.configDir, platform: 'win32', env: opts.env });
+  const envLines = Object.entries(envVars).map(([k, v]) => `set "${k}=${escapeCmdValue(v)}"`);
+  const logFile = path.win32.join(logDir, 'panel.log');
+
+  return [
+    '@echo off',
+    'setlocal',
+    `set "MAESTRIA_LOG_DIR=${escapeCmdValue(logDir)}"`,
+    'if not exist "%MAESTRIA_LOG_DIR%" mkdir "%MAESTRIA_LOG_DIR%"',
+    ...envLines,
+    `"${escapeCmdValue(opts.nodePath)}" "${escapeCmdValue(opts.cliPath)}" serve >> "${escapeCmdValue(logFile)}" 2>&1`,
+    '',
+  ].join('\r\n');
 }
 
 export interface ServerReachability {
@@ -226,16 +263,16 @@ export function checkServerReachable(
   });
 }
 
-export type SupportedPlatform = 'darwin' | 'linux';
+export type SupportedPlatform = 'darwin' | 'linux' | 'win32';
 
 export function isServicePlatformSupported(platform: NodeJS.Platform = process.platform): platform is SupportedPlatform {
-  return platform === 'darwin' || platform === 'linux';
+  return platform === 'darwin' || platform === 'linux' || platform === 'win32';
 }
 
 function assertSupportedPlatform(platform: NodeJS.Platform): SupportedPlatform {
-  if (platform === 'darwin' || platform === 'linux') return platform;
+  if (platform === 'darwin' || platform === 'linux' || platform === 'win32') return platform;
   throw new ServiceError(
-    `Background service management is supported on macOS (launchd) and Linux (systemd --user), not "${platform}". Run "maestria serve" directly.`,
+    `Background service management is supported on macOS (launchd), Linux (systemd --user), and Windows (Task Scheduler), not "${platform}". Run "maestria serve" directly.`,
   );
 }
 
@@ -255,7 +292,7 @@ function resolveServiceContext(opts: ServiceOpts) {
   const platform = assertSupportedPlatform(opts.platform ?? process.platform);
   const env = opts.env ?? process.env;
   const homeDir = opts.homeDir ?? os.homedir();
-  const configDir = opts.configDir ?? defaultConfigDir(env);
+  const configDir = opts.configDir ?? defaultConfigDir(env, platform, homeDir);
   const nodePath = opts.nodePath ?? process.execPath;
   const cliPath = opts.cliPath ?? resolveCliEntrypoint();
   const uid = opts.uid ?? process.getuid?.() ?? 501;
@@ -267,7 +304,10 @@ export function serviceUnitFile(opts: ServiceOpts = {}): string {
   const platform = assertSupportedPlatform(opts.platform ?? process.platform);
   const env = opts.env ?? process.env;
   const homeDir = opts.homeDir ?? os.homedir();
-  return platform === 'darwin' ? launchdPlistPath(homeDir) : systemdUnitPath(homeDir, env);
+  if (platform === 'darwin') return launchdPlistPath(homeDir);
+  if (platform === 'linux') return systemdUnitPath(homeDir, env);
+  const configDir = opts.configDir ?? defaultConfigDir(env, platform, homeDir);
+  return windowsServiceScriptPath(configDir);
 }
 
 export function isServiceInstalled(opts: ServiceOpts = {}): boolean {
@@ -278,7 +318,7 @@ export function isServiceInstalled(opts: ServiceOpts = {}): boolean {
 
 export interface ServiceStatusReport {
   platform: SupportedPlatform;
-  manager: 'launchd' | 'systemd-user';
+  manager: 'launchd' | 'systemd-user' | 'task-scheduler';
   unitPath: string;
   logDir: string | null;
   installed: boolean;
@@ -312,6 +352,41 @@ export async function installService(opts: ServiceOpts = {}): Promise<{ unitPath
       { mode: 0o644 },
     );
     return { unitPath: plist, logDir };
+  }
+
+  if (ctx.platform === 'win32') {
+    const script = windowsServiceScriptPath(ctx.configDir);
+    const logDir = windowsLogDir(ctx.configDir);
+    fs.mkdirSync(path.dirname(script), { recursive: true });
+    fs.mkdirSync(logDir, { recursive: true });
+    fs.writeFileSync(
+      script,
+      renderWindowsServiceScript({
+        nodePath: ctx.nodePath,
+        cliPath: ctx.cliPath,
+        configDir: ctx.configDir,
+        logDir,
+        env: ctx.env,
+      }),
+      'utf8',
+    );
+    const create = await ctx.runner([
+      'schtasks',
+      '/Create',
+      '/TN',
+      WINDOWS_TASK_NAME,
+      '/TR',
+      `"${script}"`,
+      '/SC',
+      'ONLOGON',
+      '/RL',
+      'LIMITED',
+      '/F',
+    ]);
+    if (!create.ok) {
+      throw new ServiceError(`schtasks /Create failed: ${create.stderr || 'unknown error'}`);
+    }
+    return { unitPath: script, logDir };
   }
 
   const unit = systemdUnitPath(ctx.homeDir, ctx.env);
@@ -360,6 +435,12 @@ export async function startService(opts: ServiceOpts = {}): Promise<void> {
     return;
   }
 
+  if (ctx.platform === 'win32') {
+    const run = await ctx.runner(['schtasks', '/Run', '/TN', WINDOWS_TASK_NAME]);
+    if (!run.ok) throw new ServiceError(`schtasks /Run failed: ${run.stderr || 'unknown error'}`);
+    return;
+  }
+
   const res = await ctx.runner(['systemctl', '--user', 'start', SYSTEMD_UNIT]);
   if (!res.ok) throw new ServiceError(`systemctl --user start failed: ${res.stderr || 'unknown error'}`);
 }
@@ -379,6 +460,16 @@ export async function stopService(opts: ServiceOpts = {}): Promise<{ stopped: bo
         throw new ServiceError(`launchctl bootout failed: ${bootout.stderr || 'unknown error'}`);
       }
     }
+    return { stopped: true };
+  }
+
+  if (ctx.platform === 'win32') {
+    const probe = await ctx.runner(['schtasks', '/Query', '/TN', WINDOWS_TASK_NAME, '/FO', 'LIST']);
+    if (!probe.ok || !/Status:\s*(?:Running|Queued)/i.test(probe.stdout)) {
+      return { stopped: false };
+    }
+    const end = await ctx.runner(['schtasks', '/End', '/TN', WINDOWS_TASK_NAME]);
+    if (!end.ok) throw new ServiceError(`schtasks /End failed: ${end.stderr || 'unknown error'}`);
     return { stopped: true };
   }
 
@@ -409,6 +500,13 @@ export async function restartService(opts: ServiceOpts = {}): Promise<void> {
     return;
   }
 
+  if (ctx.platform === 'win32') {
+    await ctx.runner(['schtasks', '/End', '/TN', WINDOWS_TASK_NAME]);
+    const run = await ctx.runner(['schtasks', '/Run', '/TN', WINDOWS_TASK_NAME]);
+    if (!run.ok) throw new ServiceError(`schtasks /Run failed: ${run.stderr || 'unknown error'}`);
+    return;
+  }
+
   const res = await ctx.runner(['systemctl', '--user', 'restart', SYSTEMD_UNIT]);
   if (!res.ok) throw new ServiceError(`systemctl --user restart failed: ${res.stderr || 'unknown error'}`);
 }
@@ -423,6 +521,17 @@ export async function uninstallService(opts: ServiceOpts = {}): Promise<{ remove
     await ctx.runner(['launchctl', 'bootout', target]);
     fs.rmSync(unit, { force: true });
     return { removed: existed, unitPath: unit };
+  }
+
+  if (ctx.platform === 'win32') {
+    await ctx.runner(['schtasks', '/End', '/TN', WINDOWS_TASK_NAME]);
+    const probe = await ctx.runner(['schtasks', '/Query', '/TN', WINDOWS_TASK_NAME, '/FO', 'LIST']);
+    if (probe.ok) {
+      const del = await ctx.runner(['schtasks', '/Delete', '/TN', WINDOWS_TASK_NAME, '/F']);
+      if (!del.ok) throw new ServiceError(`schtasks /Delete failed: ${del.stderr || 'unknown error'}`);
+    }
+    fs.rmSync(unit, { force: true });
+    return { removed: existed || probe.ok, unitPath: unit };
   }
 
   await ctx.runner(['systemctl', '--user', 'disable', '--now', SYSTEMD_UNIT]);
@@ -449,6 +558,22 @@ export async function getServiceStatus(opts: ServiceOpts = {}): Promise<ServiceS
       manager: 'launchd',
       unitPath: unit,
       logDir: launchdLogDir(ctx.homeDir),
+      installed,
+      loaded,
+      running,
+      server,
+    };
+  }
+
+  if (ctx.platform === 'win32') {
+    const probe = await ctx.runner(['schtasks', '/Query', '/TN', WINDOWS_TASK_NAME, '/FO', 'LIST']);
+    const loaded = probe.ok;
+    const running = (loaded && /Status:\s*Running/i.test(probe.stdout)) || server.reachable;
+    return {
+      platform: 'win32',
+      manager: 'task-scheduler',
+      unitPath: unit,
+      logDir: windowsLogDir(ctx.configDir),
       installed,
       loaded,
       running,
