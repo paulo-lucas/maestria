@@ -247,7 +247,13 @@ export async function buildServer(deps: ServerDeps): Promise<Server> {
 
   app.get('/login', { config: { public: true } }, async (req, reply) => {
     if (req.session) return reply.redirect('/', 303);
-    const csrf = crypto.randomBytes(32).toString('base64url');
+    // Reuse a well-formed existing token: browsers often load /login twice (prefetch, reload, two tabs),
+    // and rotating it on every GET made the first form's token stale ("Invalid CSRF token").
+    const existing = req.cookies[loginCsrfCookie];
+    const csrf =
+      typeof existing === 'string' && /^[A-Za-z0-9_-]{43}$/.test(existing)
+        ? existing
+        : crypto.randomBytes(32).toString('base64url');
     reply.setCookie(loginCsrfCookie, csrf, cookieOpts);
     return reply.type('text/html; charset=utf-8').send(loginPage({ csrf }));
   });
