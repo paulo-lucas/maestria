@@ -1,9 +1,10 @@
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
 import { describe, expect, it } from 'vitest';
-import { hashPassword } from '../src/auth/password.ts';
+import { hashPassword, verifyPassword } from '../src/auth/password.ts';
 import { loadSecrets, saveSecrets } from '../src/auth/secrets.ts';
 import { totp } from '../src/auth/totp.ts';
 import { parseSkillSelection, runInitCommand, skillTargetFromCheckboxes } from '../src/commands/init.ts';
@@ -226,7 +227,7 @@ describe('interactive @inquirer/prompts wizard, flags, and fake TTY flows', () =
     await tty1.pressEnter();
 
     // Password + Repeat + TOTP
-    await tty1.waitFor('New password (min 12 characters):');
+    await tty1.waitFor('New password (at least 12 characters):');
     await tty1.typeCharByChar('maestria-test-pass-123');
     await tty1.waitFor('Repeat password:');
     await tty1.typeCharByChar('maestria-test-pass-123');
@@ -289,7 +290,7 @@ describe('interactive @inquirer/prompts wizard, flags, and fake TTY flows', () =
     await tty2.pressDown(); // Move to Reset password & TOTP
     await tty2.pressEnter();
 
-    await tty2.waitFor('New password (min 12 characters):');
+    await tty2.waitFor('New password (at least 12 characters):');
     await tty2.typeCharByChar('maestria-new-pass-456');
     await tty2.waitFor('Repeat password:');
     await tty2.typeCharByChar('maestria-new-pass-456');
@@ -342,7 +343,7 @@ describe('interactive @inquirer/prompts wizard, flags, and fake TTY flows', () =
     await tty.pressDown(); // Reset password & TOTP
     await tty.pressEnter();
 
-    await tty.waitFor('New password (min 12 characters):');
+    await tty.waitFor('New password (at least 12 characters):');
     await tty.typeCharByChar('updated-pass-98765');
     await tty.waitFor('Repeat password:');
     await tty.typeCharByChar('updated-pass-98765');
@@ -364,5 +365,79 @@ describe('interactive @inquirer/prompts wizard, flags, and fake TTY flows', () =
     await run;
     expect(loadSecrets(configDir)?.totpSecret).toBe(secret);
     expect(tty.allOutput).not.toContain('updated-pass-98765');
+  });
+
+  it('validates short password, confirmation mismatch, and invalid TOTP inline in init without throwing', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'maestria-pw-reask-'));
+    const env = setupSampleEnv(tmp);
+    const tty = new FakeTtyHarness();
+
+    const run = runInitCommand([], {
+      configDir: env.configDir,
+      homeDir: env.homeDir,
+      io: tty.io,
+    });
+
+    await tty.waitFor('Maestri data directory:');
+    await tty.pressEnter();
+    await tty.waitFor('Add detected workspaces to workspaces.json?');
+    await tty.pressEnter();
+
+    await tty.waitFor('New password (at least 12 characters):');
+    // Too short (< 12 chars): must report rule and re-ask cleanly without throwing
+    await tty.typeCharByChar('short');
+    await tty.waitFor('Password must be at least 12 characters (entered 5).');
+
+    await tty.waitFor('New password (at least 12 characters):');
+    await tty.typeCharByChar('shorter-valid-123');
+
+    await tty.waitFor('Repeat password:');
+    // Mismatched repeat password: must report mismatch and re-ask cleanly
+    await tty.typeCharByChar('wrong-match');
+    await tty.waitFor('The passwords do not match. Please try again.');
+
+    await tty.waitFor('New password (at least 12 characters):');
+    await tty.typeCharByChar('shorter-valid-123');
+    await tty.waitFor('Repeat password:');
+    await tty.typeCharByChar('shorter-valid-123');
+
+    await tty.waitFor('Enter the 6-digit code shown by the app to confirm:');
+    const secret = /Or enter the key manually: ([A-Z2-7]{16,})/.exec(tty.allOutput)![1]!;
+    const validCode = totp(secret, Date.now());
+    const bogusCode = validCode === '000000' ? '111111' : '000000';
+    await tty.typeCharByChar(bogusCode);
+    await tty.waitFor('That code is not valid');
+    await tty.waitFor('Enter the 6-digit code shown by the app to confirm:');
+    await tty.typeCharByChar(validCode);
+
+    await tty.waitFor('Install Maestro protocol skill for:');
+    await tty.pressSpace();
+    await tty.pressDown();
+    await tty.pressSpace();
+    await tty.pressEnter();
+    await tty.waitFor('Skip installing Maestro protocol skill?');
+    tty.sendLine('y');
+
+    await run;
+
+    const saved = loadSecrets(env.configDir);
+    expect(saved?.totpSecret).toBe(secret);
+    expect(verifyPassword('shorter-valid-123', saved!.passwordHash)).toBe(true);
+    expect(tty.allOutput).not.toContain('shorter-valid-123');
+    expect(tty.allOutput).not.toContain('wrong-match');
+  });
+
+  it('prints a friendly error message without stack traces on unexpected CLI errors', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'maestria-cli-err-'));
+    const cliPath = path.resolve(import.meta.dirname, '..', 'src', 'cli.ts');
+    const res = spawnSync(process.execPath, ['--experimental-transform-types', cliPath, 'auth', 'setup'], {
+      env: { ...process.env, MAESTRIA_CONFIG_DIR: tmp },
+      input: '',
+      encoding: 'utf8',
+    });
+    expect(res.status).toBe(1);
+    expect(res.stderr).toContain('Error: A terminal is required to enter the password.');
+    expect(res.stderr).not.toContain('at authSetup');
+    expect(res.stderr).not.toContain('.ts:');
   });
 });

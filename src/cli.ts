@@ -97,6 +97,11 @@ async function main(argv: string[]): Promise<void> {
 }
 
 main(process.argv.slice(2)).catch((err: unknown) => {
+  if (err instanceof Error && err.name === 'ExitPromptError') {
+    process.stderr.write('\nCancelled.\n');
+    process.exitCode = 130;
+    return;
+  }
   if (
     err instanceof ConfigError ||
     err instanceof SecretsError ||
@@ -109,6 +114,7 @@ main(process.argv.slice(2)).catch((err: unknown) => {
     process.exitCode = err instanceof ArgError ? 2 : 1;
     return;
   }
-  process.stderr.write(`${err instanceof Error ? (err.stack ?? err.message) : String(err)}\n`);
+  const msg = err instanceof Error ? err.message : String(err);
+  process.stderr.write(`Error: ${msg}\n`);
   process.exitCode = 1;
 });

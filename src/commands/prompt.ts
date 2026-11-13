@@ -97,7 +97,11 @@ export async function askLine(
   );
 }
 
-export async function askHidden(message: string, io: PromptIO = defaultPromptIO()): Promise<string> {
+export async function askHidden(
+  message: string,
+  io: PromptIO = defaultPromptIO(),
+  opts?: { validate?: (value: string) => boolean | string | Promise<boolean | string> },
+): Promise<string> {
   if (!io.input.isTTY) {
     throw new Error('A terminal is required to enter the password.');
   }
@@ -105,6 +109,7 @@ export async function askHidden(message: string, io: PromptIO = defaultPromptIO(
     {
       message: message.trimEnd(),
       mask: '*',
+      validate: opts?.validate,
     },
     prepareContext(io),
   );
