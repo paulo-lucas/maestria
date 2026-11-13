@@ -67,47 +67,51 @@ export function homePage(opts: { csrf: string }): string {
 <main class="panel">
   <div id="banner" class="banner" role="alert" hidden></div>
 
-  <section id="overview-section" class="section">
-    <div class="section-head">
-      <h2>Workspaces</h2>
+  <div id="view-header" class="view-header">
+    <div>
+      <h1 id="view-title">Home</h1>
+      <p id="view-meta" class="muted small"></p>
     </div>
-    <div id="overview-grid" class="overview-grid"></div>
-    <p id="no-workspaces" class="muted" hidden>No workspaces configured yet. Add entries to <code>~/.config/maestria/workspaces.json</code> or run <code>maestria workspace add</code>.</p>
+    <button id="back-home" type="button" class="ghost small-btn" hidden>All workspaces</button>
+  </div>
+
+  <div id="filter-bar" class="filter-bar" hidden></div>
+
+  <p id="no-workspaces" class="section muted" hidden>No workspaces configured yet. Add entries to <code>~/.config/maestria/workspaces.json</code> or run <code>maestria workspace add</code>.</p>
+
+  <section id="needs-section" class="section attention clear">
+    <div class="section-head">
+      <div class="section-title">
+        <h2>Needs you</h2>
+        <span id="needs-badge" class="section-badge" hidden>0</span>
+      </div>
+      <button id="toggle-history" type="button" class="ghost small-btn" hidden></button>
+    </div>
+    <div id="needs-list" class="inbox-list"></div>
+    <p id="needs-empty" class="muted" hidden>Nothing waiting on you.</p>
   </section>
 
-  <div id="workspace-view" hidden>
-    <div class="ws-header">
-      <div>
-        <h1 id="ws-title"></h1>
-        <p id="ws-meta" class="muted small"></p>
+  <section id="updates-section" class="section">
+    <div class="section-head">
+      <div class="section-title">
+        <h2>Updates</h2>
+        <span id="updates-badge" class="count-pill"></span>
       </div>
     </div>
+    <div id="updates-list" class="inbox-list"></div>
+    <p id="updates-empty" class="muted" hidden>No updates.</p>
+  </section>
 
-    <section id="tasks-section" class="section attention clear">
-      <div class="section-head">
-        <h2>Human tasks <span id="tasks-count" class="count-pill"></span></h2>
-        <button id="toggle-history" type="button" class="ghost small-btn" hidden></button>
-      </div>
-      <div id="tasks-list" class="tasks-list"></div>
-      <p id="tasks-empty" class="muted" hidden>Nothing waiting on you here.</p>
-      <div id="history-panel" class="history-panel" hidden>
-        <h3 class="history-title">History</h3>
-        <div id="history-list" class="history-list"></div>
-        <p id="history-empty" class="muted small" hidden>No responses yet.</p>
-      </div>
-    </section>
-
-    <section id="notices-section" class="section">
-      <div class="section-head">
-        <h2>Notices <span id="notices-count" class="count-pill"></span></h2>
-      </div>
-      <div id="notices-list" class="notices-list"></div>
-      <p id="notices-empty" class="muted" hidden>No active notices.</p>
-    </section>
-  </div>
+  <section id="history-section" class="section" hidden>
+    <div class="section-head">
+      <h2>History</h2>
+    </div>
+    <div id="history-list" class="history-list"></div>
+    <p id="history-empty" class="muted small" hidden>No responses or dismissed updates yet.</p>
+  </section>
 </main>`,
     {
-      headExtra: '<script src="/static/app.js" defer></script>\n',
+      headExtra: '<link rel="stylesheet" href="/workspaces.css">\n<script src="/static/app.js" defer></script>\n',
       bodyAttrs: `data-csrf="${esc(opts.csrf)}"`,
     },
   );

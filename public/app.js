@@ -1,7 +1,7 @@
 'use strict';
 
 (() => {
-  const DRAFT_KEY = 'maestria:drafts:v2';
+  const DRAFT_KEY = 'maestria:drafts:v3';
   const POLL_MS = 5000;
 
   const csrf = document.body.dataset.csrf || '';
@@ -9,28 +9,30 @@
     switcher: document.getElementById('ws-switcher'),
     sync: document.getElementById('sync-status'),
     banner: document.getElementById('banner'),
-    overviewGrid: document.getElementById('overview-grid'),
+    viewTitle: document.getElementById('view-title'),
+    viewMeta: document.getElementById('view-meta'),
+    backHome: document.getElementById('back-home'),
+    filterBar: document.getElementById('filter-bar'),
     noWorkspaces: document.getElementById('no-workspaces'),
-    wsView: document.getElementById('workspace-view'),
-    wsTitle: document.getElementById('ws-title'),
-    wsMeta: document.getElementById('ws-meta'),
-    tasksSection: document.getElementById('tasks-section'),
-    tasksCount: document.getElementById('tasks-count'),
+    needsSection: document.getElementById('needs-section'),
+    needsBadge: document.getElementById('needs-badge'),
     toggleHistory: document.getElementById('toggle-history'),
-    tasksList: document.getElementById('tasks-list'),
-    tasksEmpty: document.getElementById('tasks-empty'),
-    historyPanel: document.getElementById('history-panel'),
+    needsList: document.getElementById('needs-list'),
+    needsEmpty: document.getElementById('needs-empty'),
+    updatesSection: document.getElementById('updates-section'),
+    updatesBadge: document.getElementById('updates-badge'),
+    updatesList: document.getElementById('updates-list'),
+    updatesEmpty: document.getElementById('updates-empty'),
+    historySection: document.getElementById('history-section'),
     historyList: document.getElementById('history-list'),
     historyEmpty: document.getElementById('history-empty'),
-    noticesCount: document.getElementById('notices-count'),
-    noticesList: document.getElementById('notices-list'),
-    noticesEmpty: document.getElementById('notices-empty'),
   };
 
   let workspaces = [];
-  let currentWsId = null;
+  let routeWsId = readWorkspaceFromHash(); // null => Home, string => workspace page
+  let homeFilterWsId = null; // null => All workspaces on Home
   let showHistory = false;
-  let boardState = { tasks: [], notices: [], historyCount: 0, history: [] };
+  let state = { needsYou: [], updates: [], historyCount: 0, history: [] };
   let drafts = loadDrafts();
   let inFlight = 0;
 
@@ -47,22 +49,22 @@
     try {
       localStorage.setItem(DRAFT_KEY, JSON.stringify(drafts));
     } catch {
-      /* ignore storage quota errors */
+      /* ignore quota errors */
     }
   }
 
-  function setDraft(taskId, value) {
+  function setDraft(itemId, value) {
     if (value === '') {
-      clearDraft(taskId);
+      clearDraft(itemId);
       return;
     }
-    drafts[taskId] = value;
+    drafts[itemId] = value;
     saveDrafts();
   }
 
-  function clearDraft(taskId) {
-    if (Object.hasOwn(drafts, taskId)) {
-      delete drafts[taskId];
+  function clearDraft(itemId) {
+    if (Object.hasOwn(drafts, itemId)) {
+      delete drafts[itemId];
       saveDrafts();
     }
   }
@@ -112,169 +114,211 @@
     return res.json();
   }
 
-  function readSelectedWorkspaceFromHash() {
+  function readWorkspaceFromHash() {
     const h = window.location.hash || '';
     const m = /^#ws=([^&]+)$/.exec(h);
     return m ? decodeURIComponent(m[1]) : null;
   }
 
-  function selectWorkspace(id) {
-    currentWsId = id;
+  function openWorkspace(id) {
+    routeWsId = id;
     showHistory = false;
-    el.historyPanel.hidden = true;
+    el.historySection.hidden = true;
     window.location.hash = id ? `ws=${encodeURIComponent(id)}` : '';
-    renderWorkspaceChrome();
-    if (id) {
-      void refreshBoard();
-    }
+    renderNavigation();
+    void refreshInbox();
   }
 
-  function renderWorkspaceChrome() {
+  function makeWsDot(wsId) {
+    const dot = document.createElement('span');
+    dot.className = 'ws-dot';
+    dot.dataset.ws = wsId;
+    return dot;
+  }
+
+  function makeWsTag(item) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'ws-tag';
+    btn.dataset.ws = item.workspaceId;
+    btn.append(makeWsDot(item.workspaceId), document.createTextNode(item.workspaceName || item.workspaceId));
+    btn.title = `Open ${item.workspaceName || item.workspaceId}`;
+    btn.addEventListener('click', () => openWorkspace(item.workspaceId));
+    return btn;
+  }
+
+  function renderNavigation() {
+    // Top switcher: Home + workspaces
     el.switcher.textContent = '';
+
+    const homeBtn = document.createElement('button');
+    homeBtn.type = 'button';
+    homeBtn.className = 'ws-pill' + (routeWsId === null ? ' active' : '');
+    homeBtn.textContent = 'Home';
+    const totalNeeds = workspaces.reduce((sum, w) => sum + (w.counts?.needsYou || 0), 0);
+    if (totalNeeds > 0) {
+      const b = document.createElement('span');
+      b.className = 'pill-badge';
+      b.textContent = String(totalNeeds);
+      homeBtn.appendChild(b);
+    }
+    homeBtn.addEventListener('click', () => openWorkspace(null));
+    el.switcher.appendChild(homeBtn);
+
     for (const ws of workspaces) {
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'ws-pill' + (ws.id === currentWsId ? ' active' : '');
-      btn.textContent = ws.name;
-      const pending = (ws.counts?.openTasks || 0) + (ws.counts?.activeNotices || 0);
-      if (pending > 0) {
-        const badge = document.createElement('span');
-        badge.className = 'pill-badge';
-        badge.textContent = String(pending);
-        btn.appendChild(badge);
+      btn.className = 'ws-pill' + (ws.id === routeWsId ? ' active' : '');
+      btn.append(makeWsDot(ws.id), document.createTextNode(ws.name));
+      const count = ws.counts?.needsYou || 0;
+      if (count > 0) {
+        const b = document.createElement('span');
+        b.className = 'pill-badge';
+        b.textContent = String(count);
+        btn.appendChild(b);
       }
-      btn.addEventListener('click', () => selectWorkspace(ws.id));
+      btn.addEventListener('click', () => openWorkspace(ws.id));
       el.switcher.appendChild(btn);
     }
 
-    el.overviewGrid.textContent = '';
     el.noWorkspaces.hidden = workspaces.length > 0;
-    for (const ws of workspaces) {
-      const card = document.createElement('button');
-      card.type = 'button';
-      card.className = 'ws-card' + (ws.id === currentWsId ? ' selected' : '');
-      card.addEventListener('click', () => selectWorkspace(ws.id));
 
-      const title = document.createElement('div');
-      title.className = 'ws-card-title';
-      title.textContent = ws.name;
+    if (routeWsId === null) {
+      el.viewTitle.textContent = 'Home';
+      el.viewMeta.textContent = workspaces.length
+        ? `Unified inbox across ${workspaces.length} workspace${workspaces.length === 1 ? '' : 's'}`
+        : '';
+      el.backHome.hidden = true;
 
-      const pathEl = document.createElement('div');
-      pathEl.className = 'ws-card-path';
-      pathEl.textContent = ws.path;
+      // Filter chips on Home
+      el.filterBar.textContent = '';
+      if (workspaces.length > 1) {
+        el.filterBar.hidden = false;
+        const allChip = document.createElement('button');
+        allChip.type = 'button';
+        allChip.className = 'filter-chip' + (homeFilterWsId === null ? ' active' : '');
+        allChip.textContent = 'All workspaces';
+        allChip.addEventListener('click', () => {
+          homeFilterWsId = null;
+          renderNavigation();
+          void refreshInbox();
+        });
+        el.filterBar.appendChild(allChip);
 
-      const stats = document.createElement('div');
-      stats.className = 'ws-card-stats';
-
-      const openChip = document.createElement('span');
-      const openCount = ws.counts?.openTasks || 0;
-      openChip.className = 'stat-chip' + (openCount > 0 ? ' warn' : '');
-      openChip.textContent = `${openCount} pending`;
-      stats.appendChild(openChip);
-
-      const noticeChip = document.createElement('span');
-      const noticeCount = ws.counts?.activeNotices || 0;
-      noticeChip.className = 'stat-chip';
-      noticeChip.textContent = `${noticeCount} notice${noticeCount === 1 ? '' : 's'}`;
-      stats.appendChild(noticeChip);
-
-      const maestroChip = document.createElement('span');
-      maestroChip.className = 'stat-chip ok';
-      maestroChip.textContent = ws.maestroAgent;
-      stats.appendChild(maestroChip);
-
-      card.append(title, pathEl, stats);
-      el.overviewGrid.appendChild(card);
+        for (const ws of workspaces) {
+          const chip = document.createElement('button');
+          chip.type = 'button';
+          chip.className = 'filter-chip' + (homeFilterWsId === ws.id ? ' active' : '');
+          chip.dataset.ws = ws.id;
+          const pending = (ws.counts?.needsYou || 0) + (ws.counts?.updates || 0);
+          const label = pending > 0 ? `${ws.name} (${pending})` : ws.name;
+          chip.append(makeWsDot(ws.id), document.createTextNode(label));
+          chip.addEventListener('click', () => {
+            homeFilterWsId = homeFilterWsId === ws.id ? null : ws.id;
+            renderNavigation();
+            void refreshInbox();
+          });
+          el.filterBar.appendChild(chip);
+        }
+      } else {
+        el.filterBar.hidden = true;
+      }
+    } else {
+      const ws = workspaces.find((w) => w.id === routeWsId);
+      el.filterBar.hidden = true;
+      el.backHome.hidden = false;
+      if (ws) {
+        el.viewTitle.textContent = ws.name;
+        el.viewMeta.textContent = `${ws.path} · Maestro: ${ws.maestroAgent}`;
+      } else {
+        el.viewTitle.textContent = routeWsId;
+        el.viewMeta.textContent = '';
+      }
     }
-
-    const activeWs = workspaces.find((w) => w.id === currentWsId) || null;
-    if (!activeWs) {
-      el.wsView.hidden = true;
-      return;
-    }
-    el.wsView.hidden = false;
-    el.wsTitle.textContent = activeWs.name;
-    el.wsMeta.textContent = `${activeWs.path} · Maestro: ${activeWs.maestroAgent}`;
   }
 
-  function createTaskElement(task) {
+  function createInboxElement(item) {
     const wrap = document.createElement('div');
-    wrap.className = 'task-item';
-    wrap.dataset.taskId = task.id;
-    wrap.dataset.taskType = task.type;
+    wrap.className = 'inbox-item';
+    wrap.dataset.itemId = item.id;
+    wrap.dataset.ws = item.workspaceId;
 
     const head = document.createElement('div');
-    head.className = 'task-head';
+    head.className = 'inbox-head';
 
-    const body = document.createElement('div');
-    body.className = 'task-body';
+    const bodyCol = document.createElement('div');
+    bodyCol.className = 'inbox-body';
 
-    const textWrap = document.createElement('div');
-    const typeTag = document.createElement('span');
-    typeTag.className = 'task-type-tag';
-    typeTag.textContent = task.type;
+    const tags = document.createElement('div');
+    tags.className = 'inbox-tags';
+    if (routeWsId === null) {
+      tags.appendChild(makeWsTag(item));
+    }
+    const kindTag = document.createElement('span');
+    kindTag.className = 'kind-tag';
+    kindTag.textContent = item.kind;
+    tags.appendChild(kindTag);
 
-    const textSpan = document.createElement('span');
-    textSpan.className = 'task-text';
-    textSpan.innerHTML = task.textHtml;
-    textSpan.dataset.rawText = task.text;
-
-    textWrap.append(typeTag, textSpan);
+    const md = document.createElement('div');
+    md.className = 'md';
+    md.innerHTML = item.bodyHtml;
+    md.dataset.rawBody = item.body;
 
     const meta = document.createElement('div');
-    meta.className = 'task-meta';
-    meta.textContent = `by ${task.createdBy} · ${fmtTime(task.createdAt)}`;
+    meta.className = 'inbox-meta';
+    meta.textContent = `by ${item.createdBy} · ${fmtTime(item.createdAt)}`;
 
-    body.append(textWrap, meta);
+    bodyCol.append(tags, md, meta);
+    head.appendChild(bodyCol);
 
-    const dismissBtn = document.createElement('button');
-    dismissBtn.type = 'button';
-    dismissBtn.className = 'icon-btn';
-    dismissBtn.textContent = '✕';
-    dismissBtn.title = 'Dismiss without responding';
-    dismissBtn.setAttribute('aria-label', 'Dismiss task');
-    dismissBtn.addEventListener('click', () => {
-      void dismissTask(task.id);
-    });
+    if (item.kind !== 'notice') {
+      const dismissBtn = document.createElement('button');
+      dismissBtn.type = 'button';
+      dismissBtn.className = 'icon-btn';
+      dismissBtn.textContent = '✕';
+      dismissBtn.title = 'Dismiss without responding';
+      dismissBtn.setAttribute('aria-label', 'Dismiss item');
+      dismissBtn.addEventListener('click', () => void dismissItem(item));
+      head.appendChild(dismissBtn);
+    }
 
-    head.append(body, dismissBtn);
     wrap.appendChild(head);
 
     let textarea = null;
-    if (task.type === 'approve' || task.type === 'input') {
+    if (item.kind === 'approve' || item.kind === 'input') {
       textarea = document.createElement('textarea');
-      textarea.placeholder = task.type === 'approve' ? 'Optional comment…' : 'Write your response…';
+      textarea.placeholder = item.kind === 'approve' ? 'Optional comment…' : 'Write your response…';
       textarea.maxLength = 8000;
-      if (Object.hasOwn(drafts, task.id)) {
-        textarea.value = drafts[task.id];
+      if (Object.hasOwn(drafts, item.id)) {
+        textarea.value = drafts[item.id];
       }
       textarea.addEventListener('input', () => {
-        setDraft(task.id, textarea.value);
+        setDraft(item.id, textarea.value);
         const hint = wrap.querySelector('.draft-hint');
         if (hint) hint.textContent = textarea.value ? 'Draft saved' : '';
-        const inlineErr = wrap.querySelector('.task-inline-err');
-        if (inlineErr) inlineErr.textContent = '';
+        const err = wrap.querySelector('.inline-err');
+        if (err) err.textContent = '';
       });
       wrap.appendChild(textarea);
     }
 
     const actions = document.createElement('div');
-    actions.className = 'task-actions';
+    actions.className = 'inbox-actions';
 
-    if (task.type === 'ack') {
+    if (item.kind === 'notice') {
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'small-btn';
+      btn.className = 'ghost small-btn';
       btn.textContent = 'Got it';
-      btn.addEventListener('click', () => void respondToTask(task.id, { decision: 'ack' }));
+      btn.addEventListener('click', () => void respondToItem(item, { decision: 'ack' }));
       actions.appendChild(btn);
-    } else if (task.type === 'approve') {
+    } else if (item.kind === 'approve') {
       const approveBtn = document.createElement('button');
       approveBtn.type = 'button';
       approveBtn.className = 'small-btn btn-ok';
       approveBtn.textContent = 'Approve';
       approveBtn.addEventListener('click', () =>
-        void respondToTask(task.id, { decision: 'approved', response: textarea ? textarea.value : '' }),
+        void respondToItem(item, { decision: 'approved', response: textarea ? textarea.value : '' }),
       );
 
       const rejectBtn = document.createElement('button');
@@ -282,26 +326,26 @@
       rejectBtn.className = 'small-btn btn-danger';
       rejectBtn.textContent = 'Reject';
       rejectBtn.addEventListener('click', () =>
-        void respondToTask(task.id, { decision: 'rejected', response: textarea ? textarea.value : '' }),
+        void respondToItem(item, { decision: 'rejected', response: textarea ? textarea.value : '' }),
       );
 
       const hint = document.createElement('span');
       hint.className = 'muted small draft-hint';
-      hint.textContent = Object.hasOwn(drafts, task.id) ? 'Draft saved' : '';
+      hint.textContent = Object.hasOwn(drafts, item.id) ? 'Draft saved' : '';
 
       actions.append(approveBtn, rejectBtn, hint);
-    } else if (task.type === 'input') {
+    } else if (item.kind === 'input') {
       const sendBtn = document.createElement('button');
       sendBtn.type = 'button';
       sendBtn.className = 'small-btn';
       sendBtn.textContent = 'Send';
 
       const inlineErr = document.createElement('span');
-      inlineErr.className = 'task-inline-err';
+      inlineErr.className = 'inline-err';
 
       const hint = document.createElement('span');
       hint.className = 'muted small draft-hint';
-      hint.textContent = Object.hasOwn(drafts, task.id) ? 'Draft saved' : '';
+      hint.textContent = Object.hasOwn(drafts, item.id) ? 'Draft saved' : '';
 
       sendBtn.addEventListener('click', () => {
         const val = textarea ? textarea.value.trim() : '';
@@ -310,17 +354,17 @@
           if (textarea) textarea.focus();
           return;
         }
-        void respondToTask(task.id, { response: textarea.value });
+        void respondToItem(item, { response: textarea.value });
       });
 
       actions.append(sendBtn, hint, inlineErr);
-    } else if (task.type === 'choice') {
-      for (const opt of task.options || []) {
+    } else if (item.kind === 'choice') {
+      for (const opt of item.options || []) {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'small-btn btn-choice';
         btn.textContent = opt;
-        btn.addEventListener('click', () => void respondToTask(task.id, { decision: opt }));
+        btn.addEventListener('click', () => void respondToItem(item, { decision: opt }));
         actions.appendChild(btn);
       }
     }
@@ -329,110 +373,127 @@
     return wrap;
   }
 
-  function updateTaskElement(wrap, task) {
-    const textSpan = wrap.querySelector('.task-text');
-    if (textSpan && textSpan.dataset.rawText !== task.text) {
-      textSpan.innerHTML = task.textHtml;
-      textSpan.dataset.rawText = task.text;
+  function updateInboxElement(wrap, item) {
+    wrap.dataset.ws = item.workspaceId;
+    const md = wrap.querySelector('.md');
+    if (md && md.dataset.rawBody !== item.body) {
+      md.innerHTML = item.bodyHtml;
+      md.dataset.rawBody = item.body;
     }
-    const meta = wrap.querySelector('.task-meta');
+    const meta = wrap.querySelector('.inbox-meta');
     if (meta) {
-      meta.textContent = `by ${task.createdBy} · ${fmtTime(task.createdAt)}`;
+      meta.textContent = `by ${item.createdBy} · ${fmtTime(item.createdAt)}`;
     }
   }
 
-  function reconcileTasks() {
-    const tasks = boardState.tasks;
-    el.tasksSection.classList.toggle('clear', tasks.length === 0);
-    el.tasksCount.textContent = tasks.length ? `${tasks.length} pending` : '';
-
-    if (boardState.historyCount > 0 || showHistory) {
-      el.toggleHistory.hidden = false;
-      el.toggleHistory.textContent = showHistory
-        ? 'Hide history'
-        : `History (${boardState.historyCount})`;
-    } else {
-      el.toggleHistory.hidden = true;
-    }
-
+  function reconcileList(container, items) {
     const existingById = new Map();
-    for (const child of Array.from(el.tasksList.children)) {
-      if (child.dataset.taskId) existingById.set(child.dataset.taskId, child);
+    for (const child of Array.from(container.children)) {
+      if (child.dataset.itemId) existingById.set(child.dataset.itemId, child);
     }
-    const desiredIds = new Set(tasks.map((t) => t.id));
+    const desiredIds = new Set(items.map((i) => i.id));
     for (const [id, node] of existingById) {
       if (!desiredIds.has(id)) node.remove();
     }
 
-    let cursor = el.tasksList.firstElementChild;
-    for (const task of tasks) {
-      let node = existingById.get(task.id);
+    let cursor = container.firstElementChild;
+    for (const item of items) {
+      let node = existingById.get(item.id);
       if (!node) {
-        node = createTaskElement(task);
-        el.tasksList.insertBefore(node, cursor);
+        node = createInboxElement(item);
+        container.insertBefore(node, cursor);
       } else {
-        updateTaskElement(node, task);
+        updateInboxElement(node, item);
         if (node !== cursor) {
-          el.tasksList.insertBefore(node, cursor);
+          container.insertBefore(node, cursor);
         } else {
           cursor = cursor.nextElementSibling;
         }
       }
     }
+  }
 
-    el.tasksEmpty.hidden = tasks.length > 0;
+  function renderInbox() {
+    const { needsYou, updates, historyCount } = state;
+
+    el.needsSection.classList.toggle('clear', needsYou.length === 0);
+    el.needsBadge.hidden = needsYou.length === 0;
+    el.needsBadge.textContent = String(needsYou.length);
+    el.needsEmpty.hidden = needsYou.length > 0;
+
+    el.updatesBadge.textContent = updates.length ? `(${updates.length})` : '';
+    el.updatesEmpty.hidden = updates.length > 0;
+
+    if (historyCount > 0 || showHistory) {
+      el.toggleHistory.hidden = false;
+      el.toggleHistory.textContent = showHistory ? 'Hide history' : `History (${historyCount})`;
+    } else {
+      el.toggleHistory.hidden = true;
+    }
+
+    const isTyping = document.activeElement instanceof HTMLTextAreaElement && el.needsList.contains(document.activeElement);
+    if (!isTyping) {
+      reconcileList(el.needsList, needsYou);
+    }
+    reconcileList(el.updatesList, updates);
   }
 
   function renderHistory() {
-    el.historyPanel.hidden = !showHistory;
+    el.historySection.hidden = !showHistory;
     if (!showHistory) return;
 
-    const items = boardState.history || [];
+    const items = state.history || [];
     el.historyList.textContent = '';
     el.historyEmpty.hidden = items.length > 0;
 
-    for (const t of items) {
+    for (const item of items) {
       const row = document.createElement('div');
       row.className = 'history-item';
+      row.dataset.ws = item.workspaceId;
 
       const top = document.createElement('div');
       top.className = 'history-row';
 
+      const left = document.createElement('div');
+      if (routeWsId === null) {
+        const tags = document.createElement('div');
+        tags.className = 'inbox-tags';
+        tags.appendChild(makeWsTag(item));
+        left.appendChild(tags);
+      }
       const prompt = document.createElement('div');
-      prompt.className = 'task-text';
-      prompt.innerHTML = t.textHtml;
+      prompt.className = 'md';
+      prompt.innerHTML = item.bodyHtml;
+      left.appendChild(prompt);
 
       const right = document.createElement('div');
       const badge = document.createElement('span');
-      if (t.status === 'dismissed') {
-        badge.className = 'decision-badge';
-        badge.textContent = 'Dismissed';
-      } else if (t.type === 'approve') {
-        badge.className = `decision-badge ${t.decision === 'approved' ? 'approved' : 'rejected'}`;
-        badge.textContent = t.decision === 'approved' ? 'Approved' : 'Rejected';
-      } else if (t.type === 'ack') {
-        badge.className = 'decision-badge ack';
-        badge.textContent = 'Got it';
-      } else if (t.type === 'choice') {
-        badge.className = 'decision-badge ack';
-        badge.textContent = t.decision || 'Chosen';
+      if (item.status === 'dismissed') {
+        badge.className = 'decision-badge' + (item.decision === 'ack' ? ' ok' : '');
+        badge.textContent = item.decision === 'ack' ? 'Got it' : 'Dismissed';
+      } else if (item.kind === 'approve') {
+        badge.className = `decision-badge ${item.decision === 'approved' ? 'approved' : 'rejected'}`;
+        badge.textContent = item.decision === 'approved' ? 'Approved' : 'Rejected';
+      } else if (item.kind === 'choice') {
+        badge.className = 'decision-badge ok';
+        badge.textContent = item.decision || 'Chosen';
       } else {
-        badge.className = 'decision-badge ack';
+        badge.className = 'decision-badge ok';
         badge.textContent = 'Replied';
       }
 
       const ts = document.createElement('span');
       ts.className = 'muted small';
-      ts.textContent = ' ' + fmtTime(t.respondedAt || t.dismissedAt);
+      ts.textContent = ' ' + fmtTime(item.resolvedAt);
 
       right.append(badge, ts);
-      top.append(prompt, right);
+      top.append(left, right);
       row.appendChild(top);
 
-      if (t.response) {
+      if (item.response) {
         const resp = document.createElement('div');
         resp.className = 'history-response';
-        resp.textContent = t.response;
+        resp.textContent = item.response;
         row.appendChild(resp);
       }
 
@@ -440,114 +501,34 @@
     }
   }
 
-  function reconcileNotices() {
-    const notices = boardState.notices;
-    el.noticesCount.textContent = notices.length ? String(notices.length) : '';
-    el.noticesEmpty.hidden = notices.length > 0;
+  async function respondToItem(item, payload) {
+    const prevNeeds = [...state.needsYou];
+    const prevUpdates = [...state.updates];
+    const prevHistoryCount = state.historyCount;
 
-    const existingById = new Map();
-    for (const child of Array.from(el.noticesList.children)) {
-      if (child.dataset.noticeId) existingById.set(child.dataset.noticeId, child);
-    }
-    const desiredIds = new Set(notices.map((n) => n.id));
-    for (const [id, node] of existingById) {
-      if (!desiredIds.has(id)) node.remove();
-    }
-
-    let cursor = el.noticesList.firstElementChild;
-    for (const notice of notices) {
-      let node = existingById.get(notice.id);
-      if (!node) {
-        node = document.createElement('div');
-        node.className = 'notice-item';
-        node.dataset.noticeId = notice.id;
-
-        const main = document.createElement('div');
-        main.className = 'notice-main';
-
-        const body = document.createElement('div');
-        body.className = 'md';
-        body.innerHTML = notice.bodyHtml;
-        body.dataset.rawBody = notice.body;
-
-        const meta = document.createElement('div');
-        meta.className = 'notice-meta';
-        meta.textContent = `by ${notice.createdBy} · ${fmtTime(notice.createdAt)}`;
-
-        main.append(body, meta);
-
-        const dismissBtn = document.createElement('button');
-        dismissBtn.type = 'button';
-        dismissBtn.className = 'icon-btn';
-        dismissBtn.textContent = '✕';
-        dismissBtn.title = 'Dismiss notice';
-        dismissBtn.setAttribute('aria-label', 'Dismiss notice');
-        dismissBtn.addEventListener('click', () => {
-          void dismissNotice(notice.id);
-        });
-
-        node.append(main, dismissBtn);
-        el.noticesList.insertBefore(node, cursor);
-      } else {
-        const body = node.querySelector('.md');
-        if (body && body.dataset.rawBody !== notice.body) {
-          body.innerHTML = notice.bodyHtml;
-          body.dataset.rawBody = notice.body;
-        }
-        if (node !== cursor) {
-          el.noticesList.insertBefore(node, cursor);
-        } else {
-          cursor = cursor.nextElementSibling;
-        }
-      }
-    }
-  }
-
-  async function respondToTask(taskId, payload) {
-    const wsId = currentWsId;
-    if (!wsId) return;
-    const prevTasks = [...boardState.tasks];
-    const prevHistoryCount = boardState.historyCount;
-
-    // Optimistic: remove task from the board immediately
-    const target = boardState.tasks.find((t) => t.id === taskId);
-    boardState.tasks = boardState.tasks.filter((t) => t.id !== taskId);
-    boardState.historyCount += 1;
-    if (showHistory && target) {
-      boardState.history = [
-        {
-          ...target,
-          status: 'responded',
-          decision: payload.decision || null,
-          response: payload.response ? payload.response.trim() : null,
-          respondedAt: Date.now(),
-        },
-        ...boardState.history,
-      ];
-      renderHistory();
-    }
-    reconcileTasks();
+    state.needsYou = state.needsYou.filter((i) => i.id !== item.id);
+    state.updates = state.updates.filter((i) => i.id !== item.id);
+    state.historyCount += 1;
+    renderInbox();
 
     inFlight += 1;
     try {
       showBanner('');
-      const res = await api(`/api/workspaces/${encodeURIComponent(wsId)}/tasks/${encodeURIComponent(taskId)}/respond`, {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
-      clearDraft(taskId);
-      if (currentWsId === wsId && showHistory) {
-        boardState.history = [res.task, ...boardState.history.filter((h) => h.id !== taskId)];
+      const res = await api(
+        `/api/workspaces/${encodeURIComponent(item.workspaceId)}/inbox/${encodeURIComponent(item.id)}/respond`,
+        { method: 'POST', body: JSON.stringify(payload) },
+      );
+      clearDraft(item.id);
+      if (showHistory) {
+        state.history = [res.item, ...state.history.filter((h) => h.id !== item.id)];
         renderHistory();
       }
       void refreshWorkspaces();
     } catch (err) {
-      if (currentWsId === wsId) {
-        boardState.tasks = prevTasks;
-        boardState.historyCount = prevHistoryCount;
-        reconcileTasks();
-        if (showHistory) renderHistory();
-      }
+      state.needsYou = prevNeeds;
+      state.updates = prevUpdates;
+      state.historyCount = prevHistoryCount;
+      renderInbox();
       if (err.message !== 'unauthenticated') {
         showBanner(`Could not submit response: ${err.message}`);
       }
@@ -556,63 +537,36 @@
     }
   }
 
-  async function dismissTask(taskId) {
-    const wsId = currentWsId;
-    if (!wsId) return;
-    const prevTasks = [...boardState.tasks];
-    const prevHistoryCount = boardState.historyCount;
+  async function dismissItem(item) {
+    const prevNeeds = [...state.needsYou];
+    const prevUpdates = [...state.updates];
+    const prevHistoryCount = state.historyCount;
 
-    boardState.tasks = boardState.tasks.filter((t) => t.id !== taskId);
-    boardState.historyCount += 1;
-    reconcileTasks();
+    state.needsYou = state.needsYou.filter((i) => i.id !== item.id);
+    state.updates = state.updates.filter((i) => i.id !== item.id);
+    state.historyCount += 1;
+    renderInbox();
 
     inFlight += 1;
     try {
       showBanner('');
-      const res = await api(`/api/workspaces/${encodeURIComponent(wsId)}/tasks/${encodeURIComponent(taskId)}/dismiss`, {
-        method: 'POST',
-      });
-      clearDraft(taskId);
-      if (currentWsId === wsId && showHistory) {
-        boardState.history = [res.task, ...boardState.history.filter((h) => h.id !== taskId)];
+      const res = await api(
+        `/api/workspaces/${encodeURIComponent(item.workspaceId)}/inbox/${encodeURIComponent(item.id)}/dismiss`,
+        { method: 'POST' },
+      );
+      clearDraft(item.id);
+      if (showHistory) {
+        state.history = [res.item, ...state.history.filter((h) => h.id !== item.id)];
         renderHistory();
       }
       void refreshWorkspaces();
     } catch (err) {
-      if (currentWsId === wsId) {
-        boardState.tasks = prevTasks;
-        boardState.historyCount = prevHistoryCount;
-        reconcileTasks();
-      }
+      state.needsYou = prevNeeds;
+      state.updates = prevUpdates;
+      state.historyCount = prevHistoryCount;
+      renderInbox();
       if (err.message !== 'unauthenticated') {
-        showBanner(`Could not dismiss task: ${err.message}`);
-      }
-    } finally {
-      inFlight -= 1;
-    }
-  }
-
-  async function dismissNotice(noticeId) {
-    const wsId = currentWsId;
-    if (!wsId) return;
-    const prevNotices = [...boardState.notices];
-    boardState.notices = boardState.notices.filter((n) => n.id !== noticeId);
-    reconcileNotices();
-
-    inFlight += 1;
-    try {
-      showBanner('');
-      await api(`/api/workspaces/${encodeURIComponent(wsId)}/notices/${encodeURIComponent(noticeId)}/dismiss`, {
-        method: 'POST',
-      });
-      void refreshWorkspaces();
-    } catch (err) {
-      if (currentWsId === wsId) {
-        boardState.notices = prevNotices;
-        reconcileNotices();
-      }
-      if (err.message !== 'unauthenticated') {
-        showBanner(`Could not dismiss notice: ${err.message}`);
+        showBanner(`Could not dismiss item: ${err.message}`);
       }
     } finally {
       inFlight -= 1;
@@ -622,44 +576,54 @@
   async function refreshWorkspaces() {
     const data = await api('/api/workspaces');
     workspaces = data.workspaces || [];
-    const fromHash = readSelectedWorkspaceFromHash();
-    if (fromHash && workspaces.some((w) => w.id === fromHash)) {
-      currentWsId = fromHash;
-    } else if (!currentWsId || !workspaces.some((w) => w.id === currentWsId)) {
-      currentWsId = workspaces.length > 0 ? workspaces[0].id : null;
+    if (routeWsId !== null && !workspaces.some((w) => w.id === routeWsId)) {
+      routeWsId = null;
     }
-    renderWorkspaceChrome();
+    if (homeFilterWsId !== null && !workspaces.some((w) => w.id === homeFilterWsId)) {
+      homeFilterWsId = null;
+    }
+    renderNavigation();
   }
 
-  async function refreshBoard() {
-    if (!currentWsId) return;
-    const wsId = currentWsId;
-    const data = await api(`/api/workspaces/${encodeURIComponent(wsId)}/board`);
-    if (currentWsId !== wsId || inFlight > 0) return;
+  async function refreshInbox() {
+    const targetRoute = routeWsId;
+    const targetFilter = homeFilterWsId;
 
-    boardState.tasks = data.tasks || [];
-    boardState.notices = data.notices || [];
-    boardState.historyCount = data.historyCount || 0;
+    let openUrl;
+    let histUrl;
+    if (targetRoute !== null) {
+      openUrl = `/api/workspaces/${encodeURIComponent(targetRoute)}/inbox`;
+      histUrl = `/api/workspaces/${encodeURIComponent(targetRoute)}/inbox?status=history`;
+    } else if (targetFilter !== null) {
+      openUrl = `/api/inbox?workspace=${encodeURIComponent(targetFilter)}`;
+      histUrl = `/api/inbox?status=history&workspace=${encodeURIComponent(targetFilter)}`;
+    } else {
+      openUrl = '/api/inbox';
+      histUrl = '/api/inbox?status=history';
+    }
+
+    const data = await api(openUrl);
+    if (routeWsId !== targetRoute || homeFilterWsId !== targetFilter || inFlight > 0) return;
+
+    state.needsYou = data.needsYou || [];
+    state.updates = data.updates || [];
+    state.historyCount = data.historyCount || 0;
 
     if (showHistory) {
-      const h = await api(`/api/workspaces/${encodeURIComponent(wsId)}/tasks?status=history`);
-      if (currentWsId === wsId && inFlight === 0) {
-        boardState.history = h.tasks || [];
+      const h = await api(histUrl);
+      if (routeWsId === targetRoute && homeFilterWsId === targetFilter && inFlight === 0) {
+        state.history = h.items || [];
         renderHistory();
       }
     }
 
-    const isTyping = document.activeElement instanceof HTMLTextAreaElement && el.tasksList.contains(document.activeElement);
-    if (!isTyping) {
-      reconcileTasks();
-    }
-    reconcileNotices();
+    renderInbox();
   }
 
   async function poll() {
     try {
       await refreshWorkspaces();
-      if (currentWsId) await refreshBoard();
+      await refreshInbox();
       el.sync.textContent = `Updated ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
     } catch (err) {
       if (err.message !== 'unauthenticated') {
@@ -668,24 +632,26 @@
     }
   }
 
+  el.backHome.addEventListener('click', () => openWorkspace(null));
+
   el.toggleHistory.addEventListener('click', () => {
     showHistory = !showHistory;
-    reconcileTasks();
+    renderInbox();
     if (showHistory) {
-      void refreshBoard();
+      void refreshInbox();
     } else {
       renderHistory();
     }
   });
 
   window.addEventListener('hashchange', () => {
-    const id = readSelectedWorkspaceFromHash();
-    if (id && workspaces.some((w) => w.id === id) && id !== currentWsId) {
-      currentWsId = id;
+    const id = readWorkspaceFromHash();
+    if (id !== routeWsId) {
+      routeWsId = id;
       showHistory = false;
-      el.historyPanel.hidden = true;
-      renderWorkspaceChrome();
-      void refreshBoard();
+      el.historySection.hidden = true;
+      renderNavigation();
+      void refreshInbox();
     }
   });
 

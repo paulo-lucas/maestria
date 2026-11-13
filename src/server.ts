@@ -13,8 +13,7 @@ import { SessionStore, type Session } from './auth/sessions.ts';
 import { LoginLimiter } from './auth/ratelimit.ts';
 import { AccessVerifier, type JwksFetcher, fetchJwks } from './auth/cloudflare.ts';
 import type { AuthSecrets } from './auth/secrets.ts';
-import { NoticeStore } from './notices.ts';
-import { ConflictError, TaskStore, ValidationError, type TaskStatus } from './tasks.ts';
+import { ConflictError, InboxStore, ValidationError, type InboxStatus } from './inbox.ts';
 import { WorkspaceError, WorkspaceRegistry, type WorkspaceProvider } from './workspaces.ts';
 import { homePage, loginPage } from './web/html.ts';
 
@@ -79,8 +78,7 @@ export interface Server {
   audit: Audit;
   limiter: LoginLimiter;
   workspaces: WorkspaceProvider;
-  tasks: TaskStore;
-  notices: NoticeStore;
+  inbox: InboxStore;
 }
 
 export async function buildServer(deps: ServerDeps): Promise<Server> {
@@ -89,8 +87,7 @@ export async function buildServer(deps: ServerDeps): Promise<Server> {
 
   const audit = new Audit(db, now);
   const workspaces = deps.workspaces ?? new WorkspaceRegistry(config.configDir);
-  const tasks = new TaskStore(db, audit, now);
-  const notices = new NoticeStore(db, audit, now);
+  const inbox = new InboxStore(db, audit, now);
   const sessions = new SessionStore(db, { idleMs: config.session.idleMinutes * 60_000, absoluteMs: config.session.absoluteHours * 3_600_000 }, now);
   const limiter = new LoginLimiter(
     {
@@ -273,63 +270,119 @@ export async function buildServer(deps: ServerDeps): Promise<Server> {
 
   app.get('/api/session', async (req) => ({ csrfToken: req.session!.csrfToken, expiresAt: req.session!.expiresAt }));
 
+  app.get('/workspaces.css', async (_req, reply) => {
+    const css = workspaces
+      .list()
+      .filter((w) => /^[a-z0-9][a-z0-9._-]{0,63}$/.test(w.id) && /^#[0-9a-f]{6}$/i.test(w.color))
+      .map((w) => `[data-ws="${w.id}"] { --ws-color: ${w.color}; }`)
+      .join('\n');
+    return reply.header('Cache-Control', 'no-cache').type('text/css; charset=utf-8').send(css + '\n');
+  });
+
   app.get('/api/workspaces', async () => {
     const list = workspaces.list();
-    const taskCounts = tasks.countsByWorkspace();
-    const noticeCounts = notices.countsByWorkspace();
+    const counts = inbox.countsByWorkspace();
     return {
       workspaces: list.map((ws) => {
-        const tc = taskCounts.get(ws.id) ?? { open: 0, responded: 0, dismissed: 0 };
-        const nc = noticeCounts.get(ws.id) ?? { active: 0, dismissed: 0 };
+        const c = counts.get(ws.id) ?? { needsYou: 0, updates: 0, history: 0 };
         return {
           id: ws.id,
           name: ws.name,
           path: ws.path,
+          color: ws.color,
           maestroAgent: ws.maestroAgent,
           hasRoadmap: ws.roadmapPath !== null,
-          counts: {
-            openTasks: tc.open,
-            respondedTasks: tc.responded,
-            dismissedTasks: tc.dismissed,
-            activeNotices: nc.active,
-          },
+          counts: c,
         };
       }),
     };
   });
 
-  app.get('/api/workspaces/:id/board', async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const ws = workspaces.get(id);
-    if (!ws) return reply.code(404).send({ error: 'workspace_not_found' });
-    const tc = tasks.countsByWorkspace().get(ws.id) ?? { open: 0, responded: 0, dismissed: 0 };
-    return {
-      workspace: {
-        id: ws.id,
-        name: ws.name,
-        path: ws.path,
-        maestroAgent: ws.maestroAgent,
-        hasRoadmap: ws.roadmapPath !== null,
-      },
-      tasks: tasks.list(ws.id, { status: 'open' }),
-      historyCount: tc.responded + tc.dismissed,
-      notices: notices.list(ws.id, { status: 'active' }),
+  app.get('/api/inbox', async (req, reply) => {
+    const q = (req.query ?? {}) as { workspace?: string; status?: string };
+    const status = q.status ?? 'open';
+    if (!['open', 'history', 'responded', 'dismissed', 'all'].includes(status)) {
+      return reply.code(400).send({ error: 'invalid_status' });
+    }
+    const list = workspaces.list();
+    const byId = new Map(list.map((w) => [w.id, w]));
+    if (q.workspace !== undefined) {
+      if (!byId.has(q.workspace)) return reply.code(404).send({ error: 'workspace_not_found' });
+    }
+
+    const counts = inbox.countsByWorkspace();
+    const enrich = (item: ReturnType<InboxStore['list']>[number]) => {
+      const ws = byId.get(item.workspaceId);
+      return ws ? { ...item, workspaceName: ws.name, workspaceColor: ws.color } : null;
     };
+
+    if (status !== 'open') {
+      const items = inbox
+        .list({ workspaceId: q.workspace, status: status as InboxStatus | 'history' | 'all' })
+        .map(enrich)
+        .filter((x): x is NonNullable<typeof x> => x !== null);
+      return { items };
+    }
+
+    const openItems = inbox
+      .list({ workspaceId: q.workspace, status: 'open' })
+      .map(enrich)
+      .filter((x): x is NonNullable<typeof x> => x !== null);
+
+    const needsYou = openItems.filter((i) => i.kind !== 'notice');
+    const updates = openItems.filter((i) => i.kind === 'notice');
+
+    let historyCount = 0;
+    if (q.workspace) {
+      historyCount = counts.get(q.workspace)?.history ?? 0;
+    } else {
+      for (const ws of list) {
+        historyCount += counts.get(ws.id)?.history ?? 0;
+      }
+    }
+
+    return { needsYou, updates, historyCount };
   });
 
-  app.get('/api/workspaces/:id/tasks', async (req, reply) => {
+  app.get('/api/workspaces/:id/inbox', async (req, reply) => {
     const { id } = req.params as { id: string };
     const ws = workspaces.get(id);
     if (!ws) return reply.code(404).send({ error: 'workspace_not_found' });
     const status = ((req.query as { status?: string } | undefined)?.status ?? 'open') as string;
-    if (!['open', 'responded', 'dismissed', 'history', 'all'].includes(status)) {
+    if (!['open', 'history', 'responded', 'dismissed', 'all'].includes(status)) {
       return reply.code(400).send({ error: 'invalid_status' });
     }
-    return { tasks: tasks.list(ws.id, { status: status as TaskStatus | 'history' | 'all' }) };
+    const wsMeta = {
+      id: ws.id,
+      name: ws.name,
+      path: ws.path,
+      color: ws.color,
+      maestroAgent: ws.maestroAgent,
+      hasRoadmap: ws.roadmapPath !== null,
+    };
+    const enrich = (item: ReturnType<InboxStore['list']>[number]) => ({
+      ...item,
+      workspaceName: ws.name,
+      workspaceColor: ws.color,
+    });
+    if (status !== 'open') {
+      return {
+        workspace: wsMeta,
+        items: inbox.list({ workspaceId: ws.id, status: status as InboxStatus | 'history' | 'all' }).map(enrich),
+      };
+    }
+    const openItems = inbox.list({ workspaceId: ws.id, status: 'open' }).map(enrich);
+    const c = inbox.countsByWorkspace().get(ws.id) ?? { needsYou: 0, updates: 0, history: 0 };
+    return {
+      workspace: wsMeta,
+      needsYou: openItems.filter((i) => i.kind !== 'notice'),
+      updates: openItems.filter((i) => i.kind === 'notice'),
+      historyCount: c.history,
+    };
   });
 
-  app.post('/api/workspaces/:id/tasks/:taskId/respond', async (req, reply) => {
-    const { id, taskId } = req.params as { id: string; taskId: string };
+  app.post('/api/workspaces/:id/inbox/:itemId/respond', async (req, reply) => {
+    const { id, itemId } = req.params as { id: string; itemId: string };
     const ws = workspaces.get(id);
     if (!ws) return reply.code(404).send({ error: 'workspace_not_found' });
     const body = req.body ?? {};
@@ -343,43 +396,23 @@ export async function buildServer(deps: ServerDeps): Promise<Server> {
     if (b.response !== undefined && typeof b.response !== 'string') {
       return reply.code(400).send({ error: 'invalid_response' });
     }
-    const updated = tasks.respond(
+    const updated = inbox.respond(
       ws.id,
-      taskId,
+      itemId,
       { decision: b.decision, response: b.response },
       { via: 'web', ip: req.clientIp },
     );
-    if (!updated) return reply.code(404).send({ error: 'task_not_found' });
-    return { task: updated };
+    if (!updated) return reply.code(404).send({ error: 'item_not_found' });
+    return { item: { ...updated, workspaceName: ws.name, workspaceColor: ws.color } };
   });
 
-  app.post('/api/workspaces/:id/tasks/:taskId/dismiss', async (req, reply) => {
-    const { id, taskId } = req.params as { id: string; taskId: string };
+  app.post('/api/workspaces/:id/inbox/:itemId/dismiss', async (req, reply) => {
+    const { id, itemId } = req.params as { id: string; itemId: string };
     const ws = workspaces.get(id);
     if (!ws) return reply.code(404).send({ error: 'workspace_not_found' });
-    const updated = tasks.dismiss(ws.id, taskId, { via: 'web', ip: req.clientIp });
-    if (!updated) return reply.code(404).send({ error: 'task_not_found' });
-    return { task: updated };
-  });
-
-  app.get('/api/workspaces/:id/notices', async (req, reply) => {
-    const { id } = req.params as { id: string };
-    const ws = workspaces.get(id);
-    if (!ws) return reply.code(404).send({ error: 'workspace_not_found' });
-    const status = ((req.query as { status?: string } | undefined)?.status ?? 'active') as string;
-    if (!['active', 'dismissed', 'all'].includes(status)) {
-      return reply.code(400).send({ error: 'invalid_status' });
-    }
-    return { notices: notices.list(ws.id, { status: status as 'active' | 'dismissed' | 'all' }) };
-  });
-
-  app.post('/api/workspaces/:id/notices/:noticeId/dismiss', async (req, reply) => {
-    const { id, noticeId } = req.params as { id: string; noticeId: string };
-    const ws = workspaces.get(id);
-    if (!ws) return reply.code(404).send({ error: 'workspace_not_found' });
-    const updated = notices.dismiss(ws.id, noticeId, { via: 'web', ip: req.clientIp });
-    if (!updated) return reply.code(404).send({ error: 'notice_not_found' });
-    return { notice: updated };
+    const updated = inbox.dismiss(ws.id, itemId, { via: 'web', ip: req.clientIp });
+    if (!updated) return reply.code(404).send({ error: 'item_not_found' });
+    return { item: { ...updated, workspaceName: ws.name, workspaceColor: ws.color } };
   });
 
   app.setNotFoundHandler(async (_req, reply) => deny(reply, 404, 'Not found'));
@@ -406,5 +439,5 @@ export async function buildServer(deps: ServerDeps): Promise<Server> {
   purge.unref();
   app.addHook('onClose', async () => clearInterval(purge));
 
-  return { app, sessions, audit, limiter, workspaces, tasks, notices };
+  return { app, sessions, audit, limiter, workspaces, inbox };
 }
