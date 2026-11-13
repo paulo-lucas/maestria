@@ -51,7 +51,24 @@ Start the panel:
 maestria serve
 ```
 
-Then open `http://127.0.0.1:4777` (only listens on `127.0.0.1`). To run continuously on macOS login, adapt [`docs/launchd.plist.example`](docs/launchd.plist.example).
+Then open `http://127.0.0.1:4777` (only listens on `127.0.0.1`).
+
+## Keep It Running (Background Service)
+
+`maestria init` offers at the end to install and start a background user service so the panel starts automatically on login and restarts if it crashes. You can manage it anytime with:
+
+```sh
+maestria service install    # install LaunchAgent (macOS) or systemd --user unit (Linux)
+maestria service start      # start the background service
+maestria service stop       # stop the background service
+maestria service restart    # reload/restart (e.g. after updating maestria)
+maestria service status     # inspect service state and panel reachability
+maestria service uninstall  # remove the LaunchAgent / systemd unit
+```
+
+- **macOS (`launchd`):** Installs `~/Library/LaunchAgents/dev.maestria.panel.plist` (`RunAtLoad` + `KeepAlive`) pointing to your current `node` and `dist/cli.js` paths, with logs in `~/Library/Logs/maestria/panel.{out,err}.log` (or customize [`docs/launchd.plist.example`](docs/launchd.plist.example)).
+- **Linux (`systemd --user`):** Installs `~/.config/systemd/user/maestria.service` (`Restart=always`) and enables it for user login sessions.
+- You can also check whether the panel is reachable from any workspace via `maestria status`.
 
 ## Secure Remote Exposure (Cloudflare Tunnel + Access)
 

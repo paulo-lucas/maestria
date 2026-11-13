@@ -212,10 +212,22 @@ describe('interactive @inquirer/prompts wizard, flags, and fake TTY flows', () =
     const tty1 = new FakeTtyHarness();
     tty1.input.write('\n\n'); // buffered Enter must be drained
 
+    const fakeCli = path.join(tmp, 'dist-cli.js');
+    fs.writeFileSync(fakeCli, '// built cli\n');
+    const serviceCmds: string[][] = [];
+
     const run1 = runInitCommand([], {
       configDir: env.configDir,
       homeDir: env.homeDir,
       io: tty1.io,
+      servicePlatform: 'darwin',
+      serviceCliPath: fakeCli,
+      serviceRunner: async (argv) => {
+        serviceCmds.push([...argv]);
+        // launchctl print fails (not loaded yet), bootstrap succeeds
+        if (argv[1] === 'print') return { ok: false, code: 113, stdout: '', stderr: '' };
+        return { ok: true, code: 0, stdout: '', stderr: '' };
+      },
     });
 
     // Maestri data directory select menu (Use default preselected) -> Enter
@@ -263,7 +275,15 @@ describe('interactive @inquirer/prompts wizard, flags, and fake TTY flows', () =
     await tty1.waitFor('Install Maestro protocol skill for claude?');
     tty1.sendLine('y');
 
+    // End of wizard offers background service menu (Install and start preselected)
+    await tty1.waitFor('Keep Maestria running in the background?');
+    await tty1.pressEnter();
+
     await run1;
+
+    expect(serviceCmds.some((c) => c[0] === 'launchctl' && c[1] === 'bootstrap')).toBe(true);
+    expect(tty1.allOutput).toContain('maestria service stop');
+    expect(tty1.allOutput).toContain('maestria service restart');
 
     expect(loadRawConfig(env.configDir).maestriDir).toBeUndefined();
     expect(loadConfig(env.configDir, { MAESTRI_HOME: env.maestriDir }).maestriDir).toBe(env.maestriDir);
@@ -278,6 +298,9 @@ describe('interactive @inquirer/prompts wizard, flags, and fake TTY flows', () =
       configDir: env.configDir,
       homeDir: env.homeDir,
       io: tty2.io,
+      servicePlatform: 'darwin',
+      serviceCliPath: fakeCli,
+      serviceRunner: async () => ({ ok: true, code: 0, stdout: '', stderr: '' }),
     });
 
     await tty2.waitFor('Configuration');
@@ -312,11 +335,14 @@ describe('interactive @inquirer/prompts wizard, flags, and fake TTY flows', () =
     await tty2.waitFor('Maestro protocol skill');
     await tty2.pressEnter(); // Keep preselected
 
+    await tty2.waitFor('Background service (already installed):');
+    await tty2.pressEnter(); // Keep existing service
+
     await run2;
 
     expect(loadSecrets(env.configDir)?.totpSecret).toBe(secret2);
     expect(tty2.allOutput).not.toContain('maestria-new-pass-456');
-  });
+  }, 15_000);
 
   it('handles existing config + existing auth (no workspaces) choosing redo via arrow menu -> password without hang', async () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'maestria-auth-redo-'));
@@ -334,7 +360,7 @@ describe('interactive @inquirer/prompts wizard, flags, and fake TTY flows', () =
     });
 
     const tty = new FakeTtyHarness();
-    const run = runInitCommand([], { configDir, homeDir, io: tty.io });
+    const run = runInitCommand([], { configDir, homeDir, io: tty.io, servicePlatform: 'win32' });
 
     await tty.waitFor('Configuration');
     await tty.pressEnter(); // Keep existing config
@@ -376,6 +402,7 @@ describe('interactive @inquirer/prompts wizard, flags, and fake TTY flows', () =
       configDir: env.configDir,
       homeDir: env.homeDir,
       io: tty.io,
+      servicePlatform: 'win32',
     });
 
     await tty.waitFor('Maestri data directory:');

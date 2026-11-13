@@ -13,6 +13,16 @@ import {
   saveRawConfig,
 } from '../config.ts';
 import { discoverMaestriWorkspaces } from '../discovery.ts';
+import {
+  installService,
+  isServiceInstalled,
+  isServicePlatformSupported,
+  restartService,
+  ServiceError,
+  startService,
+  type ServiceCommandRunner,
+  type ServiceOpts,
+} from '../service.ts';
 import { loadWorkspaces, saveWorkspaces, type Workspace } from '../workspaces.ts';
 import { ArgError, parseArgs } from './args.ts';
 import { authSetup, type AuthSetupOpts } from './auth-setup.ts';
@@ -25,6 +35,9 @@ export interface InitCliOpts {
   io?: PromptIO;
   stdout?: NodeJS.WritableStream;
   authSetupFn?: (opts: AuthSetupOpts) => Promise<void>;
+  servicePlatform?: NodeJS.Platform;
+  serviceRunner?: ServiceCommandRunner;
+  serviceCliPath?: string;
 }
 
 const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -417,18 +430,94 @@ async function resolveSkillStep(opts: {
   }
 }
 
+async function resolveServiceStep(opts: {
+  flagService?: string;
+  configDir: string;
+  env: NodeJS.ProcessEnv;
+  homeDir: string;
+  nonInteractive: boolean;
+  io: PromptIO;
+  platform: NodeJS.Platform;
+  runner?: ServiceCommandRunner;
+  cliPath?: string;
+}): Promise<'started' | 'installed' | 'skipped'> {
+  const { flagService, configDir, env, homeDir, nonInteractive, io, platform, runner, cliPath } = opts;
+  const out = io.output;
+
+  let action: 'start' | 'install' | 'skip';
+  if (typeof flagService === 'string') {
+    const v = flagService.trim().toLowerCase();
+    if (v === 'start') action = 'start';
+    else if (v === 'install') action = 'install';
+    else if (v === 'none' || v === 'skip') action = 'skip';
+    else throw new ArgError('--service must be one of: install, start, none');
+  } else if (!isServicePlatformSupported(platform)) {
+    return 'skipped';
+  } else if (nonInteractive) {
+    return 'skipped';
+  } else {
+    const serviceOpts: ServiceOpts = { configDir, homeDir, env, platform, runner, cliPath };
+    const alreadyInstalled = isServiceInstalled(serviceOpts);
+    const hasAuth = fs.existsSync(authFile(configDir));
+    if (alreadyInstalled) {
+      action = await askSelect<'start' | 'install' | 'skip'>(
+        'Background service (already installed):',
+        [
+          { name: 'Keep existing service configuration', value: 'skip' },
+          { name: 'Reinstall and restart background service', value: 'start' },
+        ],
+        { defaultValue: 'skip', io },
+      );
+    } else {
+      action = await askSelect<'start' | 'install' | 'skip'>(
+        'Keep Maestria running in the background?',
+        [
+          { name: 'Install and start background service now (recommended)', value: 'start' },
+          { name: 'Install service now, start later', value: 'install' },
+          { name: 'Skip for now (start manually with "maestria serve")', value: 'skip' },
+        ],
+        { defaultValue: hasAuth ? 'start' : 'skip', io },
+      );
+    }
+  }
+
+  if (action === 'skip') return 'skipped';
+
+  const serviceOpts: ServiceOpts = { configDir, homeDir, env, platform, runner, cliPath };
+  const wasInstalled = isServiceInstalled(serviceOpts);
+  try {
+    const res = await installService(serviceOpts);
+    out.write(`Installed Maestria service: ${res.unitPath}\n`);
+    if (res.logDir) out.write(`Service logs: ${res.logDir}\n`);
+    if (action === 'start') {
+      if (wasInstalled) await restartService(serviceOpts);
+      else await startService(serviceOpts);
+      out.write('Started Maestria background service.\n');
+      return 'started';
+    }
+    return 'installed';
+  } catch (err) {
+    if (err instanceof ServiceError) {
+      out.write(`Warning: could not set up background service (${err.message}).\n`);
+      return 'skipped';
+    }
+    throw err;
+  }
+}
+
 export async function runInitCommand(args: string[], opts: InitCliOpts): Promise<void> {
   const { flags, positional } = parseArgs(args, {
     'maestri-dir': { type: 'string' },
     skill: { type: 'string' },
     'install-skill': { type: 'string' },
+    service: { type: 'string' },
     'skip-auth': { type: 'boolean' },
     yes: { type: 'boolean', short: 'y' },
     'non-interactive': { type: 'boolean' },
   });
   if (positional.length > 0) {
     throw new ArgError(
-      'Usage: maestria init [--maestri-dir <path>] [--skill claude,antigravity|none] [--skip-auth] [--yes]',
+      'Usage: maestria init [--maestri-dir <path>] [--skill claude,antigravity|none] [--service install|start|none] [--skip-auth] [--yes]',
     );
   }
   if (typeof flags.skill === 'string' && typeof flags['install-skill'] === 'string' && flags.skill !== flags['install-skill']) {
@@ -485,7 +574,36 @@ export async function runInitCommand(args: string[], opts: InitCliOpts): Promise
     io,
   });
 
+  const platform = opts.servicePlatform ?? process.platform;
+  const serviceResult = await resolveServiceStep({
+    flagService: typeof flags.service === 'string' ? flags.service : undefined,
+    configDir: opts.configDir,
+    env,
+    homeDir,
+    nonInteractive,
+    io,
+    platform,
+    runner: opts.serviceRunner,
+    cliPath: opts.serviceCliPath,
+  });
+
   out.write('\nSetup complete. Next steps:\n');
-  out.write('  1. Start the panel locally: maestria serve\n');
+  if (serviceResult === 'started') {
+    out.write('  Panel service is running.\n');
+    out.write('  Stop:    maestria service stop\n');
+    out.write('  Restart: maestria service restart\n');
+    out.write('  Status:  maestria status\n');
+  } else if (serviceResult === 'installed') {
+    out.write('  Start:   maestria service start\n');
+    out.write('  Stop:    maestria service stop\n');
+    out.write('  Restart: maestria service restart\n');
+    out.write('  Status:  maestria status\n');
+  } else if (isServicePlatformSupported(platform)) {
+    out.write('  1. Start now in foreground: maestria serve\n');
+    out.write('     Or install background service: maestria service install && maestria service start\n');
+    out.write('     Manage anytime with: maestria service start | stop | restart | status\n');
+  } else {
+    out.write('  1. Start the panel locally: maestria serve\n');
+  }
   out.write('  2. Optionally expose securely via Cloudflare Tunnel + Access (see README.md).\n');
 }

@@ -169,7 +169,7 @@ describe('CLI inbox commands', () => {
     return { configDir, wsDir, capture, takeOut };
   }
 
-  it('infers workspace from cwd and supports post, inbox, answers, and status', () => {
+  it('infers workspace from cwd and supports post, inbox, answers, and status', async () => {
     const { configDir, wsDir, capture, takeOut } = makeEnv();
 
     runWorkspaceCommand(['add', 'My Project', wsDir, '--maestro', 'Bulbasaur', '--color', '#0e7490'], {
@@ -209,9 +209,20 @@ describe('CLI inbox commands', () => {
     expect(answers.answers).toHaveLength(1);
     expect(answers.answers[0]).toMatchObject({ id: approveItem.item.id, decision: 'approved', response: 'Go ahead' });
 
-    runStatusCommand(['--json'], { configDir, cwd: subCwd, out: capture });
-    const st = JSON.parse(takeOut()) as { id: string; needsYou: number; updates: number; history: number };
-    expect(st).toMatchObject({ id: 'my-project', needsYou: 1, updates: 1, history: 1 });
+    await runStatusCommand(['--json'], {
+      configDir,
+      cwd: subCwd,
+      out: capture,
+      reachabilityCheck: async (host, port) => ({ reachable: false, url: `http://${host}:${port}` }),
+    });
+    const st = JSON.parse(takeOut()) as {
+      id: string;
+      needsYou: number;
+      updates: number;
+      history: number;
+      server: { reachable: boolean; url: string };
+    };
+    expect(st).toMatchObject({ id: 'my-project', needsYou: 1, updates: 1, history: 1, server: { reachable: false } });
   });
 
   it('rejects unknown flags and invalid kinds with ArgError', () => {

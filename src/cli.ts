@@ -12,20 +12,24 @@ import {
 } from './commands/inbox.ts';
 import { runSayCommand, runWaitCommand } from './commands/chat.ts';
 import { runInitCommand } from './commands/init.ts';
+import { runServiceCommand } from './commands/service.ts';
 import { runTunnelCommand } from './commands/tunnel.ts';
 import { openDb } from './db.ts';
 import { Audit } from './audit.ts';
 import { SessionStore } from './auth/sessions.ts';
 import { ConflictError, ValidationError } from './inbox.ts';
+import { ServiceError } from './service.ts';
 import { WorkspaceError } from './workspaces.ts';
 import { buildServer } from './server.ts';
 
 const HELP = `maestria: control panel and protocol for Maestri workspaces
 
 Usage:
-  maestria init [--maestri-dir <path>] [--skill claude,antigravity|none] [--skip-auth] [--yes]
+  maestria init [--maestri-dir <path>] [--skill claude,antigravity|none] [--service install|start|none] [--skip-auth] [--yes]
                                     Detect Maestri workspaces, set up auth, and install Maestro skill
   maestria serve                    Start the panel (127.0.0.1 only)
+  maestria service install|uninstall|start|stop|restart|status [--json]
+                                    Manage the background user service (launchd / systemd --user)
   maestria auth setup [--force]     Set the password and enrol an authenticator app (TOTP)
   maestria auth logout-all          Invalidate every panel session
   maestria tunnel on|off|status     Enable/disable the tunnel locally or inspect kill-switch state
@@ -78,6 +82,7 @@ async function main(argv: string[]): Promise<void> {
   const configDir = defaultConfigDir();
   if (cmd === 'init') return runInitCommand(argv.slice(1), { configDir });
   if (cmd === 'serve') return serve();
+  if (cmd === 'service') return runServiceCommand(argv.slice(1), { configDir });
   if (cmd === 'auth' && sub === 'setup') return authSetup({ configDir, force: rest.includes('--force') });
   if (cmd === 'auth' && sub === 'logout-all') return logoutAll();
   if (cmd === 'tunnel') return runTunnelCommand(argv.slice(1), { configDir });
@@ -105,6 +110,7 @@ main(process.argv.slice(2)).catch((err: unknown) => {
   if (
     err instanceof ConfigError ||
     err instanceof SecretsError ||
+    err instanceof ServiceError ||
     err instanceof WorkspaceError ||
     err instanceof ValidationError ||
     err instanceof ConflictError ||

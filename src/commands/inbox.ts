@@ -1,7 +1,9 @@
 import path from 'node:path';
 import { Audit } from '../audit.ts';
+import { loadConfig } from '../config.ts';
 import { openDb } from '../db.ts';
 import { INBOX_KINDS, InboxStore, type InboxKind, type InboxStatus } from '../inbox.ts';
+import { checkServerReachable, type ServerReachability } from '../service.ts';
 import {
   loadWorkspaces,
   parseWorkspaces,
@@ -235,12 +237,20 @@ export function runAnswersCommand(argv: readonly string[], ctx: CommandContext):
   }
 }
 
-export function runStatusCommand(argv: readonly string[], ctx: CommandContext): void {
+export interface StatusCliOpts extends CommandContext {
+  reachabilityCheck?: (host: string, port: number) => Promise<ServerReachability>;
+}
+
+export async function runStatusCommand(argv: readonly string[], ctx: StatusCliOpts): Promise<void> {
   const { flags, positional } = parseArgs(argv, {
     workspace: { type: 'string', short: 'w' },
     json: { type: 'boolean' },
   });
   if (positional.length > 0) throw new ArgError(`Unexpected argument: ${positional[0]}`);
+
+  const config = loadConfig(ctx.configDir);
+  const check = ctx.reachabilityCheck ?? checkServerReachable;
+  const serverPromise = check(config.host, config.port);
 
   const workspaces = loadWorkspaces(ctx.configDir);
   const db = openDb(ctx.configDir);
@@ -272,31 +282,38 @@ export function runStatusCommand(argv: readonly string[], ctx: CommandContext): 
       }
     }
 
+    const server = await serverPromise;
+    const serverLine = server.reachable
+      ? `Panel server: running (${server.url})`
+      : `Panel server: down (${server.url} not reachable — start with: maestria service start)`;
+
     if (selected) {
       const summary = formatWs(selected);
       if (flags.json) {
-        writeOut(ctx, JSON.stringify(summary, null, 2));
+        writeOut(ctx, JSON.stringify({ ...summary, server }, null, 2));
       } else {
         writeOut(
           ctx,
           `${summary.name} (${summary.id}) · Maestro: ${summary.maestroAgent} · needs you: ${summary.needsYou}, updates: ${summary.updates}, history: ${summary.history}`,
         );
+        writeOut(ctx, serverLine);
       }
       return;
     }
 
     const list = workspaces.map(formatWs);
     if (flags.json) {
-      writeOut(ctx, JSON.stringify({ workspaces: list }, null, 2));
+      writeOut(ctx, JSON.stringify({ workspaces: list, server }, null, 2));
       return;
     }
     if (list.length === 0) {
       writeOut(ctx, 'No workspaces configured.');
-      return;
+    } else {
+      for (const s of list) {
+        writeOut(ctx, `${s.id}\t${s.name}\tneeds_you:${s.needsYou}\tupdates:${s.updates}\thistory:${s.history}`);
+      }
     }
-    for (const s of list) {
-      writeOut(ctx, `${s.id}\t${s.name}\tneeds_you:${s.needsYou}\tupdates:${s.updates}\thistory:${s.history}`);
-    }
+    writeOut(ctx, serverLine);
   } finally {
     db.close();
   }

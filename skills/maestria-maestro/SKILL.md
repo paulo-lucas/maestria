@@ -55,3 +55,16 @@ When `maestria wait` exits:
 2. Act on them (`maestria answers` for inbox replies, `maestria say` for chat replies).
 3. If `standby`, pause active work cleanly until a `resume` event arrives.
 4. Start `maestria wait` in the background again.
+
+## Server
+
+- Check panel status with `maestria status`.
+- If `maestria status` says the panel is down, start it with:
+  ```sh
+  maestria service start
+  ```
+  If your environment does not permit managing user services, tell the human the exact command to run: `maestria service start`.
+- After updating `maestria`, restart the background service so the running panel picks up the new version:
+  ```sh
+  maestria service restart
+  ```
