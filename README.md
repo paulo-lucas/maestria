@@ -14,7 +14,7 @@ A self-hosted control panel and CLI protocol add-on for [Maestri](https://maestr
 
 ## Install & Setup
 
-Run the interactive setup wizard:
+Run the interactive setup wizard (or pass flags like `--skill claude,antigravity --yes` for non-interactive runs):
 
 ```sh
 npx maestria init
@@ -26,6 +26,8 @@ Or install globally:
 npm install -g maestria
 maestria init
 ```
+
+Re-running `maestria init` is idempotent: existing config, workspaces, auth credentials, and installed skills are detected and can be kept or redone individually.
 
 What `maestria init` does:
 
