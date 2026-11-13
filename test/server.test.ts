@@ -90,7 +90,7 @@ describe('security headers', () => {
       expect(res.headers['content-security-policy']).toContain("frame-ancestors 'none'");
       expect(res.headers['x-frame-options']).toBe('DENY');
       expect(res.headers['x-content-type-options']).toBe('nosniff');
-      expect(res.headers['referrer-policy']).toBe('no-referrer');
+      expect(res.headers['referrer-policy']).toBe('same-origin');
       expect(res.headers['access-control-allow-origin']).toBeUndefined();
     }
   });
@@ -163,6 +163,26 @@ describe('authentication', () => {
     const c = res.cookies.find((x) => x.name === '__Host-maestria_session')!;
     expect(c.secure).toBe(true);
     expect(c.httpOnly).toBe(true);
+  });
+
+  it('logs in with password + TOTP when browser sends Origin: null and Sec-Fetch-Site: same-origin', async () => {
+    const ctx = await setup();
+    ctx.clock.advance(31_000);
+    const page = await ctx.srv.app.inject({ method: 'GET', url: '/login', headers: base });
+    const res = await ctx.srv.app.inject({
+      method: 'POST',
+      url: '/login',
+      headers: {
+        ...base,
+        origin: 'null',
+        'sec-fetch-site': 'same-origin',
+        'content-type': 'application/x-www-form-urlencoded',
+        cookie: cookieHeader(page),
+      },
+      payload: new URLSearchParams({ _csrf: csrfFrom(page.body), password: PASSWORD, code: totp(ctx.totpSecret, ctx.clock.now()) }).toString(),
+    });
+    expect(res.statusCode).toBe(303);
+    expect(res.cookies.find((x) => x.name === 'maestria_session')).toBeDefined();
   });
 
   it('rejects a wrong password, a wrong code, and gives the same message for both', async () => {
@@ -277,9 +297,21 @@ describe('CSRF', () => {
       ctx.srv.app.inject({ method: 'POST', url: '/logout', headers: { ...base, cookie, 'x-csrf-token': csrfToken, ...headers } });
     expect((await attempt({ origin: 'https://evil.example.com' })).statusCode).toBe(403);
     expect((await attempt({ origin: 'null' })).statusCode).toBe(403);
+    expect((await attempt({ origin: 'null', 'sec-fetch-site': 'cross-site' })).statusCode).toBe(403);
     expect((await attempt({})).statusCode).toBe(403);
     expect((await attempt({ origin: ORIGIN, 'sec-fetch-site': 'cross-site' })).statusCode).toBe(403);
     expect((await attempt({ origin: ORIGIN, 'sec-fetch-site': 'same-origin' })).statusCode).toBe(303);
+
+    // Fresh session for testing Origin: null + Sec-Fetch-Site: same-origin accepted write
+    const s2 = await login(ctx);
+    const info2 = await ctx.srv.app.inject({ method: 'GET', url: '/api/session', headers: { ...base, cookie: s2.cookie } });
+    const csrf2 = info2.json<{ csrfToken: string }>().csrfToken;
+    const nullSameOriginRes = await ctx.srv.app.inject({
+      method: 'POST',
+      url: '/logout',
+      headers: { ...base, cookie: s2.cookie, 'x-csrf-token': csrf2, origin: 'null', 'sec-fetch-site': 'same-origin' },
+    });
+    expect(nullSameOriginRes.statusCode).toBe(303);
   });
 });
 

@@ -151,7 +151,7 @@ export async function buildServer(deps: ServerDeps): Promise<Server> {
     reply.header('Content-Security-Policy', CSP);
     reply.header('X-Frame-Options', 'DENY');
     reply.header('X-Content-Type-Options', 'nosniff');
-    reply.header('Referrer-Policy', 'no-referrer');
+    reply.header('Referrer-Policy', 'same-origin');
     reply.header('Cross-Origin-Opener-Policy', 'same-origin');
     reply.header('Cross-Origin-Resource-Policy', 'same-origin');
     reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()');
@@ -189,17 +189,21 @@ export async function buildServer(deps: ServerDeps): Promise<Server> {
     }
 
     // Cross-site write defence (in addition to CSRF tokens): browsers always send Origin on POST.
+    // Some browsers send Origin: null under restrictive referrer or privacy modes for same-origin form POSTs,
+    // so only allow Origin: null when Sec-Fetch-Site proves the request is same-origin.
     if (!SAFE_METHODS.has(req.method)) {
       const origin = req.headers.origin;
+      const fetchSite = req.headers['sec-fetch-site'];
       let sameOrigin = false;
-      if (typeof origin === 'string') {
+      if (origin === 'null') {
+        sameOrigin = fetchSite === 'same-origin';
+      } else if (typeof origin === 'string') {
         try {
           sameOrigin = new URL(origin).host.toLowerCase() === host;
         } catch {
           sameOrigin = false;
         }
       }
-      const fetchSite = req.headers['sec-fetch-site'];
       if (!sameOrigin || (typeof fetchSite === 'string' && fetchSite !== 'same-origin')) {
         audit.logThrottled(`origin:${req.clientIp}`, 'origin_reject', { ip: req.clientIp, detail: { path: req.url.slice(0, 100) } });
         return deny(reply, 403, 'Forbidden');
