@@ -10,6 +10,7 @@ export interface DiscoveredWorkspace {
   path: string;
   roadmapPath: string | null;
   maestroAgent: string;
+  maestroProvider: string;
   color?: string;
 }
 
@@ -98,6 +99,8 @@ export function discoverMaestriWorkspaces(maestriDir: string, homeDir: string = 
 
     const rawColor = typeof payload.color === 'string' ? payload.color.trim() : '';
     const color = HEX_RE.test(rawColor) ? rawColor.toLowerCase() : undefined;
+    const rawProvider = typeof payload.maestroProvider === 'string' ? payload.maestroProvider.trim().toLowerCase() : '';
+    const maestroProvider = /^[a-z0-9][a-z0-9._:-]{0,63}$/.test(rawProvider) ? rawProvider : 'claude';
 
     found.push({
       id,
@@ -105,6 +108,7 @@ export function discoverMaestriWorkspaces(maestriDir: string, homeDir: string = 
       path: absDir,
       roadmapPath: detectRoadmap(absDir),
       maestroAgent: 'Maestro',
+      maestroProvider,
       ...(color ? { color } : {}),
     });
   }

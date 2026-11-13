@@ -337,6 +337,7 @@ export async function buildServer(deps: ServerDeps): Promise<Server> {
           path: ws.path,
           color: ws.color,
           maestroAgent: ws.maestroAgent,
+          maestroProvider: ws.maestroProvider,
           hasRoadmap: ws.roadmapPath !== null,
           counts: c,
         };

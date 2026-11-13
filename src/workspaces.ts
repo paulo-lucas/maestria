@@ -9,6 +9,7 @@ export interface Workspace {
   path: string;
   roadmapPath: string | null;
   maestroAgent: string;
+  maestroProvider: string;
   color: string;
 }
 
@@ -27,8 +28,9 @@ export const WORKSPACE_PALETTE: readonly string[] = [
 ];
 
 const ID_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
+const PROVIDER_ID_RE = /^[a-z0-9][a-z0-9._:-]{0,63}$/i;
 const HEX_COLOR_RE = /^#[0-9a-f]{6}$/i;
-const KNOWN_KEYS = new Set(['id', 'name', 'path', 'roadmapPath', 'maestroAgent', 'color']);
+const KNOWN_KEYS = new Set(['id', 'name', 'path', 'roadmapPath', 'maestroAgent', 'maestroProvider', 'color']);
 
 export function slugifyWorkspaceId(name: string): string {
   return name
@@ -100,6 +102,14 @@ export function parseWorkspaces(raw: unknown): Workspace[] {
         ? nonEmptyString(item.maestroAgent, `workspaces[${i}].maestroAgent`, 64)
         : 'Maestro';
 
+    let maestroProvider = 'claude';
+    if (item.maestroProvider !== undefined && item.maestroProvider !== null) {
+      maestroProvider = nonEmptyString(item.maestroProvider, `workspaces[${i}].maestroProvider`, 64).toLowerCase();
+      if (!PROVIDER_ID_RE.test(maestroProvider)) {
+        throw new WorkspaceError(`workspaces[${i}].maestroProvider: invalid provider id "${maestroProvider}"`);
+      }
+    }
+
     let color: string | null = null;
     if (item.color !== undefined && item.color !== null) {
       const c = nonEmptyString(item.color, `workspaces[${i}].color`, 16);
@@ -110,7 +120,7 @@ export function parseWorkspaces(raw: unknown): Workspace[] {
       usedColors.add(color);
     }
 
-    parsed.push({ id, name, path: resolvedPath, roadmapPath, maestroAgent, color });
+    parsed.push({ id, name, path: resolvedPath, roadmapPath, maestroAgent, maestroProvider, color });
   }
 
   let paletteIdx = 0;

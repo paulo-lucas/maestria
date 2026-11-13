@@ -82,8 +82,29 @@ describe('Chat, event stream, maestria say, and maestria wait', () => {
 
     const db = openDb(configDir);
     const events = new EventStore(db);
-    events.append('app', 'standby', { message: 'High usage' });
+    events.append('app', 'standby', {
+      message: 'Usage standby threshold reached; pause agents until resumed.',
+      triggers: [
+        {
+          providerId: 'claude',
+          providerName: 'Claude Code',
+          windowId: 'five_hour',
+          windowTitle: 'Plan limits · Session',
+          usedPercent: 96,
+          thresholdPercent: 95,
+          resetsAt: null,
+        },
+      ],
+    });
     db.close();
+
+    const waitTextOut = captureStream();
+    await runWaitCommand(['--workspace', 'app', '--cursor', 'text-view', '--timeout', '1'], {
+      configDir,
+      stdout: waitTextOut.stream,
+      pollIntervalMs: 15,
+    });
+    expect(waitTextOut.read()).toContain('STANDBY (Claude Code / Plan limits · Session: 96% >= 95%)');
 
     const waitOut = captureStream();
     await runWaitCommand(['--workspace', 'app', '--json', '--timeout', '1'], {
@@ -94,6 +115,7 @@ describe('Chat, event stream, maestria say, and maestria wait', () => {
     const waitJson = JSON.parse(waitOut.read());
     expect(waitJson.events).toHaveLength(1);
     expect(waitJson.events[0].type).toBe('standby');
+    expect(waitJson.events[0].payload.triggers[0].providerId).toBe('claude');
 
     const sayOut = captureStream();
     runSayCommand(['--workspace', 'app', '--json', 'Standing', 'by!'], {

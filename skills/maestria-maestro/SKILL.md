@@ -52,9 +52,29 @@ maestria wait
 
 When `maestria wait` exits:
 1. Read its printed event(s) (`chat`, `inbox_response`, `inbox_dismiss`, `standby`, or `resume`).
-2. Act on them (`maestria answers` for inbox replies, `maestria say` for chat replies).
-3. If `standby`, pause active work cleanly until a `resume` event arrives.
-4. Start `maestria wait` in the background again.
+2. Act on them (`maestria answers` for inbox replies, `maestria say` for chat replies; see **Standby** below for `standby` / `resume`).
+3. Start `maestria wait` in the background again.
+
+## Standby
+
+Maestria monitors the provider configured for this workspace (`maestroProvider` in `workspaces.json`, default `claude`) and emits `standby` / `resume` events. The panel never controls or interrupts agents directly — you own your team.
+
+When `maestria wait` delivers a **`standby`** event:
+1. Check which provider/window triggered it from the event output (`triggers`: provider, window, `%` vs threshold, and reset time).
+2. Immediately interrupt every currently running teammate agent:
+   ```sh
+   maestri ask <agent> --raw '\e'
+   ```
+   Remember which agents were running so you can resume them when standby clears.
+3. Stop starting or assigning new work until a `resume` event arrives.
+4. Re-arm `maestria wait` in the background (it wakes automatically when the triggering window resets or usage drops below `resumeBelowPercent`).
+
+When `maestria wait` delivers a **`resume`** event:
+1. Tell each previously interrupted teammate agent to continue its task:
+   ```sh
+   maestri ask <agent> "Usage standby cleared; please continue your task."
+   ```
+2. Re-arm `maestria wait` in the background and resume orchestrating work normally.
 
 ## Server
 

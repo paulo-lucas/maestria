@@ -80,6 +80,7 @@ _Last updated: 2026-11-12 (sprint 2 done)._
       path: wsDir,
       roadmapPath: null,
       maestroAgent: 'Maestro',
+      maestroProvider: 'claude',
       color: '#5b4bd6',
     };
 

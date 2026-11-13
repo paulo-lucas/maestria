@@ -719,10 +719,24 @@
 
   function findThreshold(thresholds, providerId, win) {
     if (!thresholds) return null;
-    const rules = thresholds[providerId] || thresholds['*'];
+    const lower = String(providerId || '').toLowerCase();
+    const alias = lower === 'claude-code' ? 'claude' : lower === 'claude' ? 'claude-code' : null;
+    const rules = thresholds[lower] || (alias && thresholds[alias]) || thresholds[providerId] || thresholds['*'];
     if (!rules) return null;
     if (typeof rules[win.id] === 'number') return rules[win.id];
-    if (win.ring && typeof rules[win.ring] === 'number') return rules[win.ring];
+    const idLower = String(win.id || '').toLowerCase();
+    const ring =
+      win.ring ||
+      (typeof win.durationSeconds === 'number'
+        ? win.durationSeconds <= 86400
+          ? 'session'
+          : 'weekly'
+        : idLower === 'five_hour' || idLower === '5h' || idLower === 'session'
+          ? 'session'
+          : idLower === 'seven_day' || idLower === '7d' || idLower === 'weekly'
+            ? 'weekly'
+            : null);
+    if (ring && typeof rules[ring] === 'number') return rules[ring];
     if (typeof rules['*'] === 'number') return rules['*'];
     return null;
   }
@@ -736,7 +750,15 @@
       const summary = standby.triggers
         .map((t) => `${t.providerName} ${t.windowTitle}: ${Math.round(t.usedPercent)}% (limit ${t.thresholdPercent}%)`)
         .join('; ');
-      el.usageStandbyNote.textContent = `Standby active — ${summary}. Work will resume automatically after reset.`;
+      const pausedNames = Array.isArray(standby.workspaces)
+        ? standby.workspaces.filter((w) => w.active).map((w) => w.workspaceName || w.workspaceId)
+        : [];
+      const wsPart = pausedNames.length > 0 ? ` [${pausedNames.join(', ')}]` : '';
+      const resumePart =
+        typeof standby.resumeBelowPercent === 'number'
+          ? `on window reset or below ${standby.resumeBelowPercent}%`
+          : 'after reset';
+      el.usageStandbyNote.textContent = `Standby active${wsPart} — ${summary}. Work will resume automatically ${resumePart}.`;
       el.usageStandbyNote.hidden = false;
     } else {
       el.usageStandbyNote.hidden = true;

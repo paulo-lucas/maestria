@@ -9,7 +9,7 @@ import { parseConfig } from '../src/config.ts';
 import { openMemoryDb } from '../src/db.ts';
 import { EventStore } from '../src/events.ts';
 import { buildServer } from '../src/server.ts';
-import { StandbyGuard } from '../src/standby.ts';
+import { defaultCliNotifier, StandbyGuard } from '../src/standby.ts';
 import { executeProviderFile, mapProviderOutput } from '../src/usage-runner.ts';
 import { UsageService } from '../src/usage.ts';
 import { parseWorkspaces, StaticWorkspaceProvider } from '../src/workspaces.ts';
@@ -394,5 +394,147 @@ describe('Maestri usage reader, fallback runner, and standby guard', () => {
     expect(p2.stale).toBe(true);
     expect(p2.plan).toBe('Pro');
     expect(p2.meters[0]?.windows[0]?.usedPercent).toBe(51);
+  });
+
+  it('evaluates standby per workspace maestroProvider, uses sensible defaults, and resumes on window reset or below threshold without holding on unrelated windows', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'maestria-standby-ws-'));
+    const maestriDir = path.join(tmp, 'maestri');
+    const providersDir = mkProvidersDir(maestriDir);
+    const statusFile = path.join(providersDir, '.status.json');
+
+    let nowMs = Date.parse('2026-11-13T02:00:00Z');
+    const reset0600 = '2026-11-13T06:00:00Z';
+    const reset1100 = '2026-11-13T11:00:00Z';
+    const weekReset = '2026-11-19T00:00:00Z';
+
+    const writeProviders = (claudeSession: number, claudeWeekly: number, claudeReset: string, antigravityWeekly: number) =>
+      fs.writeFileSync(
+        statusFile,
+        JSON.stringify({
+          updatedAt: new Date(nowMs).toISOString(),
+          providers: [
+            {
+              id: 'claude-code',
+              name: 'Claude Code',
+              enabled: true,
+              state: 'ready',
+              lastSuccessAt: new Date(nowMs).toISOString(),
+              meters: [
+                {
+                  id: 'plan',
+                  label: 'Plan limits',
+                  windows: [
+                    { id: 'five_hour', title: 'Session', ring: 'session', usedPercent: claudeSession, resetsAt: claudeReset },
+                    { id: 'seven_day', title: 'Weekly', ring: 'weekly', usedPercent: claudeWeekly, resetsAt: weekReset },
+                  ],
+                },
+              ],
+            },
+            {
+              id: 'antigravity',
+              name: 'Antigravity',
+              enabled: true,
+              state: 'ready',
+              lastSuccessAt: new Date(nowMs).toISOString(),
+              meters: [
+                {
+                  id: 'plan',
+                  label: 'Plan limits',
+                  windows: [{ id: 'weekly', title: 'Weekly', ring: 'weekly', usedPercent: antigravityWeekly, resetsAt: weekReset }],
+                },
+              ],
+            },
+          ],
+        }),
+      );
+
+    // Default thresholds include claude: { session: 95, weekly: 90 }, resumeBelowPercent: 80.
+    // Extend config with an antigravity threshold as well to verify provider isolation across workspaces.
+    const cfg = parseConfig(
+      {
+        maestriDir,
+        standby: {
+          thresholds: {
+            claude: { session: 95, weekly: 90 },
+            antigravity: { weekly: 90 },
+          },
+          resumeBelowPercent: 80,
+          notifyViaCli: false,
+        },
+      },
+      tmp,
+    );
+
+    const db = openMemoryDb();
+    const audit = new Audit(db, () => nowMs);
+    const events = new EventStore(db, () => nowMs);
+    const guard = new StandbyGuard(db, audit, cfg, events, () => nowMs);
+    const usage = new UsageService(cfg, () => nowMs);
+    const workspaces = parseWorkspaces([
+      { id: 'ws-claude', name: 'Claude App', path: path.join(tmp, 'c'), maestroProvider: 'claude' },
+      { id: 'ws-ag', name: 'AG App', path: path.join(tmp, 'a'), maestroProvider: 'antigravity' },
+    ]);
+
+    // 1. Claude hits session 96% (>= 95%), weekly is 85% (< 90%). Antigravity is at 20%.
+    // Only ws-claude should enter standby; ws-ag must remain untouched!
+    writeProviders(96, 85, reset0600, 20);
+    const s1 = await guard.evaluate(await usage.read(), workspaces);
+    expect(s1.active).toBe(true);
+    expect(s1.triggers).toHaveLength(1);
+    expect(s1.triggers[0]).toMatchObject({ providerId: 'claude-code', windowId: 'five_hour', usedPercent: 96, thresholdPercent: 95 });
+    expect(s1.workspaces.find((w) => w.workspaceId === 'ws-claude')?.active).toBe(true);
+    expect(s1.workspaces.find((w) => w.workspaceId === 'ws-ag')?.active).toBe(false);
+
+    const claudeEvents1 = events.since('ws-claude', 0);
+    expect(claudeEvents1.map((e) => e.type)).toEqual(['standby']);
+    expect(String(claudeEvents1[0]?.payload.message)).toContain('Claude Code');
+    expect(String(claudeEvents1[0]?.payload.message)).toContain('Session');
+    expect(events.since('ws-ag', 0)).toEqual([]);
+
+    // 2. Non-triggering window (weekly 85% < 90%) must NOT keep standby active once session drops below 80%.
+    nowMs += 60_000;
+    writeProviders(50, 85, reset0600, 20);
+    const s2 = await guard.evaluate(await usage.read(), workspaces);
+    expect(s2.active).toBe(false);
+    expect(events.since('ws-claude', 0).map((e) => e.type)).toEqual(['standby', 'resume']);
+
+    // 3. Re-enter standby at 05:50 UTC with reset at 06:00 UTC, then advance past 06:00 UTC with STALE .status.json still showing 96%!
+    nowMs = Date.parse('2026-11-13T05:50:00Z');
+    writeProviders(96, 40, reset0600, 20);
+    const s3 = await guard.evaluate(await usage.read(), workspaces);
+    expect(s3.active).toBe(true);
+
+    nowMs = Date.parse('2026-11-13T06:01:00Z');
+    const s4 = await guard.evaluate(await usage.read(), workspaces);
+    expect(s4.active).toBe(false);
+    const evAfterReset = events.since('ws-claude', 0);
+    expect(evAfterReset.at(-1)?.type).toBe('resume');
+    expect(evAfterReset.at(-1)?.payload.reason).toBe('reset');
+
+    // Subsequent poll with same stale expired pre-reset .status.json must NOT re-trigger standby.
+    nowMs = Date.parse('2026-11-13T06:02:00Z');
+    const s5 = await guard.evaluate(await usage.read(), workspaces);
+    expect(s5.active).toBe(false);
+
+    // 4. Re-enter standby in new window (11:00 UTC reset), then rotate resetsAt forward to 16:00 UTC with 84% (< 95% threshold, even > 80% hysteresis).
+    // Advancing to a new reset cycle below threshold must also clear standby.
+    writeProviders(97, 40, reset1100, 20);
+    const s6 = await guard.evaluate(await usage.read(), workspaces);
+    expect(s6.active).toBe(true);
+    nowMs += 60_000;
+    writeProviders(84, 40, '2026-11-13T16:00:00Z', 20);
+    const s7 = await guard.evaluate(await usage.read(), workspaces);
+    expect(s7.active).toBe(false);
+
+    // 5. defaultCliNotifier only notifies with trigger info and never controls agents (no `maestri ask`).
+    const cliCalls: Array<{ file: string; args: readonly string[] }> = [];
+    await defaultCliNotifier('standby', s6, [workspaces[0]!], async (file, args) => {
+      cliCalls.push({ file, args });
+    });
+    expect(cliCalls).toHaveLength(1);
+    expect(cliCalls[0]?.file).toBe('maestri');
+    expect(cliCalls[0]?.args[0]).toBe('notify');
+    expect(cliCalls[0]?.args[1]).toContain('Claude Code');
+    expect(cliCalls.some((c) => c.args[0] === 'ask')).toBe(false);
   });
 });

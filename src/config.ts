@@ -39,9 +39,9 @@ export interface Config {
   standby: {
     /** Per-provider thresholds: `{ [providerId]: { [windowIdOrRingOrStar]: percent (1..100) } }`. */
     thresholds: Record<string, Record<string, number>>;
-    /** Optional global hysteresis threshold to clear standby once all monitored windows drop below it. */
+    /** Optional global hysteresis threshold to clear standby once all triggering windows drop below it. */
     resumeBelowPercent: number | null;
-    /** Best-effort local `maestri notify` / `--raw \e` alert in addition to event stream entries. */
+    /** Best-effort local `maestri notify` alert in addition to event stream entries. */
     notifyViaCli: boolean;
   };
   tunnel: {
@@ -160,6 +160,22 @@ function isFile(p: string): boolean {
   }
 }
 
+export const DEFAULT_STANDBY_THRESHOLDS: Record<string, Record<string, number>> = {
+  claude: { session: 95, weekly: 90 },
+};
+
+export const DEFAULT_RESUME_BELOW_PERCENT = 80;
+
+export function cloneStandbyThresholds(
+  thresholds: Record<string, Record<string, number>>,
+): Record<string, Record<string, number>> {
+  const out: Record<string, Record<string, number>> = {};
+  for (const [k, v] of Object.entries(thresholds)) {
+    out[k] = { ...v };
+  }
+  return out;
+}
+
 export function defaultConfig(
   configDir: string,
   env: NodeJS.ProcessEnv = process.env,
@@ -177,7 +193,11 @@ export function defaultConfig(
     login: { maxFailuresPerIp: 5, maxFailuresGlobal: 20, windowSeconds: 900, lockoutSeconds: 900 },
     cloudflareAccess: null,
     usage: { staleMinutes: 15, fallbackEnabled: true, pollSeconds: 30 },
-    standby: { thresholds: {}, resumeBelowPercent: null, notifyViaCli: false },
+    standby: {
+      thresholds: cloneStandbyThresholds(DEFAULT_STANDBY_THRESHOLDS),
+      resumeBelowPercent: DEFAULT_RESUME_BELOW_PERCENT,
+      notifyViaCli: false,
+    },
     tunnel: { stopCommand: [], startCommand: [], statusCommand: [] },
   };
 }
@@ -298,8 +318,9 @@ export function parseConfig(
     if (!isObj(raw.standby)) throw new ConfigError('config: "standby" must be an object');
     const s = raw.standby;
     if (s.notifyViaCli !== undefined) cfg.standby.notifyViaCli = bool(s.notifyViaCli, 'standby.notifyViaCli');
-    if (s.resumeBelowPercent !== undefined && s.resumeBelowPercent !== null) {
-      cfg.standby.resumeBelowPercent = int(s.resumeBelowPercent, 'standby.resumeBelowPercent', 0, 99);
+    if (s.resumeBelowPercent !== undefined) {
+      cfg.standby.resumeBelowPercent =
+        s.resumeBelowPercent === null ? null : int(s.resumeBelowPercent, 'standby.resumeBelowPercent', 0, 99);
     }
     if (s.thresholds !== undefined) {
       if (!isObj(s.thresholds)) throw new ConfigError('config: "standby.thresholds" must be an object');

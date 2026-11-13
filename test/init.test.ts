@@ -83,16 +83,22 @@ describe('maestria init, workspace discovery, and skill installer', () => {
     expect(output).toContain('Verified Maestri usage providers');
     expect(output).toContain('Detected 1 new Maestri workspace');
 
-    expect(loadConfig(configDir).maestriDir).toBe(maestriDir);
+    const cfg = loadConfig(configDir);
+    expect(cfg.maestriDir).toBe(maestriDir);
+    expect(cfg.standby.thresholds).toEqual({ claude: { session: 95, weekly: 90 } });
+    expect(cfg.standby.resumeBelowPercent).toBe(80);
     const savedWs = loadWorkspaces(configDir);
     expect(savedWs).toHaveLength(1);
-    expect(savedWs[0]).toMatchObject({ id: 'sample-project', name: 'Sample Project', path: projDir, roadmapPath: 'ROADMAP.md' });
+    expect(savedWs[0]).toMatchObject({ id: 'sample-project', name: 'Sample Project', path: projDir, roadmapPath: 'ROADMAP.md', maestroProvider: 'claude' });
 
     const claudeSkill = path.join(homeDir, '.claude', 'skills', 'maestria', 'SKILL.md');
     const agSkill = path.join(homeDir, '.gemini', 'config', 'skills', 'maestria', 'SKILL.md');
     expect(fs.existsSync(claudeSkill)).toBe(true);
     expect(fs.existsSync(agSkill)).toBe(true);
-    expect(fs.readFileSync(claudeSkill, 'utf8')).toContain('maestria wait');
+    const skillText = fs.readFileSync(claudeSkill, 'utf8');
+    expect(skillText).toContain('maestria wait');
+    expect(skillText).toContain('## Standby');
+    expect(skillText).toContain("maestri ask <agent> --raw '\\e'");
 
     // Re-running init when no .gemini/config/skills exists defaults to ~/.gemini/antigravity/skills
     const freshHome = path.join(tmp, 'home2');

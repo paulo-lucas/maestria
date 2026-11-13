@@ -25,8 +25,8 @@ import { buildServer } from './server.ts';
 const HELP = `maestria: control panel and protocol for Maestri workspaces
 
 Usage:
-  maestria init [--maestri-dir <path>] [--skill claude,antigravity|none] [--service install|start|none] [--skip-auth] [--yes]
-                                    Detect Maestri workspaces, set up auth, and install Maestro skill
+  maestria init [--maestri-dir <path>] [--standby default|none] [--skill claude,antigravity|none] [--service install|start|none] [--skip-auth] [--yes]
+                                    Detect Maestri workspaces, configure standby, set up auth, and install Maestro skill
   maestria serve                    Start the panel (127.0.0.1 only)
   maestria service install|uninstall|start|stop|restart|status [--json]
                                     Manage the background user service (launchd / systemd --user / Task Scheduler)

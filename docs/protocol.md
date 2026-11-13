@@ -13,7 +13,7 @@ This workspace uses Maestria (`maestria` CLI) to talk to the human:
 - Post updates (`maestria post --kind notice "..."`), approvals (`--kind approve`), questions (`--kind input`), and choices (`--kind choice --option A --option B "..."`).
 - Reply in chat with `maestria say "..."`.
 - Run `maestria wait` in the background to receive human chat messages, inbox answers, and usage standby/resume events; after handling an event, re-run `maestria wait` in the background.
-- On a `standby` event, pause work until a `resume` event arrives.
+- On a `standby` event, interrupt running teammates (`maestri ask <agent> --raw '\e'`), stop starting work, and re-arm `maestria wait` until a `resume` event arrives, then tell interrupted agents to continue.
 ```
 
 ## CLI Reference
@@ -25,7 +25,7 @@ This workspace uses Maestria (`maestria` CLI) to talk to the human:
 | `maestria answers [--all] [--json]` | Read resolved Inbox answers/decisions (human-readable or JSON). |
 | `maestria say [--by <agent>] <text>` | Append a Maestro reply to the workspace Chat. |
 | `maestria wait [--cursor <name>] [--since <id>] [--from-now] [--timeout <sec>] [--json]` | Block until new events arrive for the workspace, advance the named SQLite cursor, print events, and exit. |
-| `maestria status [--json]` | Show workspace counts (`needsYou`, `updates`, `history`). |
+| `maestria status [--json]` | Show workspace counts (`needsYou`, `updates`, `history`) and panel server reachability. |
 
 ## Event Types (`maestria wait`)
 
@@ -34,7 +34,7 @@ Each event row belongs to a single workspace and carries an auto-incrementing `i
 - `chat`: `{ messageId, author, body, createdAt }` — emitted when the human sends a Chat message in the panel.
 - `inbox_response`: `{ itemId, kind, decision, response }` — emitted when the human responds to an `approve`, `input`, or `choice` item.
 - `inbox_dismiss`: `{ itemId, kind, decision }` — emitted when the human clicks "Got it" on a `notice` or dismisses an open item.
-- `standby`: `{ message, triggers }` — emitted when configured provider/window usage reaches a standby threshold.
-- `resume`: `{ message }` — emitted once monitored usage drops below the resume threshold.
+- `standby`: `{ provider, message, triggers }` — emitted for a workspace when usage on its configured `maestroProvider` (default `claude`) reaches a standby threshold; `triggers` lists each `{ providerId, providerName, windowId, windowTitle, usedPercent, thresholdPercent, resetsAt }`.
+- `resume`: `{ provider, reason, message }` — emitted once the triggering window resets or usage drops below `resumeBelowPercent`.
 
 Using `--cursor <name>` (default `"default"`) persists `last_event_id` per workspace in SQLite (`wait_cursors`), so events arriving while the Maestro is between `maestria wait` runs are delivered immediately on the next call without being dropped.

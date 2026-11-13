@@ -85,6 +85,14 @@ describe('maestriDir resolution and config validation', () => {
       expect(fs.statSync(path.join(dir, 'config.json')).mode & 0o777).toBe(0o600);
     }
     expect(loadConfig(dir).maestriDir).toBe(path.resolve('/tmp/saved-maestri'));
-    expect(defaultConfig(dir).port).toBe(4777);
+    const def = defaultConfig(dir);
+    expect(def.port).toBe(4777);
+    expect(def.standby.thresholds).toEqual({ claude: { session: 95, weekly: 90 } });
+    expect(def.standby.resumeBelowPercent).toBe(80);
+    expect(def.standby.notifyViaCli).toBe(false);
+
+    const noHysteresis = parseConfig({ standby: { resumeBelowPercent: null, thresholds: {} } }, dir);
+    expect(noHysteresis.standby.resumeBelowPercent).toBeNull();
+    expect(noHysteresis.standby.thresholds).toEqual({});
   });
 });

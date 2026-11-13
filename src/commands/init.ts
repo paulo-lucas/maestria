@@ -4,10 +4,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { authFile } from '../auth/secrets.ts';
 import {
+  cloneStandbyThresholds,
   ConfigError,
   configFilePath,
+  DEFAULT_RESUME_BELOW_PERCENT,
+  DEFAULT_STANDBY_THRESHOLDS,
   ensureConfigDir,
   inspectMaestriDir,
+  loadConfig,
   loadRawConfig,
   resolveMaestriDir,
   saveRawConfig,
@@ -294,6 +298,170 @@ async function resolveWorkspacesStep(opts: {
   }
 }
 
+function formatStandbySummary(standby: { thresholds: Record<string, Record<string, number>>; resumeBelowPercent: number | null }): string {
+  const entries = Object.entries(standby.thresholds).filter(([, wins]) => Object.keys(wins).length > 0);
+  if (entries.length === 0) return 'disabled';
+  const parts = entries.map(([prov, wins]) => {
+    const winText = Object.entries(wins)
+      .map(([w, pct]) => `${w} ${pct}%`)
+      .join(', ');
+    return `${prov}: ${winText}`;
+  });
+  const resumeText =
+    standby.resumeBelowPercent !== null
+      ? `resume on reset or below ${standby.resumeBelowPercent}%`
+      : 'resume on reset or below threshold';
+  return `${parts.join(' | ')}; ${resumeText}`;
+}
+
+function validatePercentOrNone(raw: string, min: number, max: number): true | string {
+  const t = raw.trim().toLowerCase();
+  if (t === 'none' || t === 'off' || t === '') return true;
+  if (!/^\d+$/.test(t)) return `Enter a whole number between ${min} and ${max}, or "none".`;
+  const n = Number(t);
+  if (!Number.isInteger(n) || n < min || n > max) {
+    return `Value must be between ${min} and ${max} (or "none").`;
+  }
+  return true;
+}
+
+function parsePercentOrNone(raw: string): number | null {
+  const t = raw.trim().toLowerCase();
+  if (t === 'none' || t === 'off' || t === '') return null;
+  return Number(t);
+}
+
+async function resolveStandbyStep(opts: {
+  configDir: string;
+  flagStandby?: string;
+  nonInteractive: boolean;
+  env: NodeJS.ProcessEnv;
+  io: PromptIO;
+}): Promise<void> {
+  const { configDir, flagStandby, nonInteractive, env, io } = opts;
+  const out = io.output;
+  const existingRaw = loadRawConfig(configDir);
+  const existingStandby =
+    typeof existingRaw.standby === 'object' && existingRaw.standby !== null && !Array.isArray(existingRaw.standby)
+      ? (existingRaw.standby as Record<string, unknown>)
+      : null;
+
+  const saveStandbyConfig = (
+    thresholds: Record<string, Record<string, number>>,
+    resumeBelowPercent: number | null,
+  ) => {
+    const nextRaw: Record<string, unknown> = {
+      ...existingRaw,
+      standby: {
+        ...(existingStandby ?? {}),
+        thresholds,
+        resumeBelowPercent,
+      },
+    };
+    saveRawConfig(configDir, nextRaw, env);
+  };
+
+  if (typeof flagStandby === 'string') {
+    const mode = flagStandby.trim().toLowerCase();
+    if (mode === 'default') {
+      const thresholds = cloneStandbyThresholds(DEFAULT_STANDBY_THRESHOLDS);
+      saveStandbyConfig(thresholds, DEFAULT_RESUME_BELOW_PERCENT);
+      out.write(`Standby thresholds set to defaults (${formatStandbySummary({ thresholds, resumeBelowPercent: DEFAULT_RESUME_BELOW_PERCENT })}).\n`);
+      return;
+    }
+    if (mode === 'none' || mode === 'disable' || mode === 'off') {
+      saveStandbyConfig({}, null);
+      out.write('Usage standby disabled (--standby none).\n');
+      return;
+    }
+    throw new ArgError('--standby must be "default" or "none"');
+  }
+
+  if (existingStandby && existingStandby.thresholds !== undefined) {
+    const current = loadConfig(configDir, env).standby;
+    const summary = formatStandbySummary(current);
+    out.write(`Existing standby thresholds (${summary}).\n`);
+    if (nonInteractive) return;
+    const action = await askKeepOrRedo('Standby thresholds', io, {
+      keep: `Keep existing standby (${summary})`,
+      redo: 'Change standby thresholds',
+    });
+    if (action === 'keep') return;
+  } else if (nonInteractive) {
+    const thresholds = cloneStandbyThresholds(DEFAULT_STANDBY_THRESHOLDS);
+    saveStandbyConfig(thresholds, DEFAULT_RESUME_BELOW_PERCENT);
+    out.write(`Configured default standby thresholds (${formatStandbySummary({ thresholds, resumeBelowPercent: DEFAULT_RESUME_BELOW_PERCENT })}).\n`);
+    return;
+  }
+
+  const mode = await askSelect<'default' | 'custom' | 'disable'>(
+    'Usage standby thresholds (auto-pause agents near quota limits):',
+    [
+      {
+        name: 'Use defaults (claude: session 95%, weekly 90%; resume on reset or below 80%)',
+        value: 'default',
+      },
+      { name: 'Customize provider/window thresholds', value: 'custom' },
+      { name: 'Disable automatic standby', value: 'disable' },
+    ],
+    { defaultValue: 'default', io },
+  );
+
+  if (mode === 'default') {
+    const thresholds = cloneStandbyThresholds(DEFAULT_STANDBY_THRESHOLDS);
+    saveStandbyConfig(thresholds, DEFAULT_RESUME_BELOW_PERCENT);
+    out.write(`Standby thresholds confirmed (${formatStandbySummary({ thresholds, resumeBelowPercent: DEFAULT_RESUME_BELOW_PERCENT })}).\n`);
+    return;
+  }
+
+  if (mode === 'disable') {
+    saveStandbyConfig({}, null);
+    out.write('Usage standby disabled.\n');
+    return;
+  }
+
+  const provider = (
+    await askLine('Provider ID to guard (e.g. claude, antigravity, codex):', io, {
+      defaultValue: 'claude',
+      validate: (raw) =>
+        /^[a-z0-9*][a-z0-9._:-]{0,63}$/i.test(raw.trim()) ? true : 'Enter a valid provider ID (letters, digits, ., _, :, -).',
+    })
+  )
+    .trim()
+    .toLowerCase();
+
+  const sessionRaw = await askLine(`Session window limit % for ${provider} (1-100, or "none"):`, io, {
+    defaultValue: '95',
+    validate: (raw) => validatePercentOrNone(raw, 1, 100),
+  });
+  const weeklyRaw = await askLine(`Weekly window limit % for ${provider} (1-100, or "none"):`, io, {
+    defaultValue: '90',
+    validate: (raw) => validatePercentOrNone(raw, 1, 100),
+  });
+  const resumeRaw = await askLine('Resume below % before reset (0-99, or "none" for reset-only):', io, {
+    defaultValue: '80',
+    validate: (raw) => validatePercentOrNone(raw, 0, 99),
+  });
+
+  const providerRules: Record<string, number> = {};
+  const sessionPct = parsePercentOrNone(sessionRaw);
+  const weeklyPct = parsePercentOrNone(weeklyRaw);
+  if (sessionPct !== null) providerRules.session = sessionPct;
+  if (weeklyPct !== null) providerRules.weekly = weeklyPct;
+
+  const baseThresholds = existingStandby ? loadConfig(configDir, env).standby.thresholds : {};
+  const nextThresholds = cloneStandbyThresholds(baseThresholds);
+  if (Object.keys(providerRules).length > 0) {
+    nextThresholds[provider] = providerRules;
+  } else {
+    delete nextThresholds[provider];
+  }
+  const resumeBelowPercent = parsePercentOrNone(resumeRaw);
+
+  saveStandbyConfig(nextThresholds, resumeBelowPercent);
+  out.write(`Standby thresholds saved (${formatStandbySummary({ thresholds: nextThresholds, resumeBelowPercent })}).\n`);
+}
+
 async function resolveAuthStep(opts: {
   configDir: string;
   skipAuth: boolean;
@@ -508,6 +676,7 @@ async function resolveServiceStep(opts: {
 export async function runInitCommand(args: string[], opts: InitCliOpts): Promise<void> {
   const { flags, positional } = parseArgs(args, {
     'maestri-dir': { type: 'string' },
+    standby: { type: 'string' },
     skill: { type: 'string' },
     'install-skill': { type: 'string' },
     service: { type: 'string' },
@@ -517,7 +686,7 @@ export async function runInitCommand(args: string[], opts: InitCliOpts): Promise
   });
   if (positional.length > 0) {
     throw new ArgError(
-      'Usage: maestria init [--maestri-dir <path>] [--skill claude,antigravity|none] [--service install|start|none] [--skip-auth] [--yes]',
+      'Usage: maestria init [--maestri-dir <path>] [--standby default|none] [--skill claude,antigravity|none] [--service install|start|none] [--skip-auth] [--yes]',
     );
   }
   if (typeof flags.skill === 'string' && typeof flags['install-skill'] === 'string' && flags.skill !== flags['install-skill']) {
@@ -549,6 +718,14 @@ export async function runInitCommand(args: string[], opts: InitCliOpts): Promise
     maestriDir,
     nonInteractive,
     homeDir,
+    io,
+  });
+
+  await resolveStandbyStep({
+    configDir: opts.configDir,
+    flagStandby: typeof flags.standby === 'string' ? flags.standby : undefined,
+    nonInteractive,
+    env,
     io,
   });
 

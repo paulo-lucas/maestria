@@ -18,11 +18,11 @@ describe('workspaces config', () => {
   it('parses valid entries, applies defaults, and auto-assigns distinct palette colors', () => {
     const list = parseWorkspaces([
       { name: 'My App', path: '/tmp/my-app' },
-      { id: 'docs', name: 'Docs Site', path: '/tmp/docs', roadmapPath: 'ROADMAP.md', maestroAgent: 'Bulbasaur', color: '#2563EB' },
+      { id: 'docs', name: 'Docs Site', path: '/tmp/docs', roadmapPath: 'ROADMAP.md', maestroAgent: 'Bulbasaur', maestroProvider: 'Antigravity', color: '#2563EB' },
     ]);
     expect(list).toEqual([
-      { id: 'my-app', name: 'My App', path: path.resolve('/tmp/my-app'), roadmapPath: null, maestroAgent: 'Maestro', color: WORKSPACE_PALETTE[0] },
-      { id: 'docs', name: 'Docs Site', path: path.resolve('/tmp/docs'), roadmapPath: 'ROADMAP.md', maestroAgent: 'Bulbasaur', color: '#2563eb' },
+      { id: 'my-app', name: 'My App', path: path.resolve('/tmp/my-app'), roadmapPath: null, maestroAgent: 'Maestro', maestroProvider: 'claude', color: WORKSPACE_PALETTE[0] },
+      { id: 'docs', name: 'Docs Site', path: path.resolve('/tmp/docs'), roadmapPath: 'ROADMAP.md', maestroAgent: 'Bulbasaur', maestroProvider: 'antigravity', color: '#2563eb' },
     ]);
   });
 
@@ -32,6 +32,7 @@ describe('workspaces config', () => {
     expect(() => parseWorkspaces([{ name: 'A', path: 'relative/path' }])).toThrow(WorkspaceError);
     expect(() => parseWorkspaces([{ id: 'BAD ID', name: 'A', path: '/tmp/a' }])).toThrow(WorkspaceError);
     expect(() => parseWorkspaces([{ name: 'A', path: '/tmp/a', color: 'red' }])).toThrow(WorkspaceError);
+    expect(() => parseWorkspaces([{ name: 'A', path: '/tmp/a', maestroProvider: 'bad provider!' }])).toThrow(WorkspaceError);
     expect(() =>
       parseWorkspaces([
         { id: 'dup', name: 'One', path: '/tmp/one' },

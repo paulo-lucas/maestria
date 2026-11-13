@@ -64,8 +64,21 @@ export function formatEventSummary(ev: WorkspaceEvent): string {
     }
     case 'inbox_dismiss':
       return `[${ts}] inbox_dismiss (${String(ev.payload.kind ?? '')} ${String(ev.payload.itemId ?? '')})`;
-    case 'standby':
-      return `[${ts}] STANDBY: ${String(ev.payload.message ?? 'Threshold reached')}`;
+    case 'standby': {
+      const rawTriggers = Array.isArray(ev.payload.triggers) ? ev.payload.triggers : [];
+      const triggerText = rawTriggers
+        .filter((t): t is Record<string, unknown> => typeof t === 'object' && t !== null)
+        .map((t) => {
+          const prov = String(t.providerName ?? t.providerId ?? 'provider');
+          const win = String(t.windowTitle ?? t.windowId ?? 'window');
+          const used = typeof t.usedPercent === 'number' ? `${Math.round(t.usedPercent)}%` : '?%';
+          const limit = typeof t.thresholdPercent === 'number' ? `${t.thresholdPercent}%` : '?%';
+          return `${prov} / ${win}: ${used} >= ${limit}`;
+        })
+        .join('; ');
+      const msg = String(ev.payload.message ?? 'Threshold reached');
+      return triggerText ? `[${ts}] STANDBY (${triggerText}): ${msg}` : `[${ts}] STANDBY: ${msg}`;
+    }
     case 'resume':
       return `[${ts}] RESUME: ${String(ev.payload.message ?? 'Usage below threshold')}`;
   }

@@ -45,7 +45,10 @@ export function runWorkspaceCommand(argv: readonly string[], ctx: CommandContext
       return;
     }
     for (const ws of list) {
-      writeOut(ctx, `${ws.id}\t${ws.name}\t${ws.color}\t${ws.path}\t${ws.maestroAgent}${ws.roadmapPath ? `\t${ws.roadmapPath}` : ''}`);
+      writeOut(
+        ctx,
+        `${ws.id}\t${ws.name}\t${ws.color}\t${ws.path}\t${ws.maestroAgent} (${ws.maestroProvider})${ws.roadmapPath ? `\t${ws.roadmapPath}` : ''}`,
+      );
     }
     return;
   }
@@ -55,11 +58,14 @@ export function runWorkspaceCommand(argv: readonly string[], ctx: CommandContext
       id: { type: 'string' },
       roadmap: { type: 'string' },
       maestro: { type: 'string' },
+      provider: { type: 'string' },
       color: { type: 'string' },
       json: { type: 'boolean' },
     });
     if (positional.length !== 2) {
-      throw new ArgError('Usage: maestria workspace add <name> <path> [--id <id>] [--roadmap <path>] [--maestro <agent>] [--color <#rrggbb>]');
+      throw new ArgError(
+        'Usage: maestria workspace add <name> <path> [--id <id>] [--roadmap <path>] [--maestro <agent>] [--provider <id>] [--color <#rrggbb>]',
+      );
     }
     const [name, rawPath] = positional as [string, string];
     const absPath = path.resolve(ctx.cwd ?? process.cwd(), rawPath);
@@ -73,6 +79,7 @@ export function runWorkspaceCommand(argv: readonly string[], ctx: CommandContext
         path: absPath,
         roadmapPath: typeof flags.roadmap === 'string' ? flags.roadmap : null,
         maestroAgent: typeof flags.maestro === 'string' ? flags.maestro : 'Maestro',
+        maestroProvider: typeof flags.provider === 'string' ? flags.provider : 'claude',
         ...(typeof flags.color === 'string' ? { color: flags.color } : {}),
       },
     ]);
@@ -265,6 +272,7 @@ export async function runStatusCommand(argv: readonly string[], ctx: StatusCliOp
         path: ws.path,
         color: ws.color,
         maestroAgent: ws.maestroAgent,
+        maestroProvider: ws.maestroProvider,
         needsYou: c.needsYou,
         updates: c.updates,
         history: c.history,

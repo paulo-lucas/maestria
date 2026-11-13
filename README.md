@@ -102,9 +102,9 @@ Security properties enforced on every request:
 
 ## Standby Guard & Usage
 
-Maestria reads `<maestriDir>/usage/providers/.status.json` read-only and displays every provider configured in Maestri (Claude Code, Antigravity, Codex, and custom providers). If Maestri stops updating `.status.json` (for example while its rings are off-screen) past `usage.staleMinutes` (default `15`), Maestria can optionally execute the provider's `<id>.json` specification as a read-only fallback.
+Maestria reads `<maestriDir>/usage/providers/.status.json` read-only and displays every provider configured in Maestri (Claude Code, Antigravity, Codex, and custom providers). Erroring providers with no recent reading are hidden under a toggle, while failing providers with a reading within the last 24 hours remain visible as `stale`. If Maestri stops updating `.status.json` (for example while its rings are off-screen) past `usage.staleMinutes` (default `15`), Maestria can optionally execute the provider's `<id>.json` specification as a read-only fallback.
 
-Configure automatic standby/resume thresholds per provider and window in `config.json`:
+Standby is evaluated per workspace against that workspace's `maestroProvider` (default `"claude"` in `workspaces.json`, settable via `maestria workspace add ... --provider <id>`), so workspaces running on other providers are not paused when Claude hits its limits. By default, Maestria guards `claude` at `session: 95%` and `weekly: 90%`, and emits `resume` automatically when the triggering window resets or usage drops below `resumeBelowPercent` (`80`). You can confirm or customize these thresholds during `maestria init` or in `config.json`:
 
 ```json
 {
@@ -115,14 +115,16 @@ Configure automatic standby/resume thresholds per provider and window in `config
   },
   "standby": {
     "resumeBelowPercent": 80,
-    "notifyViaCli": true,
+    "notifyViaCli": false,
     "thresholds": {
-      "claude": { "five_hour": 95, "seven_day": 90 },
+      "claude": { "session": 95, "weekly": 90 },
       "antigravity": { "weekly": 90 }
     }
   }
 }
 ```
+
+Maestria performs no agent control itself — it appends `standby` / `resume` events (listing the triggering provider/window) to the workspace event stream, and the Maestro interrupts/resumes its running teammates via `maestria wait`.
 
 ## Kill Switch & Recovery
 

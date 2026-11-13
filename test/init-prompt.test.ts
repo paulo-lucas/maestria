@@ -238,6 +238,10 @@ describe('interactive @inquirer/prompts wizard, flags, and fake TTY flows', () =
     await tty1.waitFor('Add detected workspaces to workspaces.json?');
     await tty1.pressEnter();
 
+    // Standby thresholds confirm defaults -> Enter accepts defaults
+    await tty1.waitFor('Usage standby thresholds (auto-pause agents near quota limits):');
+    await tty1.pressEnter();
+
     // Password + Repeat + TOTP
     await tty1.waitFor('New password (at least 12 characters):');
     await tty1.typeCharByChar('maestria-test-pass-123');
@@ -309,6 +313,9 @@ describe('interactive @inquirer/prompts wizard, flags, and fake TTY flows', () =
     await tty2.waitFor('Workspaces');
     await tty2.pressEnter(); // Keep preselected
 
+    await tty2.waitFor('Standby thresholds');
+    await tty2.pressEnter(); // Keep existing standby thresholds
+
     await tty2.waitFor('Credentials');
     await tty2.pressDown(); // Move to Reset password & TOTP
     await tty2.pressEnter();
@@ -365,6 +372,9 @@ describe('interactive @inquirer/prompts wizard, flags, and fake TTY flows', () =
     await tty.waitFor('Configuration');
     await tty.pressEnter(); // Keep existing config
 
+    await tty.waitFor('Usage standby thresholds (auto-pause agents near quota limits):');
+    await tty.pressEnter(); // Confirm defaults
+
     await tty.waitFor('Credentials');
     await tty.pressDown(); // Reset password & TOTP
     await tty.pressEnter();
@@ -410,6 +420,18 @@ describe('interactive @inquirer/prompts wizard, flags, and fake TTY flows', () =
     await tty.waitFor('Add detected workspaces to workspaces.json?');
     await tty.pressEnter();
 
+    await tty.waitFor('Usage standby thresholds (auto-pause agents near quota limits):');
+    await tty.pressDown(); // Move to Customize provider/window thresholds
+    await tty.pressEnter();
+    await tty.waitFor('Provider ID to guard');
+    await tty.pressEnter(); // claude
+    await tty.waitFor('Session window limit %');
+    await tty.typeCharByChar('92');
+    await tty.waitFor('Weekly window limit %');
+    await tty.typeCharByChar('88');
+    await tty.waitFor('Resume below %');
+    await tty.typeCharByChar('75');
+
     await tty.waitFor('New password (at least 12 characters):');
     // Too short (< 12 chars): must report rule and re-ask cleanly without throwing
     await tty.typeCharByChar('short');
@@ -446,6 +468,10 @@ describe('interactive @inquirer/prompts wizard, flags, and fake TTY flows', () =
     tty.sendLine('y');
 
     await run;
+
+    const customStandby = loadConfig(env.configDir).standby;
+    expect(customStandby.thresholds).toEqual({ claude: { session: 92, weekly: 88 } });
+    expect(customStandby.resumeBelowPercent).toBe(75);
 
     const saved = loadSecrets(env.configDir);
     expect(saved?.totpSecret).toBe(secret);
