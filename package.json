@@ -28,6 +28,7 @@
     "start": "node dist/cli.js serve",
     "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
+    "pretest": "pnpm build",
     "test": "vitest run"
   },
   "dependencies": {

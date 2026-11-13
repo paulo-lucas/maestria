@@ -1,3 +1,4 @@
+import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -173,4 +174,75 @@ describe('Chat, event stream, maestria say, and maestria wait', () => {
     expect(listRes.statusCode).toBe(200);
     expect(listRes.json().messages).toHaveLength(1);
   });
+
+  it('keeps the built CLI wait subprocess alive past 2 s and exits with the event once appended', async () => {
+    const rootDir = path.resolve(import.meta.dirname, '..');
+    const distCli = path.join(rootDir, 'dist', 'cli.js');
+    if (!fs.existsSync(distCli)) {
+      const tscBin = path.join(rootDir, 'node_modules', '.bin', process.platform === 'win32' ? 'tsc.cmd' : 'tsc');
+      execFileSync(tscBin, ['-p', 'tsconfig.build.json'], { cwd: rootDir, stdio: 'pipe' });
+    }
+
+    const configDir = fs.mkdtempSync(path.join(os.tmpdir(), 'maestria-wait-proc-'));
+    const wsPath = path.join(configDir, 'ws-app');
+    fs.mkdirSync(wsPath);
+    saveWorkspaces(configDir, [{ id: 'app', name: 'App', path: wsPath, maestroAgent: 'Klefki' }]);
+    const initDb = openDb(configDir);
+    initDb.close();
+
+    const child = spawn(process.execPath, [distCli, 'wait', '--workspace', 'app', '--json'], {
+      env: { ...process.env, MAESTRIA_CONFIG_DIR: configDir },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    let stdout = '';
+    let stderr = '';
+    let exitCode: number | null = null;
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk.toString('utf8');
+    });
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk.toString('utf8');
+    });
+    const exitPromise = new Promise<number | null>((resolve, reject) => {
+      child.on('error', reject);
+      child.on('close', (code) => {
+        exitCode = code;
+        resolve(code);
+      });
+    });
+
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 2100));
+      expect(exitCode).toBeNull();
+      expect(child.exitCode).toBeNull();
+      expect(stderr).toBe('');
+
+      const db = openDb(configDir);
+      try {
+        const events = new EventStore(db);
+        events.append('app', 'chat', { author: 'Owner', body: 'Still awake!' });
+      } finally {
+        db.close();
+      }
+
+      const code = await Promise.race([
+        exitPromise,
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('wait subprocess did not exit after event')), 5000)),
+      ]);
+      expect(code).toBe(0);
+      expect(stderr).toBe('');
+      const parsed = JSON.parse(stdout);
+      expect(parsed.workspaceId).toBe('app');
+      expect(parsed.timedOut).toBe(false);
+      expect(parsed.events).toHaveLength(1);
+      expect(parsed.events[0].type).toBe('chat');
+      expect(parsed.events[0].payload.body).toBe('Still awake!');
+    } finally {
+      if (child.exitCode === null && !child.killed) {
+        child.kill('SIGKILL');
+      }
+      fs.rmSync(configDir, { recursive: true, force: true });
+    }
+  }, 15_000);
 });
