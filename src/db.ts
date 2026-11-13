@@ -143,6 +143,34 @@ const MIGRATIONS: string[] = [
   CREATE INDEX inbox_ws_status ON inbox (workspace_id, status, created_at);
   CREATE INDEX inbox_status_created ON inbox (status, created_at);
   `,
+  `
+  CREATE TABLE chat_messages (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL,
+    sender TEXT NOT NULL CHECK (sender IN ('human', 'maestro')),
+    author TEXT NOT NULL,
+    body TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX chat_ws_created ON chat_messages (workspace_id, created_at, id);
+
+  CREATE TABLE events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    workspace_id TEXT NOT NULL,
+    type TEXT NOT NULL CHECK (type IN ('chat', 'inbox_response', 'inbox_dismiss', 'standby', 'resume')),
+    payload TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX events_ws_id ON events (workspace_id, id);
+
+  CREATE TABLE wait_cursors (
+    workspace_id TEXT NOT NULL,
+    consumer TEXT NOT NULL,
+    last_event_id INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (workspace_id, consumer)
+  );
+  `,
 ];
 
 export function migrate(db: Db): void {

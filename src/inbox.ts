@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import type { Audit } from './audit.ts';
 import type { Db } from './db.ts';
+import type { EventStore } from './events.ts';
 import { renderMarkdown } from './web/markdown.ts';
 
 export type InboxKind = 'notice' | 'approve' | 'input' | 'choice';
@@ -84,6 +85,7 @@ export class InboxStore {
     private db: Db,
     private audit?: Audit,
     private now: () => number = Date.now,
+    private events?: EventStore,
   ) {}
 
   post(
@@ -270,7 +272,14 @@ export class InboxStore {
       detail: { workspaceId, itemId: id, kind: existing.kind, decision, hasResponse: response !== null, via: actor.via },
     });
 
-    return this.get(workspaceId, id)!;
+    const updated = this.get(workspaceId, id)!;
+    this.events?.append(workspaceId, nextStatus === 'dismissed' ? 'inbox_dismiss' : 'inbox_response', {
+      itemId: id,
+      kind: existing.kind,
+      decision,
+      response,
+    });
+    return updated;
   }
 
   dismiss(workspaceId: string, id: string, actor: ActorContext = { via: 'web' }): InboxItem | null {
@@ -294,7 +303,13 @@ export class InboxStore {
       detail: { workspaceId, itemId: id, kind: existing.kind, via: actor.via },
     });
 
-    return this.get(workspaceId, id)!;
+    const updated = this.get(workspaceId, id)!;
+    this.events?.append(workspaceId, 'inbox_dismiss', {
+      itemId: id,
+      kind: existing.kind,
+      decision,
+    });
+    return updated;
   }
 
   countsByWorkspace(): Map<string, { needsYou: number; updates: number; history: number }> {
