@@ -86,10 +86,15 @@ export function homePage(opts: { csrf: string }): string {
     <section id="tasks-section" class="section attention clear">
       <div class="section-head">
         <h2>Human tasks <span id="tasks-count" class="count-pill"></span></h2>
-        <button id="toggle-archived" type="button" class="ghost small-btn" hidden></button>
+        <button id="toggle-history" type="button" class="ghost small-btn" hidden></button>
       </div>
       <div id="tasks-list" class="tasks-list"></div>
       <p id="tasks-empty" class="muted" hidden>Nothing waiting on you here.</p>
+      <div id="history-panel" class="history-panel" hidden>
+        <h3 class="history-title">History</h3>
+        <div id="history-list" class="history-list"></div>
+        <p id="history-empty" class="muted small" hidden>No responses yet.</p>
+      </div>
     </section>
 
     <section id="notices-section" class="section">

@@ -57,6 +57,42 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX notices_ws_status ON notices (workspace_id, status, created_at);
   `,
+  `
+  CREATE TABLE tasks_v2 (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL,
+    type TEXT NOT NULL CHECK (type IN ('approve', 'ack', 'input', 'choice')),
+    text TEXT NOT NULL,
+    options TEXT,
+    status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'responded', 'dismissed')),
+    decision TEXT,
+    response TEXT,
+    created_by TEXT NOT NULL DEFAULT 'Maestro',
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    responded_at INTEGER,
+    dismissed_at INTEGER
+  );
+  INSERT INTO tasks_v2 (id, workspace_id, type, text, options, status, decision, response, created_by, created_at, updated_at, responded_at, dismissed_at)
+  SELECT
+    id,
+    workspace_id,
+    CASE WHEN kind = 'question' THEN 'input' ELSE 'ack' END,
+    text,
+    NULL,
+    CASE WHEN status = 'done' THEN 'responded' ELSE status END,
+    CASE WHEN status = 'done' AND kind = 'task' THEN 'ack' ELSE NULL END,
+    answer,
+    created_by,
+    created_at,
+    updated_at,
+    done_at,
+    dismissed_at
+  FROM tasks;
+  DROP TABLE tasks;
+  ALTER TABLE tasks_v2 RENAME TO tasks;
+  CREATE INDEX tasks_ws_status ON tasks (workspace_id, status, created_at);
+  `,
 ];
 
 export function migrate(db: Db): void {

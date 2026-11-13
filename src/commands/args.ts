@@ -3,20 +3,31 @@ export class ArgError extends Error {}
 export interface FlagSpec {
   type: 'boolean' | 'string';
   short?: string;
+  multiple?: boolean;
 }
 
 export interface ParsedArgs {
-  flags: Record<string, string | boolean>;
+  flags: Record<string, string | boolean | string[]>;
   positional: string[];
 }
 
 export function parseArgs(argv: readonly string[], spec: Record<string, FlagSpec>): ParsedArgs {
-  const flags: Record<string, string | boolean> = {};
+  const flags: Record<string, string | boolean | string[]> = {};
   const positional: string[] = [];
   const shortMap = new Map<string, string>();
   for (const [name, s] of Object.entries(spec)) {
     if (s.short) shortMap.set(s.short, name);
   }
+
+  const recordString = (name: string, def: FlagSpec, val: string) => {
+    if (def.multiple) {
+      const prev = flags[name];
+      if (Array.isArray(prev)) prev.push(val);
+      else flags[name] = [val];
+    } else {
+      flags[name] = val;
+    }
+  };
 
   let endOfFlags = false;
   for (let i = 0; i < argv.length; i++) {
@@ -46,7 +57,7 @@ export function parseArgs(argv: readonly string[], spec: Record<string, FlagSpec
           val = argv[i];
         }
         if (val === undefined) throw new ArgError(`Flag --${rawName} requires a value`);
-        flags[rawName] = val;
+        recordString(rawName, def, val);
       }
       continue;
     }
@@ -61,7 +72,7 @@ export function parseArgs(argv: readonly string[], spec: Record<string, FlagSpec
         i += 1;
         const val = argv[i];
         if (val === undefined) throw new ArgError(`Flag -${short} requires a value`);
-        flags[longName] = val;
+        recordString(longName, def, val);
       }
       continue;
     }

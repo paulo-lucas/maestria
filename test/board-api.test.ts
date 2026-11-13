@@ -83,67 +83,86 @@ describe('workspaces, tasks, and notices API', () => {
     expect(js.headers['content-type']).toContain('javascript');
   });
 
-  it('lists workspaces with counts and handles task lifecycle with CSRF', async () => {
+  it('handles typed task responses, moves them off the board into history, and enforces CSRF', async () => {
     const { srv, cookie, csrfToken } = await setupWithWorkspaces();
-    const t1 = srv.tasks.add({ workspaceId: 'alpha', kind: 'question', text: 'Ship `v1`?' });
-    const t2 = srv.tasks.add({ workspaceId: 'alpha', kind: 'task', text: 'Check logs' });
+    const tApprove = srv.tasks.add({ workspaceId: 'alpha', type: 'approve', text: 'Ship `v1`?' });
+    const tChoice = srv.tasks.add({ workspaceId: 'alpha', type: 'choice', text: 'Target env', options: ['Staging', 'Prod'] });
+    const tAck = srv.tasks.add({ workspaceId: 'alpha', type: 'ack', text: 'Read notes' });
     srv.notices.add({ workspaceId: 'alpha', body: 'Hello <script>x</script> **world**' });
 
     const wsRes = await srv.app.inject({ method: 'GET', url: '/api/workspaces', headers: { ...base, cookie } });
     expect(wsRes.statusCode).toBe(200);
     const wsJson = wsRes.json<{ workspaces: { id: string; counts: { openTasks: number; activeNotices: number } }[] }>();
-    expect(wsJson.workspaces[0]!.counts).toMatchObject({ openTasks: 2, activeNotices: 1 });
+    expect(wsJson.workspaces[0]!.counts).toMatchObject({ openTasks: 3, activeNotices: 1 });
 
     // Missing CSRF is rejected
     const noCsrf = await srv.app.inject({
       method: 'POST',
-      url: `/api/workspaces/alpha/tasks/${t1.id}`,
+      url: `/api/workspaces/alpha/tasks/${tApprove.id}/respond`,
       headers: { ...base, origin: ORIGIN, cookie, 'content-type': 'application/json' },
-      payload: JSON.stringify({ status: 'done', answer: 'Yes' }),
+      payload: JSON.stringify({ decision: 'approved', response: 'Yes' }),
     });
     expect(noCsrf.statusCode).toBe(403);
 
-    // Valid answer + done transition
-    const doneRes = await srv.app.inject({
+    // Approve with optional comment
+    const approveRes = await srv.app.inject({
       method: 'POST',
-      url: `/api/workspaces/alpha/tasks/${t1.id}`,
+      url: `/api/workspaces/alpha/tasks/${tApprove.id}/respond`,
       headers: { ...base, origin: ORIGIN, cookie, 'x-csrf-token': csrfToken, 'content-type': 'application/json' },
-      payload: JSON.stringify({ status: 'done', answer: 'Yes, ship it.' }),
+      payload: JSON.stringify({ decision: 'approved', response: 'Looks great.' }),
     });
-    expect(doneRes.statusCode).toBe(200);
-    expect(doneRes.json<{ task: { status: string; answer: string } }>().task).toMatchObject({
-      status: 'done',
-      answer: 'Yes, ship it.',
+    expect(approveRes.statusCode).toBe(200);
+    expect(approveRes.json<{ task: { status: string; decision: string; response: string } }>().task).toMatchObject({
+      status: 'responded',
+      decision: 'approved',
+      response: 'Looks great.',
     });
 
-    // Dismiss (archive) t2
+    // Double-responding returns 409 Conflict
+    const repeat = await srv.app.inject({
+      method: 'POST',
+      url: `/api/workspaces/alpha/tasks/${tApprove.id}/respond`,
+      headers: { ...base, origin: ORIGIN, cookie, 'x-csrf-token': csrfToken, 'content-type': 'application/json' },
+      payload: JSON.stringify({ decision: 'rejected' }),
+    });
+    expect(repeat.statusCode).toBe(409);
+
+    // Choice selection
+    const choiceRes = await srv.app.inject({
+      method: 'POST',
+      url: `/api/workspaces/alpha/tasks/${tChoice.id}/respond`,
+      headers: { ...base, origin: ORIGIN, cookie, 'x-csrf-token': csrfToken, 'content-type': 'application/json' },
+      payload: JSON.stringify({ decision: 'Staging' }),
+    });
+    expect(choiceRes.statusCode).toBe(200);
+
+    // Dismiss tAck without responding
     const dismissRes = await srv.app.inject({
       method: 'POST',
-      url: `/api/workspaces/alpha/tasks/${t2.id}`,
-      headers: { ...base, origin: ORIGIN, cookie, 'x-csrf-token': csrfToken, 'content-type': 'application/json' },
-      payload: JSON.stringify({ status: 'dismissed' }),
+      url: `/api/workspaces/alpha/tasks/${tAck.id}/dismiss`,
+      headers: { ...base, origin: ORIGIN, cookie, 'x-csrf-token': csrfToken },
     });
     expect(dismissRes.statusCode).toBe(200);
 
-    // Board excludes dismissed by default, shows dismissedCount=1, and sanitized notice HTML
+    // Board now has 0 open tasks, historyCount=3, and sanitized notice HTML
     const boardRes = await srv.app.inject({ method: 'GET', url: '/api/workspaces/alpha/board', headers: { ...base, cookie } });
     const board = boardRes.json<{
-      tasks: { id: string }[];
-      dismissedCount: number;
+      tasks: unknown[];
+      historyCount: number;
       notices: { bodyHtml: string }[];
     }>();
-    expect(board.tasks.map((t) => t.id)).toEqual([t1.id]);
-    expect(board.dismissedCount).toBe(1);
+    expect(board.tasks).toHaveLength(0);
+    expect(board.historyCount).toBe(3);
     expect(board.notices[0]!.bodyHtml).toContain('<strong>world</strong>');
     expect(board.notices[0]!.bodyHtml).not.toContain('<script>');
 
-    // Archived task is still available via includeDismissed=1
-    const withArchived = await srv.app.inject({
+    // History endpoint returns all 3 resolved tasks
+    const histRes = await srv.app.inject({
       method: 'GET',
-      url: '/api/workspaces/alpha/board?includeDismissed=1',
+      url: '/api/workspaces/alpha/tasks?status=history',
       headers: { ...base, cookie },
     });
-    expect(withArchived.json<{ tasks: unknown[] }>().tasks).toHaveLength(2);
+    expect(histRes.json<{ tasks: unknown[] }>().tasks).toHaveLength(3);
   });
 
   it('dismisses notices by stable ID so concurrent/multiple dismissals never hit the wrong notice', async () => {
@@ -163,25 +182,26 @@ describe('workspaces, tasks, and notices API', () => {
     expect(srv.audit.recent().map((e) => e.event)).toContain('notice_dismiss');
   });
 
-  it('returns 404 for unknown workspace, task, or notice, and 400 for invalid payloads', async () => {
+  it('returns 404 for unknown workspace/task/notice and 400 for invalid payloads', async () => {
     const { srv, cookie, csrfToken } = await setupWithWorkspaces();
-    const t = srv.tasks.add({ workspaceId: 'alpha', text: 'Alpha only' });
+    const t = srv.tasks.add({ workspaceId: 'alpha', type: 'input', text: 'Say hi' });
 
-    // Cross-workspace isolation: task in alpha cannot be modified via beta
+    // Cross-workspace isolation
     const cross = await srv.app.inject({
       method: 'POST',
-      url: `/api/workspaces/beta/tasks/${t.id}`,
+      url: `/api/workspaces/beta/tasks/${t.id}/respond`,
       headers: { ...base, origin: ORIGIN, cookie, 'x-csrf-token': csrfToken, 'content-type': 'application/json' },
-      payload: JSON.stringify({ status: 'done' }),
+      payload: JSON.stringify({ response: 'hi' }),
     });
     expect(cross.statusCode).toBe(404);
 
-    const badStatus = await srv.app.inject({
+    // Blank input response rejected
+    const blank = await srv.app.inject({
       method: 'POST',
-      url: `/api/workspaces/alpha/tasks/${t.id}`,
+      url: `/api/workspaces/alpha/tasks/${t.id}/respond`,
       headers: { ...base, origin: ORIGIN, cookie, 'x-csrf-token': csrfToken, 'content-type': 'application/json' },
-      payload: JSON.stringify({ status: 'deleted' }),
+      payload: JSON.stringify({ response: '   ' }),
     });
-    expect(badStatus.statusCode).toBe(400);
+    expect(blank.statusCode).toBe(400);
   });
 });

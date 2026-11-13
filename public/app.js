@@ -1,7 +1,7 @@
 'use strict';
 
 (() => {
-  const DRAFT_KEY = 'maestria:drafts:v1';
+  const DRAFT_KEY = 'maestria:drafts:v2';
   const POLL_MS = 5000;
 
   const csrf = document.body.dataset.csrf || '';
@@ -9,7 +9,6 @@
     switcher: document.getElementById('ws-switcher'),
     sync: document.getElementById('sync-status'),
     banner: document.getElementById('banner'),
-    overviewSection: document.getElementById('overview-section'),
     overviewGrid: document.getElementById('overview-grid'),
     noWorkspaces: document.getElementById('no-workspaces'),
     wsView: document.getElementById('workspace-view'),
@@ -17,9 +16,12 @@
     wsMeta: document.getElementById('ws-meta'),
     tasksSection: document.getElementById('tasks-section'),
     tasksCount: document.getElementById('tasks-count'),
-    toggleArchived: document.getElementById('toggle-archived'),
+    toggleHistory: document.getElementById('toggle-history'),
     tasksList: document.getElementById('tasks-list'),
     tasksEmpty: document.getElementById('tasks-empty'),
+    historyPanel: document.getElementById('history-panel'),
+    historyList: document.getElementById('history-list'),
+    historyEmpty: document.getElementById('history-empty'),
     noticesCount: document.getElementById('notices-count'),
     noticesList: document.getElementById('notices-list'),
     noticesEmpty: document.getElementById('notices-empty'),
@@ -27,8 +29,8 @@
 
   let workspaces = [];
   let currentWsId = null;
-  let showArchived = false;
-  let boardState = { tasks: [], notices: [], dismissedCount: 0 };
+  let showHistory = false;
+  let boardState = { tasks: [], notices: [], historyCount: 0, history: [] };
   let drafts = loadDrafts();
   let inFlight = 0;
 
@@ -50,6 +52,10 @@
   }
 
   function setDraft(taskId, value) {
+    if (value === '') {
+      clearDraft(taskId);
+      return;
+    }
     drafts[taskId] = value;
     saveDrafts();
   }
@@ -114,7 +120,8 @@
 
   function selectWorkspace(id) {
     currentWsId = id;
-    showArchived = false;
+    showHistory = false;
+    el.historyPanel.hidden = true;
     window.location.hash = id ? `ws=${encodeURIComponent(id)}` : '';
     renderWorkspaceChrome();
     if (id) {
@@ -162,7 +169,7 @@
       const openChip = document.createElement('span');
       const openCount = ws.counts?.openTasks || 0;
       openChip.className = 'stat-chip' + (openCount > 0 ? ' warn' : '');
-      openChip.textContent = `${openCount} open task${openCount === 1 ? '' : 's'}`;
+      openChip.textContent = `${openCount} pending`;
       stats.appendChild(openChip);
 
       const noticeChip = document.createElement('span');
@@ -192,187 +199,171 @@
 
   function createTaskElement(task) {
     const wrap = document.createElement('div');
-    wrap.className = `task-item ${task.status}`;
+    wrap.className = 'task-item';
     wrap.dataset.taskId = task.id;
+    wrap.dataset.taskType = task.type;
 
-    const row = document.createElement('div');
-    row.className = 'task-row';
+    const head = document.createElement('div');
+    head.className = 'task-head';
 
-    const label = document.createElement('label');
-    label.className = 'task-check-label';
+    const body = document.createElement('div');
+    body.className = 'task-body';
 
-    const check = document.createElement('input');
-    check.type = 'checkbox';
-    check.className = 'task-check';
-    check.checked = task.status === 'done';
-    check.disabled = task.status === 'dismissed';
+    const textWrap = document.createElement('div');
+    const typeTag = document.createElement('span');
+    typeTag.className = 'task-type-tag';
+    typeTag.textContent = task.type;
 
     const textSpan = document.createElement('span');
     textSpan.className = 'task-text';
     textSpan.innerHTML = task.textHtml;
+    textSpan.dataset.rawText = task.text;
 
-    label.append(check, textSpan);
-
-    const actionBtn = document.createElement('button');
-    actionBtn.type = 'button';
-    if (task.status === 'dismissed') {
-      actionBtn.className = 'ghost small-btn';
-      actionBtn.textContent = 'Restore';
-      actionBtn.title = 'Restore task';
-    } else {
-      actionBtn.className = 'icon-btn';
-      actionBtn.textContent = '✕';
-      actionBtn.title = 'Dismiss (archive)';
-      actionBtn.setAttribute('aria-label', 'Dismiss task');
-    }
-
-    row.append(label, actionBtn);
-    wrap.appendChild(row);
+    textWrap.append(typeTag, textSpan);
 
     const meta = document.createElement('div');
     meta.className = 'task-meta';
-    wrap.appendChild(meta);
+    meta.textContent = `by ${task.createdBy} · ${fmtTime(task.createdAt)}`;
 
-    if (task.kind === 'question') {
-      const answerBox = document.createElement('div');
-      answerBox.className = 'task-answer-box';
+    body.append(textWrap, meta);
 
-      const textarea = document.createElement('textarea');
-      textarea.placeholder = 'Write your answer…';
+    const dismissBtn = document.createElement('button');
+    dismissBtn.type = 'button';
+    dismissBtn.className = 'icon-btn';
+    dismissBtn.textContent = '✕';
+    dismissBtn.title = 'Dismiss without responding';
+    dismissBtn.setAttribute('aria-label', 'Dismiss task');
+    dismissBtn.addEventListener('click', () => {
+      void dismissTask(task.id);
+    });
+
+    head.append(body, dismissBtn);
+    wrap.appendChild(head);
+
+    let textarea = null;
+    if (task.type === 'approve' || task.type === 'input') {
+      textarea = document.createElement('textarea');
+      textarea.placeholder = task.type === 'approve' ? 'Optional comment…' : 'Write your response…';
       textarea.maxLength = 8000;
-      const initialVal = Object.hasOwn(drafts, task.id) ? drafts[task.id] : (task.answer || '');
-      textarea.value = initialVal;
-      textarea.readOnly = task.status !== 'open';
-
-      const actions = document.createElement('div');
-      actions.className = 'task-answer-actions';
-
-      const submitBtn = document.createElement('button');
-      submitBtn.type = 'button';
-      submitBtn.className = 'small-btn';
-      submitBtn.textContent = 'Submit answer';
-      submitBtn.hidden = task.status !== 'open';
-
-      const draftHint = document.createElement('span');
-      draftHint.className = 'muted small draft-hint';
-      draftHint.textContent = Object.hasOwn(drafts, task.id) && task.status === 'open' ? 'Draft saved locally' : '';
-
-      actions.append(submitBtn, draftHint);
-      answerBox.append(textarea, actions);
-      wrap.appendChild(answerBox);
-
+      if (Object.hasOwn(drafts, task.id)) {
+        textarea.value = drafts[task.id];
+      }
       textarea.addEventListener('input', () => {
         setDraft(task.id, textarea.value);
-        draftHint.textContent = 'Draft saved locally';
+        const hint = wrap.querySelector('.draft-hint');
+        if (hint) hint.textContent = textarea.value ? 'Draft saved' : '';
+        const inlineErr = wrap.querySelector('.task-inline-err');
+        if (inlineErr) inlineErr.textContent = '';
       });
-
-      submitBtn.addEventListener('click', () => {
-        void submitTaskTransition(task.id, 'done', textarea.value);
-      });
+      wrap.appendChild(textarea);
     }
 
-    check.addEventListener('change', () => {
-      const nextStatus = check.checked ? 'done' : 'open';
-      const textarea = wrap.querySelector('textarea');
-      const answer = textarea ? textarea.value : undefined;
-      void submitTaskTransition(task.id, nextStatus, answer);
-    });
+    const actions = document.createElement('div');
+    actions.className = 'task-actions';
 
-    actionBtn.addEventListener('click', () => {
-      const nextStatus = task.status === 'dismissed' ? 'open' : 'dismissed';
-      void submitTaskTransition(task.id, nextStatus);
-    });
+    if (task.type === 'ack') {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'small-btn';
+      btn.textContent = 'Got it';
+      btn.addEventListener('click', () => void respondToTask(task.id, { decision: 'ack' }));
+      actions.appendChild(btn);
+    } else if (task.type === 'approve') {
+      const approveBtn = document.createElement('button');
+      approveBtn.type = 'button';
+      approveBtn.className = 'small-btn btn-ok';
+      approveBtn.textContent = 'Approve';
+      approveBtn.addEventListener('click', () =>
+        void respondToTask(task.id, { decision: 'approved', response: textarea ? textarea.value : '' }),
+      );
 
-    updateTaskElement(wrap, task);
+      const rejectBtn = document.createElement('button');
+      rejectBtn.type = 'button';
+      rejectBtn.className = 'small-btn btn-danger';
+      rejectBtn.textContent = 'Reject';
+      rejectBtn.addEventListener('click', () =>
+        void respondToTask(task.id, { decision: 'rejected', response: textarea ? textarea.value : '' }),
+      );
+
+      const hint = document.createElement('span');
+      hint.className = 'muted small draft-hint';
+      hint.textContent = Object.hasOwn(drafts, task.id) ? 'Draft saved' : '';
+
+      actions.append(approveBtn, rejectBtn, hint);
+    } else if (task.type === 'input') {
+      const sendBtn = document.createElement('button');
+      sendBtn.type = 'button';
+      sendBtn.className = 'small-btn';
+      sendBtn.textContent = 'Send';
+
+      const inlineErr = document.createElement('span');
+      inlineErr.className = 'task-inline-err';
+
+      const hint = document.createElement('span');
+      hint.className = 'muted small draft-hint';
+      hint.textContent = Object.hasOwn(drafts, task.id) ? 'Draft saved' : '';
+
+      sendBtn.addEventListener('click', () => {
+        const val = textarea ? textarea.value.trim() : '';
+        if (!val) {
+          inlineErr.textContent = 'Please write a response first.';
+          if (textarea) textarea.focus();
+          return;
+        }
+        void respondToTask(task.id, { response: textarea.value });
+      });
+
+      actions.append(sendBtn, hint, inlineErr);
+    } else if (task.type === 'choice') {
+      for (const opt of task.options || []) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'small-btn btn-choice';
+        btn.textContent = opt;
+        btn.addEventListener('click', () => void respondToTask(task.id, { decision: opt }));
+        actions.appendChild(btn);
+      }
+    }
+
+    wrap.appendChild(actions);
     return wrap;
   }
 
   function updateTaskElement(wrap, task) {
-    wrap.className = `task-item ${task.status}`;
-
-    const check = wrap.querySelector('.task-check');
-    if (check) {
-      check.checked = task.status === 'done';
-      check.disabled = task.status === 'dismissed';
-    }
-
     const textSpan = wrap.querySelector('.task-text');
     if (textSpan && textSpan.dataset.rawText !== task.text) {
       textSpan.innerHTML = task.textHtml;
       textSpan.dataset.rawText = task.text;
     }
-
     const meta = wrap.querySelector('.task-meta');
     if (meta) {
-      const parts = [`by ${task.createdBy}`, fmtTime(task.createdAt)];
-      if (task.status === 'done' && task.doneAt) parts.push(`done ${fmtTime(task.doneAt)}`);
-      if (task.status === 'dismissed' && task.dismissedAt) parts.push(`archived ${fmtTime(task.dismissedAt)}`);
-      meta.textContent = parts.filter(Boolean).join(' · ');
-    }
-
-    const row = wrap.querySelector('.task-row');
-    const actionBtn = row ? row.querySelector('button') : null;
-    if (actionBtn) {
-      if (task.status === 'dismissed') {
-        actionBtn.className = 'ghost small-btn';
-        actionBtn.textContent = 'Restore';
-        actionBtn.title = 'Restore task';
-      } else {
-        actionBtn.className = 'icon-btn';
-        actionBtn.textContent = '✕';
-        actionBtn.title = 'Dismiss (archive)';
-        actionBtn.setAttribute('aria-label', 'Dismiss task');
-      }
-    }
-
-    const textarea = wrap.querySelector('textarea');
-    const submitBtn = wrap.querySelector('.task-answer-actions button');
-    const draftHint = wrap.querySelector('.draft-hint');
-    if (textarea) {
-      textarea.readOnly = task.status !== 'open';
-      const isFocused = document.activeElement === textarea;
-      const hasDraft = Object.hasOwn(drafts, task.id);
-      // Never clobber an active editor or unsaved draft on refresh/poll.
-      if (!isFocused && !hasDraft) {
-        const serverVal = task.answer || '';
-        if (textarea.value !== serverVal) textarea.value = serverVal;
-      }
-      if (submitBtn) submitBtn.hidden = task.status !== 'open';
-      if (draftHint) {
-        draftHint.textContent = hasDraft && task.status === 'open' ? 'Draft saved locally' : '';
-      }
+      meta.textContent = `by ${task.createdBy} · ${fmtTime(task.createdAt)}`;
     }
   }
 
   function reconcileTasks() {
     const tasks = boardState.tasks;
-    const openCount = tasks.filter((t) => t.status === 'open').length;
-    const doneCount = tasks.filter((t) => t.status === 'done').length;
+    el.tasksSection.classList.toggle('clear', tasks.length === 0);
+    el.tasksCount.textContent = tasks.length ? `${tasks.length} pending` : '';
 
-    el.tasksSection.classList.toggle('clear', openCount === 0);
-    el.tasksCount.textContent = tasks.length ? `${openCount} open · ${doneCount} done` : '';
-    if (boardState.dismissedCount > 0 || showArchived) {
-      el.toggleArchived.hidden = false;
-      el.toggleArchived.textContent = showArchived
-        ? 'Hide archived'
-        : `Show archived (${boardState.dismissedCount})`;
+    if (boardState.historyCount > 0 || showHistory) {
+      el.toggleHistory.hidden = false;
+      el.toggleHistory.textContent = showHistory
+        ? 'Hide history'
+        : `History (${boardState.historyCount})`;
     } else {
-      el.toggleArchived.hidden = true;
+      el.toggleHistory.hidden = true;
     }
 
     const existingById = new Map();
     for (const child of Array.from(el.tasksList.children)) {
       if (child.dataset.taskId) existingById.set(child.dataset.taskId, child);
     }
-
     const desiredIds = new Set(tasks.map((t) => t.id));
     for (const [id, node] of existingById) {
-      if (!desiredIds.has(id)) {
-        node.remove();
-      }
+      if (!desiredIds.has(id)) node.remove();
     }
 
-    // Preserve focused element across ordering updates by appending/inserting only when out of order.
     let cursor = el.tasksList.firstElementChild;
     for (const task of tasks) {
       let node = existingById.get(task.id);
@@ -390,6 +381,63 @@
     }
 
     el.tasksEmpty.hidden = tasks.length > 0;
+  }
+
+  function renderHistory() {
+    el.historyPanel.hidden = !showHistory;
+    if (!showHistory) return;
+
+    const items = boardState.history || [];
+    el.historyList.textContent = '';
+    el.historyEmpty.hidden = items.length > 0;
+
+    for (const t of items) {
+      const row = document.createElement('div');
+      row.className = 'history-item';
+
+      const top = document.createElement('div');
+      top.className = 'history-row';
+
+      const prompt = document.createElement('div');
+      prompt.className = 'task-text';
+      prompt.innerHTML = t.textHtml;
+
+      const right = document.createElement('div');
+      const badge = document.createElement('span');
+      if (t.status === 'dismissed') {
+        badge.className = 'decision-badge';
+        badge.textContent = 'Dismissed';
+      } else if (t.type === 'approve') {
+        badge.className = `decision-badge ${t.decision === 'approved' ? 'approved' : 'rejected'}`;
+        badge.textContent = t.decision === 'approved' ? 'Approved' : 'Rejected';
+      } else if (t.type === 'ack') {
+        badge.className = 'decision-badge ack';
+        badge.textContent = 'Got it';
+      } else if (t.type === 'choice') {
+        badge.className = 'decision-badge ack';
+        badge.textContent = t.decision || 'Chosen';
+      } else {
+        badge.className = 'decision-badge ack';
+        badge.textContent = 'Replied';
+      }
+
+      const ts = document.createElement('span');
+      ts.className = 'muted small';
+      ts.textContent = ' ' + fmtTime(t.respondedAt || t.dismissedAt);
+
+      right.append(badge, ts);
+      top.append(prompt, right);
+      row.appendChild(top);
+
+      if (t.response) {
+        const resp = document.createElement('div');
+        resp.className = 'history-response';
+        resp.textContent = t.response;
+        row.appendChild(resp);
+      }
+
+      el.historyList.appendChild(row);
+    }
   }
 
   function reconcileNotices() {
@@ -455,62 +503,89 @@
     }
   }
 
-  async function submitTaskTransition(taskId, nextStatus, answer) {
+  async function respondToTask(taskId, payload) {
     const wsId = currentWsId;
     if (!wsId) return;
-    const prevTasks = boardState.tasks.map((t) => ({ ...t }));
-    const prevDismissedCount = boardState.dismissedCount;
+    const prevTasks = [...boardState.tasks];
+    const prevHistoryCount = boardState.historyCount;
 
-    // Optimistic update
-    const idx = boardState.tasks.findIndex((t) => t.id === taskId);
-    if (idx >= 0) {
-      const cur = boardState.tasks[idx];
-      if (nextStatus === 'dismissed' && !showArchived) {
-        boardState.tasks.splice(idx, 1);
-        boardState.dismissedCount += 1;
-      } else {
-        boardState.tasks[idx] = {
-          ...cur,
-          status: nextStatus,
-          answer: answer !== undefined ? answer : cur.answer,
-          doneAt: nextStatus === 'done' ? Date.now() : nextStatus === 'open' ? null : cur.doneAt,
-          dismissedAt: nextStatus === 'dismissed' ? Date.now() : null,
-        };
-      }
-      reconcileTasks();
+    // Optimistic: remove task from the board immediately
+    const target = boardState.tasks.find((t) => t.id === taskId);
+    boardState.tasks = boardState.tasks.filter((t) => t.id !== taskId);
+    boardState.historyCount += 1;
+    if (showHistory && target) {
+      boardState.history = [
+        {
+          ...target,
+          status: 'responded',
+          decision: payload.decision || null,
+          response: payload.response ? payload.response.trim() : null,
+          respondedAt: Date.now(),
+        },
+        ...boardState.history,
+      ];
+      renderHistory();
     }
+    reconcileTasks();
 
     inFlight += 1;
     try {
       showBanner('');
-      const payload = { status: nextStatus };
-      if (answer !== undefined) payload.answer = answer;
-      const res = await api(`/api/workspaces/${encodeURIComponent(wsId)}/tasks/${encodeURIComponent(taskId)}`, {
+      const res = await api(`/api/workspaces/${encodeURIComponent(wsId)}/tasks/${encodeURIComponent(taskId)}/respond`, {
         method: 'POST',
         body: JSON.stringify(payload),
       });
-      if (nextStatus === 'done') {
-        clearDraft(taskId);
-      }
-      if (currentWsId === wsId) {
-        const pos = boardState.tasks.findIndex((t) => t.id === taskId);
-        if (res.task.status === 'dismissed' && !showArchived) {
-          if (pos >= 0) boardState.tasks.splice(pos, 1);
-        } else if (pos >= 0) {
-          boardState.tasks[pos] = res.task;
-        }
-        reconcileTasks();
+      clearDraft(taskId);
+      if (currentWsId === wsId && showHistory) {
+        boardState.history = [res.task, ...boardState.history.filter((h) => h.id !== taskId)];
+        renderHistory();
       }
       void refreshWorkspaces();
     } catch (err) {
-      // Revert optimistic UI, keeping any user draft intact in localStorage.
       if (currentWsId === wsId) {
         boardState.tasks = prevTasks;
-        boardState.dismissedCount = prevDismissedCount;
+        boardState.historyCount = prevHistoryCount;
+        reconcileTasks();
+        if (showHistory) renderHistory();
+      }
+      if (err.message !== 'unauthenticated') {
+        showBanner(`Could not submit response: ${err.message}`);
+      }
+    } finally {
+      inFlight -= 1;
+    }
+  }
+
+  async function dismissTask(taskId) {
+    const wsId = currentWsId;
+    if (!wsId) return;
+    const prevTasks = [...boardState.tasks];
+    const prevHistoryCount = boardState.historyCount;
+
+    boardState.tasks = boardState.tasks.filter((t) => t.id !== taskId);
+    boardState.historyCount += 1;
+    reconcileTasks();
+
+    inFlight += 1;
+    try {
+      showBanner('');
+      const res = await api(`/api/workspaces/${encodeURIComponent(wsId)}/tasks/${encodeURIComponent(taskId)}/dismiss`, {
+        method: 'POST',
+      });
+      clearDraft(taskId);
+      if (currentWsId === wsId && showHistory) {
+        boardState.history = [res.task, ...boardState.history.filter((h) => h.id !== taskId)];
+        renderHistory();
+      }
+      void refreshWorkspaces();
+    } catch (err) {
+      if (currentWsId === wsId) {
+        boardState.tasks = prevTasks;
+        boardState.historyCount = prevHistoryCount;
         reconcileTasks();
       }
       if (err.message !== 'unauthenticated') {
-        showBanner(`Could not update task: ${err.message}`);
+        showBanner(`Could not dismiss task: ${err.message}`);
       }
     } finally {
       inFlight -= 1;
@@ -559,14 +634,21 @@
   async function refreshBoard() {
     if (!currentWsId) return;
     const wsId = currentWsId;
-    const q = showArchived ? '?includeDismissed=1' : '';
-    const data = await api(`/api/workspaces/${encodeURIComponent(wsId)}/board${q}`);
+    const data = await api(`/api/workspaces/${encodeURIComponent(wsId)}/board`);
     if (currentWsId !== wsId || inFlight > 0) return;
-    boardState = {
-      tasks: data.tasks || [],
-      notices: data.notices || [],
-      dismissedCount: data.dismissedCount || 0,
-    };
+
+    boardState.tasks = data.tasks || [];
+    boardState.notices = data.notices || [];
+    boardState.historyCount = data.historyCount || 0;
+
+    if (showHistory) {
+      const h = await api(`/api/workspaces/${encodeURIComponent(wsId)}/tasks?status=history`);
+      if (currentWsId === wsId && inFlight === 0) {
+        boardState.history = h.tasks || [];
+        renderHistory();
+      }
+    }
+
     const isTyping = document.activeElement instanceof HTMLTextAreaElement && el.tasksList.contains(document.activeElement);
     if (!isTyping) {
       reconcileTasks();
@@ -586,16 +668,22 @@
     }
   }
 
-  el.toggleArchived.addEventListener('click', () => {
-    showArchived = !showArchived;
-    void refreshBoard();
+  el.toggleHistory.addEventListener('click', () => {
+    showHistory = !showHistory;
+    reconcileTasks();
+    if (showHistory) {
+      void refreshBoard();
+    } else {
+      renderHistory();
+    }
   });
 
   window.addEventListener('hashchange', () => {
     const id = readSelectedWorkspaceFromHash();
     if (id && workspaces.some((w) => w.id === id) && id !== currentWsId) {
       currentWsId = id;
-      showArchived = false;
+      showHistory = false;
+      el.historyPanel.hidden = true;
       renderWorkspaceChrome();
       void refreshBoard();
     }

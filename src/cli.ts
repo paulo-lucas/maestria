@@ -7,7 +7,7 @@ import { runNoticeCommand, runStatusCommand, runTaskCommand, runWorkspaceCommand
 import { openDb } from './db.ts';
 import { Audit } from './audit.ts';
 import { SessionStore } from './auth/sessions.ts';
-import { ValidationError } from './tasks.ts';
+import { ConflictError, ValidationError } from './tasks.ts';
 import { WorkspaceError } from './workspaces.ts';
 import { buildServer } from './server.ts';
 
@@ -19,8 +19,8 @@ Usage:
   maestria auth logout-all          Invalidate every panel session
 
   maestria workspace list|add|remove ...
-  maestria task add [--question|-q] [--workspace|-w <ws>] [--by <agent>] <text>
-  maestria task list [--workspace|-w <ws>] [--status open|done|dismissed|all] [--json]
+  maestria task add --type approve|ack|input|choice [--option <val> ...] [--workspace|-w <ws>] [--by <agent>] <text>
+  maestria task list [--workspace|-w <ws>] [--status open|responded|dismissed|history|all] [--json]
   maestria task answers [--workspace|-w <ws>] [--all] [--json]
   maestria notice add [--workspace|-w <ws>] [--by <agent>] <text>
   maestria notice list [--workspace|-w <ws>] [--status active|dismissed|all] [--json]
@@ -85,6 +85,7 @@ main(process.argv.slice(2)).catch((err: unknown) => {
     err instanceof SecretsError ||
     err instanceof WorkspaceError ||
     err instanceof ValidationError ||
+    err instanceof ConflictError ||
     err instanceof ArgError
   ) {
     process.stderr.write(`${err.message}\n`);

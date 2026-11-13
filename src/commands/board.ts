@@ -2,7 +2,7 @@ import path from 'node:path';
 import { Audit } from '../audit.ts';
 import { openDb } from '../db.ts';
 import { NoticeStore, type NoticeStatus } from '../notices.ts';
-import { TaskStore, type TaskStatus } from '../tasks.ts';
+import { TASK_TYPES, TaskStore, type TaskStatus, type TaskType } from '../tasks.ts';
 import {
   loadWorkspaces,
   parseWorkspaces,
@@ -56,7 +56,7 @@ export function runWorkspaceCommand(argv: readonly string[], ctx: CommandContext
       maestro: { type: 'string' },
       json: { type: 'boolean' },
     });
-    if (positional.length < 2 || positional.length > 2) {
+    if (positional.length !== 2) {
       throw new ArgError('Usage: maestria workspace add <name> <path> [--id <id>] [--roadmap <path>] [--maestro <agent>]');
     }
     const [name, rawPath] = positional as [string, string];
@@ -105,13 +105,21 @@ export function runTaskCommand(argv: readonly string[], ctx: CommandContext): vo
 
   if (sub === 'add') {
     const { flags, positional } = parseArgs(rest, {
-      question: { type: 'boolean', short: 'q' },
+      type: { type: 'string', short: 't' },
+      option: { type: 'string', short: 'o', multiple: true },
       workspace: { type: 'string', short: 'w' },
       by: { type: 'string' },
       json: { type: 'boolean' },
     });
     const text = positional.join(' ').trim();
-    if (!text) throw new ArgError('Usage: maestria task add [--question|-q] [--workspace|-w <ws>] [--by <agent>] <text>');
+    if (!text) {
+      throw new ArgError('Usage: maestria task add [--type approve|ack|input|choice] [--option <val> ...] [--workspace|-w <ws>] [--by <agent>] <text>');
+    }
+    const rawType = typeof flags.type === 'string' ? flags.type : 'ack';
+    if (!TASK_TYPES.includes(rawType as TaskType)) {
+      throw new ArgError(`Invalid --type "${rawType}". Expected one of: ${TASK_TYPES.join(', ')}`);
+    }
+    const options = Array.isArray(flags.option) ? flags.option : undefined;
     const ws = resolveWorkspace(workspaces, {
       workspace: typeof flags.workspace === 'string' ? flags.workspace : undefined,
       cwd: ctx.cwd,
@@ -122,8 +130,9 @@ export function runTaskCommand(argv: readonly string[], ctx: CommandContext): vo
       const task = store.add(
         {
           workspaceId: ws.id,
-          kind: flags.question ? 'question' : 'task',
+          type: rawType as TaskType,
           text,
+          options,
           createdBy: typeof flags.by === 'string' ? flags.by : ws.maestroAgent,
         },
         { via: 'cli' },
@@ -131,7 +140,8 @@ export function runTaskCommand(argv: readonly string[], ctx: CommandContext): vo
       if (flags.json) {
         writeOut(ctx, JSON.stringify({ task }, null, 2));
       } else {
-        writeOut(ctx, `${task.id}\t${task.kind}\t${task.text}`);
+        const optSuffix = task.options.length ? `\toptions=[${task.options.join(', ')}]` : '';
+        writeOut(ctx, `${task.id}\t${task.type}\t${task.text}${optSuffix}`);
       }
     } finally {
       db.close();
@@ -147,8 +157,8 @@ export function runTaskCommand(argv: readonly string[], ctx: CommandContext): vo
     });
     if (positional.length > 0) throw new ArgError(`Unexpected argument: ${positional[0]}`);
     const status = typeof flags.status === 'string' ? flags.status : 'open';
-    if (!['open', 'done', 'dismissed', 'all'].includes(status)) {
-      throw new ArgError('Invalid --status. Expected open, done, dismissed, or all.');
+    if (!['open', 'responded', 'dismissed', 'history', 'all'].includes(status)) {
+      throw new ArgError('Invalid --status. Expected open, responded, dismissed, history, or all.');
     }
     const ws = resolveWorkspace(workspaces, {
       workspace: typeof flags.workspace === 'string' ? flags.workspace : undefined,
@@ -156,7 +166,7 @@ export function runTaskCommand(argv: readonly string[], ctx: CommandContext): vo
     });
     const db = openDb(ctx.configDir);
     try {
-      const tasks = new TaskStore(db).list(ws.id, { status: status as TaskStatus | 'all' });
+      const tasks = new TaskStore(db).list(ws.id, { status: status as TaskStatus | 'history' | 'all' });
       if (flags.json) {
         writeOut(ctx, JSON.stringify({ workspace: ws.id, tasks }, null, 2));
         return;
@@ -166,8 +176,9 @@ export function runTaskCommand(argv: readonly string[], ctx: CommandContext): vo
         return;
       }
       for (const t of tasks) {
-        const answerPart = t.answer ? `\tanswer=${JSON.stringify(t.answer)}` : '';
-        writeOut(ctx, `${t.id}\t[${t.status}]\t(${t.kind})\t${t.text}${answerPart}`);
+        const decisionPart = t.decision ? `\tdecision=${t.decision}` : '';
+        const responsePart = t.response ? `\tresponse=${JSON.stringify(t.response)}` : '';
+        writeOut(ctx, `${t.id}\t[${t.status}]\t(${t.type})\t${t.text}${decisionPart}${responsePart}`);
       }
     } finally {
       db.close();
@@ -194,13 +205,16 @@ export function runTaskCommand(argv: readonly string[], ctx: CommandContext): vo
         return;
       }
       if (tasks.length === 0) {
-        writeOut(ctx, `No answered or completed tasks in ${ws.id}.`);
+        writeOut(ctx, `No task responses in ${ws.id}.`);
         return;
       }
       for (const t of tasks) {
-        const ts = fmtIso(t.doneAt ?? t.dismissedAt);
-        const ans = t.answer !== null && t.answer !== '' ? t.answer : '(marked done)';
-        writeOut(ctx, `${t.id}\t${ts}\tQ: ${t.text}\n  A: ${ans}`);
+        const ts = fmtIso(t.respondedAt ?? t.dismissedAt);
+        const summary =
+          t.status === 'dismissed'
+            ? 'dismissed'
+            : [t.decision, t.response].filter(Boolean).join(': ') || '(responded)';
+        writeOut(ctx, `${t.id}\t${ts}\t(${t.type})\t${t.text}\n  -> ${summary}`);
       }
     } finally {
       db.close();
@@ -302,7 +316,7 @@ export function runStatusCommand(argv: readonly string[], ctx: CommandContext): 
     const noticeCounts = new NoticeStore(db).countsByWorkspace();
 
     const formatWs = (ws: Workspace) => {
-      const tc = taskCounts.get(ws.id) ?? { open: 0, done: 0, dismissed: 0 };
+      const tc = taskCounts.get(ws.id) ?? { open: 0, responded: 0, dismissed: 0 };
       const nc = noticeCounts.get(ws.id) ?? { active: 0, dismissed: 0 };
       return {
         id: ws.id,
@@ -310,7 +324,7 @@ export function runStatusCommand(argv: readonly string[], ctx: CommandContext): 
         path: ws.path,
         maestroAgent: ws.maestroAgent,
         openTasks: tc.open,
-        doneTasks: tc.done,
+        respondedTasks: tc.responded,
         dismissedTasks: tc.dismissed,
         activeNotices: nc.active,
       };
@@ -334,7 +348,7 @@ export function runStatusCommand(argv: readonly string[], ctx: CommandContext): 
       } else {
         writeOut(
           ctx,
-          `${summary.name} (${summary.id}) · Maestro: ${summary.maestroAgent} · open tasks: ${summary.openTasks}, done: ${summary.doneTasks}, notices: ${summary.activeNotices}`,
+          `${summary.name} (${summary.id}) · Maestro: ${summary.maestroAgent} · open tasks: ${summary.openTasks}, responded: ${summary.respondedTasks}, notices: ${summary.activeNotices}`,
         );
       }
       return;
@@ -350,7 +364,7 @@ export function runStatusCommand(argv: readonly string[], ctx: CommandContext): 
       return;
     }
     for (const s of list) {
-      writeOut(ctx, `${s.id}\t${s.name}\topen:${s.openTasks}\tdone:${s.doneTasks}\tnotices:${s.activeNotices}`);
+      writeOut(ctx, `${s.id}\t${s.name}\topen:${s.openTasks}\tresponded:${s.respondedTasks}\tnotices:${s.activeNotices}`);
     }
   } finally {
     db.close();
