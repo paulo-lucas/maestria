@@ -14,6 +14,10 @@ import { LoginLimiter } from './auth/ratelimit.ts';
 import { AccessVerifier, type JwksFetcher, fetchJwks } from './auth/cloudflare.ts';
 import type { AuthSecrets } from './auth/secrets.ts';
 import { ConflictError, InboxStore, ValidationError, type InboxStatus } from './inbox.ts';
+import { EventStore } from './events.ts';
+import { readWorkspaceRoadmap } from './roadmap.ts';
+import { StandbyGuard, type StandbyNotifier } from './standby.ts';
+import { UsageService, type FallbackRunner } from './usage.ts';
 import { WorkspaceError, WorkspaceRegistry, type WorkspaceProvider } from './workspaces.ts';
 import { homePage, loginPage } from './web/html.ts';
 
@@ -38,6 +42,9 @@ export interface ServerDeps {
   now?: () => number;
   logger?: boolean;
   jwksFetcher?: JwksFetcher;
+  fallbackRunner?: FallbackRunner;
+  standbyNotifier?: StandbyNotifier;
+  enableUsagePoll?: boolean;
 }
 
 const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
@@ -78,7 +85,10 @@ export interface Server {
   audit: Audit;
   limiter: LoginLimiter;
   workspaces: WorkspaceProvider;
+  events: EventStore;
   inbox: InboxStore;
+  usage: UsageService;
+  standby: StandbyGuard;
 }
 
 export async function buildServer(deps: ServerDeps): Promise<Server> {
@@ -87,7 +97,10 @@ export async function buildServer(deps: ServerDeps): Promise<Server> {
 
   const audit = new Audit(db, now);
   const workspaces = deps.workspaces ?? new WorkspaceRegistry(config.configDir);
-  const inbox = new InboxStore(db, audit, now);
+  const events = new EventStore(db, now);
+  const inbox = new InboxStore(db, audit, now, events);
+  const usage = new UsageService(config, now, deps.fallbackRunner);
+  const standby = new StandbyGuard(db, audit, config, events, now, deps.standbyNotifier);
   const sessions = new SessionStore(db, { idleMs: config.session.idleMinutes * 60_000, absoluteMs: config.session.absoluteHours * 3_600_000 }, now);
   const limiter = new LoginLimiter(
     {
@@ -415,6 +428,28 @@ export async function buildServer(deps: ServerDeps): Promise<Server> {
     return { item: { ...updated, workspaceName: ws.name, workspaceColor: ws.color } };
   });
 
+  app.get('/api/workspaces/:id/roadmap', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const ws = workspaces.get(id);
+    if (!ws) return reply.code(404).send({ error: 'workspace_not_found' });
+    return {
+      workspace: { id: ws.id, name: ws.name, color: ws.color, roadmapPath: ws.roadmapPath },
+      ...readWorkspaceRoadmap(ws),
+    };
+  });
+
+  app.get('/api/usage', async () => {
+    const snap = await usage.read();
+    const standbyState = await standby.evaluate(snap, workspaces.list());
+    return { ...snap, standby: standbyState };
+  });
+
+  app.post('/api/usage/refresh', async () => {
+    const snap = await usage.read({ forceFallback: true });
+    const standbyState = await standby.evaluate(snap, workspaces.list());
+    return { ...snap, standby: standbyState };
+  });
+
   app.setNotFoundHandler(async (_req, reply) => deny(reply, 404, 'Not found'));
 
   app.setErrorHandler(async (err, req, reply) => {
@@ -437,7 +472,28 @@ export async function buildServer(deps: ServerDeps): Promise<Server> {
   // Expired sessions are also rejected on use; this just keeps the table small.
   const purge = setInterval(() => sessions.purgeExpired(), 10 * 60_000);
   purge.unref();
-  app.addHook('onClose', async () => clearInterval(purge));
 
-  return { app, sessions, audit, limiter, workspaces, inbox };
+  let usageTimer: NodeJS.Timeout | null = null;
+  if (deps.enableUsagePoll) {
+    const checkUsage = async () => {
+      try {
+        const snap = await usage.read();
+        await standby.evaluate(snap, workspaces.list());
+      } catch {
+        /* keep background timer resilient */
+      }
+    };
+    void checkUsage();
+    usageTimer = setInterval(() => {
+      void checkUsage();
+    }, config.usage.pollSeconds * 1000);
+    usageTimer.unref();
+  }
+
+  app.addHook('onClose', async () => {
+    clearInterval(purge);
+    if (usageTimer) clearInterval(usageTimer);
+  });
+
+  return { app, sessions, audit, limiter, workspaces, events, inbox, usage, standby };
 }

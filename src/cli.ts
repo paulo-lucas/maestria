@@ -41,7 +41,7 @@ async function serve(): Promise<void> {
     throw new ConfigError('No credentials configured. Run "maestria auth setup" first.');
   }
   const db = openDb(configDir);
-  const { app } = await buildServer({ config, db, secrets, logger: true });
+  const { app } = await buildServer({ config, db, secrets, logger: true, enableUsagePoll: true });
   // Loopback only, on purpose: the internet reaches the panel through the tunnel.
   await app.listen({ host: config.host, port: config.port });
 

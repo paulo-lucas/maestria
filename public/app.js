@@ -12,6 +12,16 @@
     viewTitle: document.getElementById('view-title'),
     viewMeta: document.getElementById('view-meta'),
     backHome: document.getElementById('back-home'),
+    wsTabs: document.getElementById('ws-tabs'),
+    tabInbox: document.getElementById('tab-inbox'),
+    tabRoadmap: document.getElementById('tab-roadmap'),
+    usageSection: document.getElementById('usage-section'),
+    standbyPill: document.getElementById('standby-pill'),
+    usageUpdated: document.getElementById('usage-updated'),
+    refreshUsage: document.getElementById('refresh-usage'),
+    usageSetupError: document.getElementById('usage-setup-error'),
+    usageStandbyNote: document.getElementById('usage-standby-note'),
+    usageGrid: document.getElementById('usage-grid'),
     filterBar: document.getElementById('filter-bar'),
     noWorkspaces: document.getElementById('no-workspaces'),
     needsSection: document.getElementById('needs-section'),
@@ -26,10 +36,15 @@
     historySection: document.getElementById('history-section'),
     historyList: document.getElementById('history-list'),
     historyEmpty: document.getElementById('history-empty'),
+    roadmapSection: document.getElementById('roadmap-section'),
+    roadmapCounts: document.getElementById('roadmap-counts'),
+    roadmapUpdated: document.getElementById('roadmap-updated'),
+    roadmapBody: document.getElementById('roadmap-body'),
   };
 
   let workspaces = [];
   let routeWsId = readWorkspaceFromHash(); // null => Home, string => workspace page
+  let wsTab = 'inbox'; // 'inbox' | 'roadmap'
   let homeFilterWsId = null; // null => All workspaces on Home
   let showHistory = false;
   let state = { needsYou: [], updates: [], historyCount: 0, history: [] };
@@ -120,13 +135,21 @@
     return m ? decodeURIComponent(m[1]) : null;
   }
 
-  function openWorkspace(id) {
+  function openWorkspace(id, tab = 'inbox') {
     routeWsId = id;
+    wsTab = id ? tab : 'inbox';
     showHistory = false;
     el.historySection.hidden = true;
     window.location.hash = id ? `ws=${encodeURIComponent(id)}` : '';
     renderNavigation();
-    void refreshInbox();
+    if (routeWsId === null) {
+      void refreshUsage(false);
+    }
+    if (routeWsId !== null && wsTab === 'roadmap') {
+      void refreshRoadmap();
+    } else {
+      void refreshInbox();
+    }
   }
 
   function makeWsDot(wsId) {
@@ -182,6 +205,16 @@
     }
 
     el.noWorkspaces.hidden = workspaces.length > 0;
+
+    const showInboxSections = routeWsId === null || wsTab === 'inbox';
+    el.usageSection.hidden = routeWsId !== null;
+    el.wsTabs.hidden = routeWsId === null;
+    el.tabInbox.classList.toggle('active', wsTab === 'inbox');
+    el.tabRoadmap.classList.toggle('active', wsTab === 'roadmap');
+    el.needsSection.hidden = !showInboxSections;
+    el.updatesSection.hidden = !showInboxSections;
+    if (!showInboxSections) el.historySection.hidden = true;
+    el.roadmapSection.hidden = routeWsId === null || wsTab !== 'roadmap';
 
     if (routeWsId === null) {
       el.viewTitle.textContent = 'Home';
@@ -620,10 +653,335 @@
     renderInbox();
   }
 
+  function fmtResetTime(iso) {
+    if (!iso) return '';
+    const ms = Date.parse(iso);
+    if (!Number.isFinite(ms)) return '';
+    const diffMs = ms - Date.now();
+    if (diffMs > 0 && diffMs < 48 * 3600 * 1000) {
+      const mins = Math.round(diffMs / 60000);
+      if (mins < 60) return `resets in ${mins}m`;
+      const hrs = Math.floor(mins / 60);
+      const rem = mins % 60;
+      return `resets in ${hrs}h${rem ? ` ${rem}m` : ''}`;
+    }
+    try {
+      return 'resets ' + new Date(ms).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return '';
+    }
+  }
+
+  function findThreshold(thresholds, providerId, win) {
+    if (!thresholds) return null;
+    const rules = thresholds[providerId] || thresholds['*'];
+    if (!rules) return null;
+    if (typeof rules[win.id] === 'number') return rules[win.id];
+    if (win.ring && typeof rules[win.ring] === 'number') return rules[win.ring];
+    if (typeof rules['*'] === 'number') return rules['*'];
+    return null;
+  }
+
+  function renderUsage(data) {
+    el.usageUpdated.textContent = data.updatedAt ? `· updated ${fmtTime(Date.parse(data.updatedAt))}` : '';
+    const standby = data.standby || { active: false, triggers: [], thresholds: {} };
+    el.standbyPill.hidden = !standby.active;
+
+    if (standby.active && standby.triggers && standby.triggers.length > 0) {
+      const summary = standby.triggers
+        .map((t) => `${t.providerName} ${t.windowTitle}: ${Math.round(t.usedPercent)}% (limit ${t.thresholdPercent}%)`)
+        .join('; ');
+      el.usageStandbyNote.textContent = `Standby active — ${summary}. Work will resume automatically after reset.`;
+      el.usageStandbyNote.hidden = false;
+    } else {
+      el.usageStandbyNote.hidden = true;
+    }
+
+    if (data.status !== 'ok') {
+      el.usageSetupError.textContent = data.setupError || 'Usage data unavailable.';
+      el.usageSetupError.hidden = false;
+      el.usageGrid.textContent = '';
+      return;
+    }
+
+    el.usageSetupError.hidden = true;
+    el.usageGrid.textContent = '';
+
+    const providers = data.providers || [];
+    if (providers.length === 0) {
+      const p = document.createElement('p');
+      p.className = 'muted small';
+      p.textContent = 'No usage providers enabled in Maestri.';
+      el.usageGrid.appendChild(p);
+      return;
+    }
+
+    for (const prov of providers) {
+      const card = document.createElement('div');
+      card.className = 'usage-card';
+
+      const head = document.createElement('div');
+      head.className = 'usage-card-head';
+
+      const title = document.createElement('div');
+      title.className = 'usage-card-title';
+      title.textContent = prov.name || prov.id;
+      if (prov.plan) {
+        const plan = document.createElement('span');
+        plan.className = 'kind-tag';
+        plan.textContent = prov.plan;
+        title.appendChild(plan);
+      }
+
+      const badges = document.createElement('div');
+      const st = document.createElement('span');
+      let stCls = 'state-pill';
+      if (prov.state === 'ready') stCls += prov.stale ? ' warn' : ' ready';
+      else if (prov.state === 'failed' || prov.state === 'executableNotFound' || prov.state === 'fileError') stCls += ' err';
+      else stCls += ' warn';
+      st.className = stCls;
+      st.textContent = prov.stale && prov.state === 'ready' ? 'stale' : prov.state;
+      badges.appendChild(st);
+
+      if (prov.source === 'fallback') {
+        const fb = document.createElement('span');
+        fb.className = 'kind-tag';
+        fb.textContent = 'fallback';
+        badges.append(' ', fb);
+      }
+
+      head.append(title, badges);
+      card.appendChild(head);
+
+      if (prov.error) {
+        const errP = document.createElement('div');
+        errP.className = 'inline-err';
+        errP.textContent = prov.error;
+        card.appendChild(errP);
+      } else if (prov.limitsApply === false) {
+        const p = document.createElement('p');
+        p.className = 'muted small';
+        p.textContent = 'Plan limits do not apply to this account.';
+        card.appendChild(p);
+      }
+
+      for (const meter of prov.meters || []) {
+        if ((prov.meters || []).length > 1 || (meter.label && meter.label !== 'Plan limits')) {
+          const ml = document.createElement('div');
+          ml.className = 'usage-meter-label';
+          ml.textContent = meter.label;
+          card.appendChild(ml);
+        }
+        for (const win of meter.windows || []) {
+          const wWrap = document.createElement('div');
+          wWrap.className = 'usage-window';
+
+          const row = document.createElement('div');
+          row.className = 'usage-win-row';
+          const left = document.createElement('span');
+          const pct = win.usedPercent !== null ? `${Math.round(win.usedPercent)}%` : '—';
+          const guard = findThreshold(standby.thresholds, prov.id, win);
+          left.textContent = `${win.title}: ${pct}` + (guard !== null ? ` (guard ${guard}%)` : '');
+          const right = document.createElement('span');
+          right.className = 'muted small';
+          right.textContent = fmtResetTime(win.resetsAt);
+          row.append(left, right);
+
+          const bar = document.createElement('progress');
+          bar.className = 'usage-bar';
+          bar.max = 100;
+          bar.value = win.usedPercent !== null ? Math.max(0, Math.min(100, win.usedPercent)) : 0;
+          if (guard !== null && win.usedPercent !== null) {
+            if (win.usedPercent >= guard) bar.classList.add('over');
+            else if (win.usedPercent >= guard * 0.85) bar.classList.add('warn');
+          } else if (win.usedPercent !== null && win.usedPercent >= 90) {
+            bar.classList.add('over');
+          }
+
+          wWrap.append(row, bar);
+          card.appendChild(wWrap);
+        }
+      }
+
+      if (prov.lastSuccessAt) {
+        const foot = document.createElement('div');
+        foot.className = 'inbox-meta';
+        foot.textContent = `Last reading: ${fmtTime(Date.parse(prov.lastSuccessAt))}`;
+        card.appendChild(foot);
+      }
+
+      el.usageGrid.appendChild(card);
+    }
+  }
+
+  async function refreshUsage(force) {
+    try {
+      const data = force
+        ? await api('/api/usage/refresh', { method: 'POST' })
+        : await api('/api/usage');
+      if (routeWsId === null) {
+        renderUsage(data);
+      }
+    } catch (err) {
+      if (err.message !== 'unauthenticated' && force) {
+        showBanner(`Could not refresh usage: ${err.message}`);
+      }
+    }
+  }
+
+  function makeTableElement(tbl) {
+    const table = document.createElement('table');
+    table.className = 'roadmap-table';
+    const thead = document.createElement('thead');
+    const htr = document.createElement('tr');
+    for (const h of tbl.headers || []) {
+      const th = document.createElement('th');
+      th.textContent = h;
+      htr.appendChild(th);
+    }
+    thead.appendChild(htr);
+    table.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+    for (const row of tbl.rows || []) {
+      const tr = document.createElement('tr');
+      for (const cell of row) {
+        const td = document.createElement('td');
+        td.textContent = cell;
+        tr.appendChild(td);
+      }
+      tbody.appendChild(tr);
+    }
+    table.appendChild(tbody);
+    return table;
+  }
+
+  function renderRoadmap(data) {
+    el.roadmapBody.textContent = '';
+    el.roadmapUpdated.textContent = '';
+    el.roadmapCounts.textContent = '';
+
+    if (data.status === 'unconfigured') {
+      const p = document.createElement('p');
+      p.className = 'muted';
+      p.textContent = 'No roadmapPath configured for this workspace.';
+      el.roadmapBody.appendChild(p);
+      return;
+    }
+    if (data.status !== 'ok' || !data.roadmap) {
+      const p = document.createElement('p');
+      p.className = 'inline-err';
+      p.textContent = data.error || 'Could not load roadmap.';
+      el.roadmapBody.appendChild(p);
+      return;
+    }
+
+    const rm = data.roadmap;
+    el.roadmapCounts.textContent = `(${rm.pipeline.length} in pipeline · ${rm.done.length} done)`;
+    if (rm.updatedNote) {
+      el.roadmapUpdated.textContent = rm.updatedNote;
+    }
+
+    const activeSections = [];
+    let doneSection = null;
+    for (const sec of rm.sections || []) {
+      if (sec.heading.toLowerCase() === 'done') {
+        doneSection = sec;
+      } else if (sec.tables.length > 0 || sec.listItems.length > 0) {
+        activeSections.push(sec);
+      }
+    }
+
+    for (const sec of activeSections) {
+      const block = document.createElement('div');
+      block.className = 'roadmap-block';
+      const h3 = document.createElement('h3');
+      h3.textContent = sec.heading;
+      block.appendChild(h3);
+
+      for (const tbl of sec.tables) {
+        if (tbl.milestone) {
+          const h4 = document.createElement('h4');
+          h4.textContent = tbl.milestone;
+          block.appendChild(h4);
+        }
+        if (tbl.rows.length > 0) {
+          block.appendChild(makeTableElement(tbl));
+        } else if (tbl.milestone) {
+          const empty = document.createElement('p');
+          empty.className = 'muted small';
+          empty.textContent = 'Completed.';
+          block.appendChild(empty);
+        }
+      }
+
+      if (sec.listItems.length > 0) {
+        const ul = document.createElement('ul');
+        for (const item of sec.listItems) {
+          const li = document.createElement('li');
+          li.textContent = (item.checked === true ? '[done] ' : item.checked === false ? '[ ] ' : '') + item.text;
+          ul.appendChild(li);
+        }
+        block.appendChild(ul);
+      }
+
+      el.roadmapBody.appendChild(block);
+    }
+
+    if (doneSection && (doneSection.tables.length > 0 || doneSection.listItems.length > 0)) {
+      const details = document.createElement('details');
+      details.className = 'roadmap-details';
+      const summary = document.createElement('summary');
+      summary.textContent = `Done (${rm.done.length})`;
+      details.appendChild(summary);
+      for (const tbl of doneSection.tables) {
+        if (tbl.rows.length > 0) details.appendChild(makeTableElement(tbl));
+      }
+      if (doneSection.listItems.length > 0) {
+        const ul = document.createElement('ul');
+        for (const item of doneSection.listItems) {
+          const li = document.createElement('li');
+          li.textContent = item.text;
+          ul.appendChild(li);
+        }
+        details.appendChild(ul);
+      }
+      el.roadmapBody.appendChild(details);
+    }
+
+    if (el.roadmapBody.children.length === 0) {
+      const p = document.createElement('p');
+      p.className = 'muted';
+      p.textContent = 'Roadmap has no tables or list items yet.';
+      el.roadmapBody.appendChild(p);
+    }
+  }
+
+  async function refreshRoadmap() {
+    if (!routeWsId) return;
+    const target = routeWsId;
+    try {
+      const data = await api(`/api/workspaces/${encodeURIComponent(target)}/roadmap`);
+      if (routeWsId === target && wsTab === 'roadmap') {
+        renderRoadmap(data);
+      }
+    } catch (err) {
+      if (err.message !== 'unauthenticated') {
+        showBanner(`Could not load roadmap: ${err.message}`);
+      }
+    }
+  }
+
   async function poll() {
     try {
       await refreshWorkspaces();
-      await refreshInbox();
+      if (routeWsId === null) {
+        await Promise.all([refreshUsage(false), refreshInbox()]);
+      } else if (wsTab === 'roadmap') {
+        await refreshRoadmap();
+      } else {
+        await refreshInbox();
+      }
       el.sync.textContent = `Updated ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
     } catch (err) {
       if (err.message !== 'unauthenticated') {
@@ -633,6 +991,17 @@
   }
 
   el.backHome.addEventListener('click', () => openWorkspace(null));
+  el.refreshUsage.addEventListener('click', () => void refreshUsage(true));
+  el.tabInbox.addEventListener('click', () => {
+    wsTab = 'inbox';
+    renderNavigation();
+    void refreshInbox();
+  });
+  el.tabRoadmap.addEventListener('click', () => {
+    wsTab = 'roadmap';
+    renderNavigation();
+    void refreshRoadmap();
+  });
 
   el.toggleHistory.addEventListener('click', () => {
     showHistory = !showHistory;
@@ -648,9 +1017,11 @@
     const id = readWorkspaceFromHash();
     if (id !== routeWsId) {
       routeWsId = id;
+      wsTab = 'inbox';
       showHistory = false;
       el.historySection.hidden = true;
       renderNavigation();
+      if (id === null) void refreshUsage(false);
       void refreshInbox();
     }
   });

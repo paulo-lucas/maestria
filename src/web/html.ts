@@ -75,6 +75,25 @@ export function homePage(opts: { csrf: string }): string {
     <button id="back-home" type="button" class="ghost small-btn" hidden>All workspaces</button>
   </div>
 
+  <div id="ws-tabs" class="ws-tabs" hidden>
+    <button id="tab-inbox" type="button" class="ws-tab active">Inbox</button>
+    <button id="tab-roadmap" type="button" class="ws-tab">Roadmap</button>
+  </div>
+
+  <section id="usage-section" class="section usage-section" hidden>
+    <div class="section-head">
+      <div class="section-title">
+        <h2>Agent Usage</h2>
+        <span id="standby-pill" class="decision-badge rejected" hidden>Standby active</span>
+        <span id="usage-updated" class="muted small"></span>
+      </div>
+      <button id="refresh-usage" type="button" class="ghost small-btn">Refresh</button>
+    </div>
+    <div id="usage-setup-error" class="warn-box" hidden></div>
+    <div id="usage-standby-note" class="warn-box" hidden></div>
+    <div id="usage-grid" class="usage-grid"></div>
+  </section>
+
   <div id="filter-bar" class="filter-bar" hidden></div>
 
   <p id="no-workspaces" class="section muted" hidden>No workspaces configured yet. Add entries to <code>~/.config/maestria/workspaces.json</code> or run <code>maestria workspace add</code>.</p>
@@ -108,6 +127,17 @@ export function homePage(opts: { csrf: string }): string {
     </div>
     <div id="history-list" class="history-list"></div>
     <p id="history-empty" class="muted small" hidden>No responses or dismissed updates yet.</p>
+  </section>
+
+  <section id="roadmap-section" class="section" hidden>
+    <div class="section-head">
+      <div class="section-title">
+        <h2>Roadmap</h2>
+        <span id="roadmap-counts" class="count-pill"></span>
+      </div>
+      <span id="roadmap-updated" class="muted small"></span>
+    </div>
+    <div id="roadmap-body"></div>
   </section>
 </main>`,
     {
