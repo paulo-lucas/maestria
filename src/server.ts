@@ -13,6 +13,9 @@ import { SessionStore, type Session } from './auth/sessions.ts';
 import { LoginLimiter } from './auth/ratelimit.ts';
 import { AccessVerifier, type JwksFetcher, fetchJwks } from './auth/cloudflare.ts';
 import type { AuthSecrets } from './auth/secrets.ts';
+import { NoticeStore } from './notices.ts';
+import { TaskStore, ValidationError, type TaskStatus } from './tasks.ts';
+import { WorkspaceError, WorkspaceRegistry, type WorkspaceProvider } from './workspaces.ts';
 import { homePage, loginPage } from './web/html.ts';
 
 declare module 'fastify' {
@@ -32,13 +35,17 @@ export interface ServerDeps {
   config: Config;
   db: Db;
   secrets: AuthSecrets;
+  workspaces?: WorkspaceProvider;
   now?: () => number;
   logger?: boolean;
   jwksFetcher?: JwksFetcher;
 }
 
 const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
-const STATIC_FILES: Record<string, { type: string }> = { 'app.css': { type: 'text/css; charset=utf-8' } };
+const STATIC_FILES: Record<string, { type: string }> = {
+  'app.css': { type: 'text/css; charset=utf-8' },
+  'app.js': { type: 'application/javascript; charset=utf-8' },
+};
 
 export const CSP = [
   "default-src 'none'",
@@ -71,6 +78,9 @@ export interface Server {
   sessions: SessionStore;
   audit: Audit;
   limiter: LoginLimiter;
+  workspaces: WorkspaceProvider;
+  tasks: TaskStore;
+  notices: NoticeStore;
 }
 
 export async function buildServer(deps: ServerDeps): Promise<Server> {
@@ -78,6 +88,9 @@ export async function buildServer(deps: ServerDeps): Promise<Server> {
   const now = deps.now ?? Date.now;
 
   const audit = new Audit(db, now);
+  const workspaces = deps.workspaces ?? new WorkspaceRegistry(config.configDir);
+  const tasks = new TaskStore(db, audit, now);
+  const notices = new NoticeStore(db, audit, now);
   const sessions = new SessionStore(db, { idleMs: config.session.idleMinutes * 60_000, absoluteMs: config.session.absoluteHours * 3_600_000 }, now);
   const limiter = new LoginLimiter(
     {
@@ -260,9 +273,115 @@ export async function buildServer(deps: ServerDeps): Promise<Server> {
 
   app.get('/api/session', async (req) => ({ csrfToken: req.session!.csrfToken, expiresAt: req.session!.expiresAt }));
 
+  app.get('/api/workspaces', async () => {
+    const list = workspaces.list();
+    const taskCounts = tasks.countsByWorkspace();
+    const noticeCounts = notices.countsByWorkspace();
+    return {
+      workspaces: list.map((ws) => {
+        const tc = taskCounts.get(ws.id) ?? { open: 0, done: 0, dismissed: 0 };
+        const nc = noticeCounts.get(ws.id) ?? { active: 0, dismissed: 0 };
+        return {
+          id: ws.id,
+          name: ws.name,
+          path: ws.path,
+          maestroAgent: ws.maestroAgent,
+          hasRoadmap: ws.roadmapPath !== null,
+          counts: {
+            openTasks: tc.open,
+            doneTasks: tc.done,
+            dismissedTasks: tc.dismissed,
+            activeNotices: nc.active,
+          },
+        };
+      }),
+    };
+  });
+
+  app.get('/api/workspaces/:id/board', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const ws = workspaces.get(id);
+    if (!ws) return reply.code(404).send({ error: 'workspace_not_found' });
+    const q = (req.query ?? {}) as { includeDismissed?: string };
+    const includeDismissed = q.includeDismissed === '1' || q.includeDismissed === 'true';
+    const taskCounts = tasks.countsByWorkspace().get(ws.id) ?? { open: 0, done: 0, dismissed: 0 };
+    return {
+      workspace: {
+        id: ws.id,
+        name: ws.name,
+        path: ws.path,
+        maestroAgent: ws.maestroAgent,
+        hasRoadmap: ws.roadmapPath !== null,
+      },
+      tasks: tasks.list(ws.id, { status: includeDismissed ? 'all' : 'board' }),
+      dismissedCount: taskCounts.dismissed,
+      notices: notices.list(ws.id, { status: 'active' }),
+    };
+  });
+
+  app.get('/api/workspaces/:id/tasks', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const ws = workspaces.get(id);
+    if (!ws) return reply.code(404).send({ error: 'workspace_not_found' });
+    const status = ((req.query as { status?: string } | undefined)?.status ?? 'board') as string;
+    if (!['open', 'done', 'dismissed', 'board', 'all'].includes(status)) {
+      return reply.code(400).send({ error: 'invalid_status' });
+    }
+    return { tasks: tasks.list(ws.id, { status: status as TaskStatus | 'board' | 'all' }) };
+  });
+
+  const handleTaskUpdate = async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id, taskId } = req.params as { id: string; taskId: string };
+    const ws = workspaces.get(id);
+    if (!ws) return reply.code(404).send({ error: 'workspace_not_found' });
+    const body = req.body;
+    if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+      return reply.code(400).send({ error: 'invalid_body' });
+    }
+    const b = body as Record<string, unknown>;
+    if (b.status !== 'open' && b.status !== 'done' && b.status !== 'dismissed') {
+      return reply.code(400).send({ error: 'invalid_status' });
+    }
+    if (b.answer !== undefined && typeof b.answer !== 'string') {
+      return reply.code(400).send({ error: 'invalid_answer' });
+    }
+    const updated = tasks.updateState(ws.id, taskId, { status: b.status, answer: b.answer }, { via: 'web', ip: req.clientIp });
+    if (!updated) return reply.code(404).send({ error: 'task_not_found' });
+    return { task: updated };
+  };
+  app.post('/api/workspaces/:id/tasks/:taskId', handleTaskUpdate);
+  app.patch('/api/workspaces/:id/tasks/:taskId', handleTaskUpdate);
+
+  app.get('/api/workspaces/:id/notices', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const ws = workspaces.get(id);
+    if (!ws) return reply.code(404).send({ error: 'workspace_not_found' });
+    const status = ((req.query as { status?: string } | undefined)?.status ?? 'active') as string;
+    if (!['active', 'dismissed', 'all'].includes(status)) {
+      return reply.code(400).send({ error: 'invalid_status' });
+    }
+    return { notices: notices.list(ws.id, { status: status as 'active' | 'dismissed' | 'all' }) };
+  });
+
+  app.post('/api/workspaces/:id/notices/:noticeId/dismiss', async (req, reply) => {
+    const { id, noticeId } = req.params as { id: string; noticeId: string };
+    const ws = workspaces.get(id);
+    if (!ws) return reply.code(404).send({ error: 'workspace_not_found' });
+    const updated = notices.dismiss(ws.id, noticeId, { via: 'web', ip: req.clientIp });
+    if (!updated) return reply.code(404).send({ error: 'notice_not_found' });
+    return { notice: updated };
+  });
+
   app.setNotFoundHandler(async (_req, reply) => deny(reply, 404, 'Not found'));
 
   app.setErrorHandler(async (err, req, reply) => {
+    if (err instanceof ValidationError) {
+      return reply.code(400).send({ error: err.message });
+    }
+    if (err instanceof WorkspaceError) {
+      req.log.error(err);
+      return reply.code(500).send({ error: 'workspaces_config_error' });
+    }
     const status = (err as { statusCode?: number }).statusCode;
     if (status && status >= 400 && status < 500) return deny(reply, status, 'Bad request');
     req.log.error(err);
@@ -274,5 +393,5 @@ export async function buildServer(deps: ServerDeps): Promise<Server> {
   purge.unref();
   app.addHook('onClose', async () => clearInterval(purge));
 
-  return { app, sessions, audit, limiter };
+  return { app, sessions, audit, limiter, workspaces, tasks, notices };
 }

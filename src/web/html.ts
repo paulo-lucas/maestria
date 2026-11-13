@@ -4,7 +4,7 @@ export function esc(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ESCAPES[c]!);
 }
 
-export function layout(title: string, body: string): string {
+export function layout(title: string, body: string, opts: { headExtra?: string; bodyAttrs?: string } = {}): string {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -14,8 +14,8 @@ export function layout(title: string, body: string): string {
 <meta name="robots" content="noindex, nofollow">
 <title>${esc(title)} · Maestria</title>
 <link rel="stylesheet" href="/static/app.css">
-</head>
-<body>
+${opts.headExtra ?? ''}</head>
+<body${opts.bodyAttrs ? ' ' + opts.bodyAttrs : ''}>
 ${body}
 </body>
 </html>
@@ -48,19 +48,62 @@ export function homePage(opts: { csrf: string }): string {
   return layout(
     'Panel',
     `<header class="bar">
-  <strong>Maestria</strong>
-  <form method="post" action="/logout">
-    <input type="hidden" name="_csrf" value="${esc(opts.csrf)}">
-    <button type="submit" class="ghost">Sign out</button>
-  </form>
+  <div class="bar-left">
+    <strong class="brand">Maestria</strong>
+    <nav id="ws-switcher" class="ws-switcher" aria-label="Workspaces"></nav>
+  </div>
+  <div class="bar-actions">
+    <span id="sync-status" class="muted small"></span>
+    <form method="post" action="/logout">
+      <input type="hidden" name="_csrf" value="${esc(opts.csrf)}">
+      <button type="submit" class="ghost small-btn">Sign out</button>
+    </form>
+    <form method="post" action="/logout-all">
+      <input type="hidden" name="_csrf" value="${esc(opts.csrf)}">
+      <button type="submit" class="ghost small-btn">Sign out everywhere</button>
+    </form>
+  </div>
 </header>
-<main class="card">
-  <h1>Welcome</h1>
-  <p class="muted">You are signed in. Workspaces, tasks, notices, roadmap, usage and chat arrive in the next steps.</p>
-  <form method="post" action="/logout-all">
-    <input type="hidden" name="_csrf" value="${esc(opts.csrf)}">
-    <button type="submit" class="ghost">Sign out everywhere</button>
-  </form>
+<main class="panel">
+  <div id="banner" class="banner" role="alert" hidden></div>
+
+  <section id="overview-section" class="section">
+    <div class="section-head">
+      <h2>Workspaces</h2>
+    </div>
+    <div id="overview-grid" class="overview-grid"></div>
+    <p id="no-workspaces" class="muted" hidden>No workspaces configured yet. Add entries to <code>~/.config/maestria/workspaces.json</code> or run <code>maestria workspace add</code>.</p>
+  </section>
+
+  <div id="workspace-view" hidden>
+    <div class="ws-header">
+      <div>
+        <h1 id="ws-title"></h1>
+        <p id="ws-meta" class="muted small"></p>
+      </div>
+    </div>
+
+    <section id="tasks-section" class="section attention clear">
+      <div class="section-head">
+        <h2>Human tasks <span id="tasks-count" class="count-pill"></span></h2>
+        <button id="toggle-archived" type="button" class="ghost small-btn" hidden></button>
+      </div>
+      <div id="tasks-list" class="tasks-list"></div>
+      <p id="tasks-empty" class="muted" hidden>Nothing waiting on you here.</p>
+    </section>
+
+    <section id="notices-section" class="section">
+      <div class="section-head">
+        <h2>Notices <span id="notices-count" class="count-pill"></span></h2>
+      </div>
+      <div id="notices-list" class="notices-list"></div>
+      <p id="notices-empty" class="muted" hidden>No active notices.</p>
+    </section>
+  </div>
 </main>`,
+    {
+      headExtra: '<script src="/static/app.js" defer></script>\n',
+      bodyAttrs: `data-csrf="${esc(opts.csrf)}"`,
+    },
   );
 }

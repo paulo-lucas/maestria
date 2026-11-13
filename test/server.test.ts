@@ -147,7 +147,7 @@ describe('authentication', () => {
     expect(c.path).toBe('/');
     const home = await ctx.srv.app.inject({ method: 'GET', url: '/', headers: { ...base, cookie } });
     expect(home.statusCode).toBe(200);
-    expect(home.body).toContain('Welcome');
+    expect(home.body).toContain('Workspaces');
   });
 
   it('marks the session cookie Secure with a __Host- prefix when configured', async () => {
