@@ -16,7 +16,7 @@ import { discoverMaestriWorkspaces } from '../discovery.ts';
 import { loadWorkspaces, saveWorkspaces, type Workspace } from '../workspaces.ts';
 import { ArgError, parseArgs } from './args.ts';
 import { authSetup, type AuthSetupOpts } from './auth-setup.ts';
-import { askKeepOrRedo, askValidated, askYesNo, defaultPromptIO, type PromptIO } from './prompt.ts';
+import { askCheckbox, askConfirm, askKeepOrRedo, askLine, askSelect, defaultPromptIO, type PromptIO } from './prompt.ts';
 
 export interface InitCliOpts {
   configDir: string;
@@ -31,6 +31,7 @@ const PACKAGE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 
 export const BUNDLED_SKILL_PATH = path.join(PACKAGE_ROOT, 'skills', 'maestria-maestro', 'SKILL.md');
 
 export type SkillTarget = 'claude' | 'antigravity' | 'both' | 'none';
+export type SkillAgent = 'claude' | 'antigravity';
 
 export function resolveAntigravitySkillDir(homeDir: string): string {
   const configSkills = path.join(homeDir, '.gemini', 'config', 'skills');
@@ -73,10 +74,19 @@ export function parseSkillSelection(raw: string, allowShort = false): SkillTarge
   if (none) {
     return claude || antigravity ? null : 'none';
   }
-  if (claude && antigravity) return 'both';
-  if (claude) return 'claude';
-  if (antigravity) return 'antigravity';
-  return null;
+  return skillTargetFromCheckboxes([
+    ...(claude ? (['claude'] as const) : []),
+    ...(antigravity ? (['antigravity'] as const) : []),
+  ]);
+}
+
+export function skillTargetFromCheckboxes(selected: readonly SkillAgent[]): SkillTarget {
+  const hasClaude = selected.includes('claude');
+  const hasAg = selected.includes('antigravity');
+  if (hasClaude && hasAg) return 'both';
+  if (hasClaude) return 'claude';
+  if (hasAg) return 'antigravity';
+  return 'none';
 }
 
 export function formatSkillTarget(target: SkillTarget): string {
@@ -133,26 +143,31 @@ async function promptMaestriDir(
   homeDir: string,
   io: PromptIO,
 ): Promise<{ dir: string; custom: boolean }> {
-  return askValidated<{ dir: string; custom: boolean }>(
-    `Maestri data directory (enter a path, or "default" for ${envDefault}): `,
-    (raw) => {
+  const mode = await askSelect<'default' | 'custom'>(
+    'Maestri data directory:',
+    [
+      { name: `Use default (${envDefault})`, value: 'default' },
+      { name: 'Enter a custom path', value: 'custom' },
+    ],
+    { defaultValue: 'default', io },
+  );
+  if (mode === 'default') {
+    return { dir: envDefault, custom: false };
+  }
+  const entered = await askLine('Custom Maestri data directory path:', io, {
+    validate: (raw) => {
       const trimmed = raw.trim();
-      if (!trimmed) {
-        return { ok: false, error: `Please enter a path or "default" (default: ${envDefault}).` };
-      }
-      if (trimmed.toLowerCase() === 'default') {
-        return { ok: true, value: { dir: envDefault, custom: false } };
-      }
+      if (!trimmed) return 'Please enter a path (e.g. ~/.maestri or /path/to/.maestri).';
       try {
-        const resolved = resolveMaestriDir(trimmed, env, homeDir);
-        return { ok: true, value: { dir: resolved, custom: resolved !== envDefault } };
+        resolveMaestriDir(trimmed, env, homeDir);
+        return true;
       } catch (err) {
-        const msg = err instanceof ConfigError ? err.message : String(err);
-        return { ok: false, error: msg };
+        return err instanceof ConfigError ? err.message : String(err);
       }
     },
-    io,
-  );
+  });
+  const resolved = resolveMaestriDir(entered.trim(), env, homeDir);
+  return { dir: resolved, custom: resolved !== envDefault };
 }
 
 async function resolveConfigStep(opts: {
@@ -185,7 +200,10 @@ async function resolveConfigStep(opts: {
       writeUsageStatus(inspectMaestriDir(maestriDir), out);
       return maestriDir;
     }
-    const action = await askKeepOrRedo('Keep existing config or redo? [keep/redo, default: keep]: ', io);
+    const action = await askKeepOrRedo('Configuration', io, {
+      keep: `Keep existing config (${label})`,
+      redo: 'Change Maestri data directory',
+    });
     if (action === 'keep') {
       writeUsageStatus(inspectMaestriDir(maestriDir), out);
       return maestriDir;
@@ -234,10 +252,7 @@ async function resolveWorkspacesStep(opts: {
     }
     const importOk = nonInteractive
       ? true
-      : await askYesNo('Add detected workspaces to workspaces.json? [y/n, default: y]: ', {
-          defaultLabel: 'y',
-          io,
-        });
+      : await askConfirm('Add detected workspaces to workspaces.json?', { defaultValue: true, io });
     if (importOk) {
       const merged: Partial<Workspace>[] = [...existingWs, ...newOnes];
       saveWorkspaces(configDir, merged);
@@ -255,7 +270,10 @@ async function resolveWorkspacesStep(opts: {
 
   out.write(`Existing workspaces.json has ${existingWs.length} configured workspace(s).\n`);
   if (!nonInteractive && discovered.length > 0) {
-    const action = await askKeepOrRedo('Keep existing workspaces.json or redo from discovery? [keep/redo, default: keep]: ', io);
+    const action = await askKeepOrRedo('Workspaces', io, {
+      keep: `Keep existing workspaces (${existingWs.length})`,
+      redo: `Replace from discovery (${discovered.length})`,
+    });
     if (action === 'redo') {
       saveWorkspaces(configDir, discovered);
       out.write(`Replaced workspaces.json with ${discovered.length} discovered workspace(s).\n`);
@@ -284,7 +302,10 @@ async function resolveAuthStep(opts: {
       out.write('Keeping existing credentials.\n');
       return;
     }
-    const action = await askKeepOrRedo('Keep existing credentials or redo password & TOTP? [keep/redo, default: keep]: ', io);
+    const action = await askKeepOrRedo('Credentials', io, {
+      keep: 'Keep existing credentials',
+      redo: 'Reset password & TOTP',
+    });
     if (action === 'keep') return;
     await authSetupFn({ configDir, force: true, io });
     return;
@@ -298,8 +319,8 @@ async function resolveAuthStep(opts: {
   await authSetupFn({ configDir, force: false, io });
 }
 
-function findInstalledSkills(homeDir: string): { label: string; path: string }[] {
-  const found: { label: string; path: string }[] = [];
+function findInstalledSkills(homeDir: string): { label: SkillAgent; path: string }[] {
+  const found: { label: SkillAgent; path: string }[] = [];
   const claude = claudeSkillFilePath(homeDir);
   if (fs.existsSync(claude)) found.push({ label: 'claude', path: claude });
   const ag = antigravitySkillFilePath(homeDir);
@@ -307,29 +328,39 @@ function findInstalledSkills(homeDir: string): { label: string; path: string }[]
   return found;
 }
 
-async function promptSkillChoice(io: PromptIO): Promise<SkillTarget> {
+async function promptSkillChoice(
+  homeDir: string,
+  existingSkills: readonly { label: SkillAgent; path: string }[],
+  io: PromptIO,
+): Promise<SkillTarget> {
+  const hasClaude = existingSkills.some((s) => s.label === 'claude');
+  const hasAg = existingSkills.some((s) => s.label === 'antigravity');
+  const defaultAll = existingSkills.length === 0;
+
   while (true) {
-    const choice = await askValidated<SkillTarget>(
-      'Install Maestro protocol skill for [claude,antigravity | claude | antigravity | none] (default: claude,antigravity): ',
-      (raw) => {
-        const parsed = parseSkillSelection(raw, true);
-        if (!parsed) {
-          return {
-            ok: false,
-            error:
-              'Invalid or empty choice. Enter "claude,antigravity" (default), "claude", "antigravity", or "none".',
-          };
-        }
-        return { ok: true, value: parsed };
-      },
+    const selected = await askCheckbox<SkillAgent>(
+      'Install Maestro protocol skill for:',
+      [
+        {
+          name: `Claude Code (${claudeSkillFilePath(homeDir)})`,
+          value: 'claude',
+          checked: hasClaude || defaultAll,
+        },
+        {
+          name: `Antigravity (${antigravitySkillFilePath(homeDir)})`,
+          value: 'antigravity',
+          checked: hasAg || defaultAll,
+        },
+      ],
       io,
     );
 
-    const confirmPrompt =
+    const choice = skillTargetFromCheckboxes(selected);
+    const confirmMsg =
       choice === 'none'
-        ? 'Confirm: skip installing Maestro protocol skill? [y/n, default: y]: '
-        : `Confirm: install Maestro protocol skill for ${formatSkillTarget(choice)}? [y/n, default: y]: `;
-    const confirmed = await askYesNo(confirmPrompt, { defaultLabel: 'y', io });
+        ? 'Skip installing Maestro protocol skill?'
+        : `Install Maestro protocol skill for ${formatSkillTarget(choice)}?`;
+    const confirmed = await askConfirm(confirmMsg, { defaultValue: true, io });
     if (confirmed) return choice;
   }
 }
@@ -367,14 +398,17 @@ async function resolveSkillStep(opts: {
       out.write('Keeping existing Maestro skill(s).\n');
       return;
     }
-    const action = await askKeepOrRedo('Keep existing Maestro skill(s) or redo? [keep/redo, default: keep]: ', io);
+    const action = await askKeepOrRedo('Maestro protocol skill', io, {
+      keep: `Keep existing skill(s) (${existingSkills.map((s) => s.label).join(', ')})`,
+      redo: 'Re-select skills to install',
+    });
     if (action === 'keep') return;
   } else if (nonInteractive) {
     out.write('Skipping skill installation in non-interactive mode (pass --skill claude,antigravity to install).\n');
     return;
   }
 
-  const choice = await promptSkillChoice(io);
+  const choice = await promptSkillChoice(homeDir, existingSkills, io);
   const installed = installMaestroSkill(choice, homeDir);
   if (installed.length === 0) {
     out.write('Skipped Maestro protocol skill installation.\n');

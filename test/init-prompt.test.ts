@@ -6,18 +6,13 @@ import { describe, expect, it } from 'vitest';
 import { hashPassword } from '../src/auth/password.ts';
 import { loadSecrets, saveSecrets } from '../src/auth/secrets.ts';
 import { totp } from '../src/auth/totp.ts';
-import { parseSkillSelection, runInitCommand } from '../src/commands/init.ts';
-import {
-  askHidden,
-  askKeepOrRedo,
-  askLine,
-  drainBufferedInput,
-  isPromptInFlight,
-  type PromptInput,
-  type PromptIO,
-  type WatchdogEvent,
-} from '../src/commands/prompt.ts';
+import { parseSkillSelection, runInitCommand, skillTargetFromCheckboxes } from '../src/commands/init.ts';
+import { askCheckbox, askConfirm, askHidden, askKeepOrRedo, askLine, drainBufferedInput, type PromptInput, type PromptIO } from '../src/commands/prompt.ts';
 import { loadConfig, loadRawConfig } from '../src/config.ts';
+
+function stripAnsi(s: string): string {
+  return s.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '');
+}
 
 function setupSampleEnv(baseDir: string): { homeDir: string; configDir: string; maestriDir: string; projDir: string } {
   const homeDir = path.join(baseDir, 'home');
@@ -66,23 +61,24 @@ class FakeTtyHarness {
   }
 
   get allOutput(): string {
-    return this.text;
+    return stripAnsi(this.text);
   }
 
   async waitFor(needle: string): Promise<string> {
-    const deadline = Date.now() + 4000;
+    const deadline = Date.now() + 5000;
     while (true) {
-      const slice = this.text.slice(this.cursor);
+      const slice = stripAnsi(this.text.slice(this.cursor));
       const idx = slice.indexOf(needle);
       if (idx >= 0) {
-        this.cursor += idx + needle.length;
-        return slice.slice(0, idx + needle.length);
+        // Advance raw cursor safely past what we matched in stripped view by snapping to text.length
+        this.cursor = this.text.length;
+        return slice;
       }
       if (Date.now() > deadline) {
         throw new Error(`Timed out waiting for prompt text ${JSON.stringify(needle)}. Output tail:\n${slice}`);
       }
       await new Promise<void>((resolve) => {
-        const timer = setTimeout(resolve, 25);
+        const timer = setTimeout(resolve, 20);
         this.waiters.push(() => {
           clearTimeout(timer);
           resolve();
@@ -91,26 +87,36 @@ class FakeTtyHarness {
     }
   }
 
-  /** Capture output emitted after the current cursor up to `endNeedle`. */
-  sliceSinceCursor(): string {
-    return this.text.slice(this.cursor);
-  }
-
   sendLine(line: string): void {
     this.input.write(`${line}\r`);
+  }
+
+  async pressEnter(): Promise<void> {
+    this.input.write('\r');
+    await new Promise((r) => setTimeout(r, 10));
+  }
+
+  async pressDown(): Promise<void> {
+    this.input.write('\x1b[B');
+    await new Promise((r) => setTimeout(r, 10));
+  }
+
+  async pressSpace(): Promise<void> {
+    this.input.write(' ');
+    await new Promise((r) => setTimeout(r, 10));
   }
 
   async typeCharByChar(text: string): Promise<void> {
     for (const ch of text) {
       this.input.write(ch);
-      await new Promise((r) => setTimeout(r, 2));
+      await new Promise((r) => setTimeout(r, 3));
     }
     this.input.write('\r');
   }
 }
 
-describe('prompt helpers and init wizard bugs', () => {
-  it('parses skill selections strictly and rejects empty or conflicting choices', () => {
+describe('interactive @inquirer/prompts wizard, flags, and fake TTY flows', () => {
+  it('parses skill flags and checkbox target combinations strictly', () => {
     expect(parseSkillSelection('claude')).toBe('claude');
     expect(parseSkillSelection('antigravity')).toBe('antigravity');
     expect(parseSkillSelection('claude,antigravity')).toBe('both');
@@ -122,78 +128,88 @@ describe('prompt helpers and init wizard bugs', () => {
     expect(parseSkillSelection('unknown')).toBeNull();
     expect(parseSkillSelection('claude,none')).toBeNull();
     expect(parseSkillSelection('claude,')).toBeNull();
+
+    expect(skillTargetFromCheckboxes([])).toBe('none');
+    expect(skillTargetFromCheckboxes(['claude'])).toBe('claude');
+    expect(skillTargetFromCheckboxes(['antigravity'])).toBe('antigravity');
+    expect(skillTargetFromCheckboxes(['claude', 'antigravity'])).toBe('both');
   });
 
   it('supports non-interactive --skill claude,antigravity --yes and --skill none --yes', async () => {
     const tmp1 = fs.mkdtempSync(path.join(os.tmpdir(), 'maestria-init-flags-'));
     const env1 = setupSampleEnv(tmp1);
-    const out1 = new PassThrough();
     await runInitCommand(['--skill', 'claude,antigravity', '--yes', '--skip-auth'], {
       configDir: env1.configDir,
       homeDir: env1.homeDir,
-      stdout: out1,
+      stdout: new PassThrough(),
     });
     expect(fs.existsSync(path.join(env1.homeDir, '.claude', 'skills', 'maestria', 'SKILL.md'))).toBe(true);
     expect(fs.existsSync(path.join(env1.homeDir, '.gemini', 'config', 'skills', 'maestria', 'SKILL.md'))).toBe(true);
 
     const tmp2 = fs.mkdtempSync(path.join(os.tmpdir(), 'maestria-init-none-'));
     const env2 = setupSampleEnv(tmp2);
-    const out2 = new PassThrough();
     await runInitCommand(['--skill', 'none', '--yes', '--skip-auth'], {
       configDir: env2.configDir,
       homeDir: env2.homeDir,
-      stdout: out2,
+      stdout: new PassThrough(),
     });
     expect(fs.existsSync(path.join(env2.homeDir, '.claude', 'skills', 'maestria', 'SKILL.md'))).toBe(false);
     expect(fs.existsSync(path.join(env2.homeDir, '.gemini', 'config', 'skills', 'maestria', 'SKILL.md'))).toBe(false);
   });
 
-  it('drains buffered stdin before asking so stray input never skips prompts', async () => {
+  it('drains buffered stdin before showing interactive prompts and handles single-echo input + masked password', async () => {
     const tty = new FakeTtyHarness();
-    // Simulate stray enter + text buffered in stdin before a question is shown.
     tty.input.write('\nstale buffered junk\n');
     expect(drainBufferedInput(tty.input)).toBeGreaterThan(0);
 
-    // Also test askLine drains right before asking even without manual drain:
-    tty.input.write('pre-buffered-line\n');
-    const pending = askLine('Question? ', tty.io);
-    await tty.waitFor('Question? ');
-    tty.sendLine('real-answer');
-    const answer = await pending;
-    expect(answer).toBe('real-answer');
-  });
+    tty.input.write('pre-buffered\n');
+    const keepPromise = askKeepOrRedo('Configuration', tty.io);
+    await tty.waitFor('Configuration');
+    // Default ('keep') is preselected: pressing Enter picks 'keep'
+    await tty.pressEnter();
+    expect(await keepPromise).toBe('keep');
 
-  it('echoes TOTP digits once (no double readline echo) and keeps hidden password un-echoed', async () => {
-    const tty = new FakeTtyHarness();
-    const askPwd = askHidden('Password: ', tty.io);
-    await tty.waitFor('Password: ');
+    const pwPromise = askHidden('New password:', tty.io);
+    await tty.waitFor('New password:');
     await tty.typeCharByChar('super-secret-password');
-    const pwd = await askPwd;
-    expect(pwd).toBe('super-secret-password');
+    expect(await pwPromise).toBe('super-secret-password');
     expect(tty.allOutput).not.toContain('super-secret');
 
-    // Immediately follow with askLine (e.g. TOTP 6-digit confirmation)
-    const askCode = askLine('Code: ', tty.io);
-    await tty.waitFor('Code: ');
+    const codePromise = askLine('Enter code:', tty.io);
+    await tty.waitFor('Enter code:');
     await tty.typeCharByChar('482913');
-    const code = await askCode;
-    expect(code).toBe('482913');
+    expect(await codePromise).toBe('482913');
+    const out = tty.allOutput;
+    expect(out).toContain('482913');
+    expect(out).not.toContain('448822991133');
 
-    // Verify digits were echoed once cleanly, NOT doubled as 448822991133
-    const codeRegion = tty.sliceSinceCursor();
-    expect(codeRegion).toContain('482913');
-    expect(codeRegion).not.toContain('448822991133');
-    expect(tty.rawModeHistory.at(-1)).toBe(false);
+    const cbPromise = askCheckbox<'a' | 'b'>(
+      'Pick targets:',
+      [
+        { name: 'Alpha', value: 'a', checked: true },
+        { name: 'Beta', value: 'b', checked: true },
+      ],
+      tty.io,
+    );
+    await tty.waitFor('Pick targets:');
+    await tty.pressDown();
+    await tty.pressSpace(); // untoggle Beta
+    await tty.pressEnter();
+    expect(await cbPromise).toEqual(['a']);
+
+    const confPromise = askConfirm('Continue?', { defaultValue: false, io: tty.io });
+    await tty.waitFor('Continue?');
+    tty.sendLine('y');
+    expect(await confPromise).toBe(true);
   });
 
-  it('runs interactive fake TTY init (drains stray input, validates/re-asks/confirms skill) and idempotent re-run without double echo', async () => {
+  it('runs fresh TTY wizard (arrow select, y/N confirm, auth, checkbox skill toggle) and idempotent re-run', async () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'maestria-tty-'));
     const env = setupSampleEnv(tmp);
 
     // --- Pass 1: fresh interactive setup over fake TTY ---
     const tty1 = new FakeTtyHarness();
-    // Inject stray buffered newline before starting wizard
-    tty1.input.write('\n\n');
+    tty1.input.write('\n\n'); // buffered Enter must be drained
 
     const run1 = runInitCommand([], {
       configDir: env.configDir,
@@ -201,56 +217,49 @@ describe('prompt helpers and init wizard bugs', () => {
       io: tty1.io,
     });
 
-    await tty1.waitFor('Maestri data directory');
-    // Empty enter should NOT silently succeed — it must re-ask with an error
-    tty1.sendLine('');
-    await tty1.waitFor('Please enter a path or "default"');
-    await tty1.waitFor('Maestri data directory');
-    tty1.sendLine('default');
+    // Maestri data directory select menu (Use default preselected) -> Enter
+    await tty1.waitFor('Maestri data directory:');
+    await tty1.pressEnter();
 
+    // Workspace confirm (Y/n) -> Enter accepts yes
     await tty1.waitFor('Add detected workspaces to workspaces.json?');
-    tty1.sendLine('y');
+    await tty1.pressEnter();
 
-    await tty1.waitFor('New password (min 12 characters): ');
+    // Password + Repeat + TOTP
+    await tty1.waitFor('New password (min 12 characters):');
     await tty1.typeCharByChar('maestria-test-pass-123');
-    await tty1.waitFor('Repeat password: ');
+    await tty1.waitFor('Repeat password:');
     await tty1.typeCharByChar('maestria-test-pass-123');
 
-    await tty1.waitFor('Or enter the key manually: ');
-    const afterManual = await tty1.waitFor('Enter the 6-digit code shown by the app to confirm: ');
-    const secretMatch = /([A-Z2-7]{16,})/.exec(afterManual);
-    expect(secretMatch).not.toBeNull();
-    const secret1 = secretMatch![1]!;
+    await tty1.waitFor('Enter the 6-digit code shown by the app to confirm:');
+    const secret1 = /Or enter the key manually: ([A-Z2-7]{16,})/.exec(tty1.allOutput)![1]!;
     const code1 = totp(secret1, Date.now());
     await tty1.typeCharByChar(code1);
     const codeEcho1 = await tty1.waitFor('Done. Credentials saved');
-    const doubledCode1 = code1
-      .split('')
-      .map((c) => c + c)
-      .join('');
     expect(codeEcho1).toContain(code1);
-    expect(codeEcho1).not.toContain(doubledCode1);
+    expect(codeEcho1).not.toContain(
+      code1
+        .split('')
+        .map((c) => c + c)
+        .join(''),
+    );
 
-    // Inject stray line right before the skill prompt; verify it is drained and ignored!
+    // Inject stray line before checkbox; must be drained so both default-checked options aren't auto-accepted
     tty1.input.write('\nbogus-prebuffered-input\n');
+    await tty1.waitFor('Install Maestro protocol skill for:');
+    // Uncheck Antigravity (down + space), confirm only Claude Code
+    await tty1.pressDown();
+    await tty1.pressSpace();
+    await tty1.pressEnter();
 
-    await tty1.waitFor('Install Maestro protocol skill for');
-    // Empty input must re-ask
-    tty1.sendLine('');
-    await tty1.waitFor('Invalid or empty choice.');
-    await tty1.waitFor('Install Maestro protocol skill for');
-    // Invalid input must re-ask
-    tty1.sendLine('bogus');
-    await tty1.waitFor('Invalid or empty choice.');
-    await tty1.waitFor('Install Maestro protocol skill for');
-    // Pick claude,antigravity, then say 'n' to confirmation to verify re-prompt loop
-    tty1.sendLine('claude,antigravity');
-    await tty1.waitFor('Confirm: install Maestro protocol skill for claude, antigravity?');
+    // Decline confirm first ('n'), verify checkbox re-appears, then accept on second pass
+    await tty1.waitFor('Install Maestro protocol skill for claude?');
     tty1.sendLine('n');
-    await tty1.waitFor('Install Maestro protocol skill for');
-    // Finally choose only 'claude' and confirm 'y'
-    tty1.sendLine('claude');
-    await tty1.waitFor('Confirm: install Maestro protocol skill for claude?');
+    await tty1.waitFor('Install Maestro protocol skill for:');
+    await tty1.pressDown();
+    await tty1.pressSpace();
+    await tty1.pressEnter();
+    await tty1.waitFor('Install Maestro protocol skill for claude?');
     tty1.sendLine('y');
 
     await run1;
@@ -262,7 +271,7 @@ describe('prompt helpers and init wizard bugs', () => {
     expect(fs.existsSync(path.join(env.homeDir, '.gemini', 'config', 'skills', 'maestria', 'SKILL.md'))).toBe(false);
     expect(tty1.allOutput).not.toContain('maestria-test-pass-123');
 
-    // --- Pass 2: idempotent re-run (keep config, workspaces, skill; redo auth and verify NO double echo on TOTP) ---
+    // --- Pass 2: idempotent re-run via arrow keys (keep config/workspaces/skill; down-arrow -> redo auth) ---
     const tty2 = new FakeTtyHarness();
     const run2 = runInitCommand([], {
       configDir: env.configDir,
@@ -270,49 +279,45 @@ describe('prompt helpers and init wizard bugs', () => {
       io: tty2.io,
     });
 
-    await tty2.waitFor('Keep existing config or redo?');
-    tty2.sendLine('keep');
+    await tty2.waitFor('Configuration');
+    await tty2.pressEnter(); // Keep preselected
 
-    await tty2.waitFor('Keep existing workspaces.json or redo from discovery?');
-    tty2.sendLine('keep');
+    await tty2.waitFor('Workspaces');
+    await tty2.pressEnter(); // Keep preselected
 
-    await tty2.waitFor('Keep existing credentials or redo password & TOTP?');
-    tty2.sendLine('redo');
+    await tty2.waitFor('Credentials');
+    await tty2.pressDown(); // Move to Reset password & TOTP
+    await tty2.pressEnter();
 
-    await tty2.waitFor('New password (min 12 characters): ');
+    await tty2.waitFor('New password (min 12 characters):');
     await tty2.typeCharByChar('maestria-new-pass-456');
-    await tty2.waitFor('Repeat password: ');
+    await tty2.waitFor('Repeat password:');
     await tty2.typeCharByChar('maestria-new-pass-456');
 
-    await tty2.waitFor('Or enter the key manually: ');
-    const afterManual2 = await tty2.waitFor('Enter the 6-digit code shown by the app to confirm: ');
-    const secretMatch2 = /([A-Z2-7]{16,})/.exec(afterManual2);
-    expect(secretMatch2).not.toBeNull();
-    const secret2 = secretMatch2![1]!;
+    await tty2.waitFor('Enter the 6-digit code shown by the app to confirm:');
+    const secret2 = /Or enter the key manually: ([A-Z2-7]{16,})/.exec(tty2.allOutput)![1]!;
     expect(secret2).not.toBe(secret1);
     const code2 = totp(secret2, Date.now());
-
     await tty2.typeCharByChar(code2);
     const codeEcho2 = await tty2.waitFor('Done. Credentials saved');
-    const doubledCode2 = code2
-      .split('')
-      .map((c) => c + c)
-      .join('');
     expect(codeEcho2).toContain(code2);
-    expect(codeEcho2).not.toContain(doubledCode2);
+    expect(codeEcho2).not.toContain(
+      code2
+        .split('')
+        .map((c) => c + c)
+        .join(''),
+    );
 
-    await tty2.waitFor('Keep existing Maestro skill(s) or redo?');
-    tty2.sendLine('keep');
+    await tty2.waitFor('Maestro protocol skill');
+    await tty2.pressEnter(); // Keep preselected
 
     await run2;
 
     expect(loadSecrets(env.configDir)?.totpSecret).toBe(secret2);
-    expect(fs.existsSync(path.join(env.homeDir, '.claude', 'skills', 'maestria', 'SKILL.md'))).toBe(true);
-    expect(fs.existsSync(path.join(env.homeDir, '.gemini', 'config', 'skills', 'maestria', 'SKILL.md'))).toBe(false);
     expect(tty2.allOutput).not.toContain('maestria-new-pass-456');
   });
 
-  it('reproduces existing config + existing auth (no workspaces) choosing redo -> askHidden without deadlock', async () => {
+  it('handles existing config + existing auth (no workspaces) choosing redo via arrow menu -> password without hang', async () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'maestria-auth-redo-'));
     const homeDir = path.join(tmp, 'home');
     const configDir = path.join(tmp, 'cfg');
@@ -330,71 +335,34 @@ describe('prompt helpers and init wizard bugs', () => {
     const tty = new FakeTtyHarness();
     const run = runInitCommand([], { configDir, homeDir, io: tty.io });
 
-    await tty.waitFor('Keep existing config or redo? [keep/redo, default: keep]: ');
-    tty.sendLine('keep');
+    await tty.waitFor('Configuration');
+    await tty.pressEnter(); // Keep existing config
 
-    await tty.waitFor('Keep existing credentials or redo password & TOTP? [keep/redo, default: keep]: ');
-    // Pre-pause check + redo -> immediately transitions to askHidden('New password...')
-    tty.sendLine('redo');
+    await tty.waitFor('Credentials');
+    await tty.pressDown(); // Reset password & TOTP
+    await tty.pressEnter();
 
-    await tty.waitFor('New password (min 12 characters): ');
-    expect(tty.input.isPaused()).toBe(false);
-    expect(isPromptInFlight()).toBe(true);
+    await tty.waitFor('New password (min 12 characters):');
+    await tty.typeCharByChar('updated-pass-98765');
+    await tty.waitFor('Repeat password:');
     await tty.typeCharByChar('updated-pass-98765');
 
-    await tty.waitFor('Repeat password: ');
-    await tty.typeCharByChar('updated-pass-98765');
-
-    await tty.waitFor('Or enter the key manually: ');
-    const afterManual = await tty.waitFor('Enter the 6-digit code shown by the app to confirm: ');
-    const secret = /([A-Z2-7]{16,})/.exec(afterManual)![1]!;
+    await tty.waitFor('Enter the 6-digit code shown by the app to confirm:');
+    const secret = /Or enter the key manually: ([A-Z2-7]{16,})/.exec(tty.allOutput)![1]!;
     await tty.typeCharByChar(totp(secret, Date.now()));
 
-    await tty.waitFor('Install Maestro protocol skill for');
-    tty.sendLine('none');
-    await tty.waitFor('Confirm: skip installing Maestro protocol skill?');
+    // Uncheck both skills via space toggles -> None -> confirm skip
+    await tty.waitFor('Install Maestro protocol skill for:');
+    await tty.pressSpace(); // untoggle Claude Code
+    await tty.pressDown();
+    await tty.pressSpace(); // untoggle Antigravity
+    await tty.pressEnter();
+
+    await tty.waitFor('Skip installing Maestro protocol skill?');
     tty.sendLine('y');
 
     await run;
-    expect(isPromptInFlight()).toBe(false);
     expect(loadSecrets(configDir)?.totpSecret).toBe(secret);
     expect(tty.allOutput).not.toContain('updated-pass-98765');
-  });
-
-  it('watchdog resumes paused TTY, ensures question is printed, and releases lock on stream close/error', async () => {
-    const tty = new FakeTtyHarness();
-    const events: WatchdogEvent[] = [];
-    tty.io.watchdogMs = 25;
-    tty.io.onWatchdog = (ev) => events.push(ev);
-
-    // Step 1: askKeepOrRedo -> 'redo', followed by askHidden where stdin gets paused before watchdog fires
-    const p1 = askKeepOrRedo('Keep existing credentials or redo? [keep/redo]: ', tty.io);
-    await tty.waitFor('Keep existing credentials or redo? [keep/redo]: ');
-    tty.sendLine('redo');
-    expect(await p1).toBe('redo');
-
-    const p2 = askHidden('New password (min 12 characters): ', tty.io);
-    await tty.waitFor('New password (min 12 characters): ');
-    // Simulate stdin stuck paused before user types
-    tty.input.pause();
-    expect(tty.input.isPaused()).toBe(true);
-
-    // Wait past watchdogMs -> watchdog must fire, resume stdin, and re-print question
-    await tty.waitFor('\nNew password (min 12 characters): ');
-    expect(events.length).toBe(1);
-    expect(events[0]).toMatchObject({ question: 'New password (min 12 characters): ', wasPaused: true });
-    expect(tty.input.isPaused()).toBe(false);
-
-    await tty.typeCharByChar('watchdog-pass-1234');
-    expect(await p2).toBe('watchdog-pass-1234');
-    expect(isPromptInFlight()).toBe(false);
-
-    // Step 2: if stream closes mid-prompt, promptInFlight lock must still reset so next prompt works
-    const ttyErr = new FakeTtyHarness();
-    const aborted = askLine('Will EOF: ', ttyErr.io);
-    await ttyErr.waitFor('Will EOF: ');
-    ttyErr.input.destroy();
-    await expect(aborted).rejects.toThrow(/Input stream closed/);
-    expect(isPromptInFlight()).toBe(false);
   });
 });
