@@ -54,6 +54,8 @@ export function homePage(opts: { csrf: string }): string {
   </div>
   <div class="bar-actions">
     <span id="sync-status" class="muted small"></span>
+    <button id="toggle-audit" type="button" class="ghost small-btn">Audit log</button>
+    <button id="kill-btn" type="button" class="btn-danger small-btn">Kill switch</button>
     <form method="post" action="/logout">
       <input type="hidden" name="_csrf" value="${esc(opts.csrf)}">
       <button type="submit" class="ghost small-btn">Sign out</button>
@@ -66,6 +68,14 @@ export function homePage(opts: { csrf: string }): string {
 </header>
 <main class="panel">
   <div id="banner" class="banner" role="alert" hidden></div>
+
+  <div id="kill-confirm" class="banner" role="alertdialog" hidden>
+    <p><strong>Activate Kill Switch?</strong> This runs the tunnel stop command immediately, signs out every session, and locks panel logins until you run <code>maestria tunnel on</code> locally on the host.</p>
+    <div class="inbox-actions">
+      <button id="kill-confirm-btn" type="button" class="small-btn btn-danger">Stop tunnel &amp; lock panel</button>
+      <button id="kill-cancel-btn" type="button" class="ghost small-btn">Cancel</button>
+    </div>
+  </div>
 
   <div id="view-header" class="view-header">
     <div>
@@ -157,6 +167,20 @@ export function homePage(opts: { csrf: string }): string {
         <span id="chat-err" class="inline-err"></span>
       </div>
     </form>
+  </section>
+
+  <section id="audit-section" class="section" hidden>
+    <div class="section-head">
+      <div class="section-title">
+        <h2>Audit log</h2>
+        <span id="audit-count" class="count-pill"></span>
+      </div>
+      <div class="bar-actions">
+        <button id="audit-refresh" type="button" class="ghost small-btn">Refresh</button>
+        <button id="audit-close" type="button" class="ghost small-btn">Close</button>
+      </div>
+    </div>
+    <div id="audit-body"></div>
   </section>
 </main>`,
     {

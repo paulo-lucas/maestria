@@ -11,6 +11,7 @@ import {
   runWorkspaceCommand,
 } from './commands/inbox.ts';
 import { runSayCommand, runWaitCommand } from './commands/chat.ts';
+import { runTunnelCommand } from './commands/tunnel.ts';
 import { openDb } from './db.ts';
 import { Audit } from './audit.ts';
 import { SessionStore } from './auth/sessions.ts';
@@ -24,6 +25,7 @@ Usage:
   maestria serve                    Start the panel (127.0.0.1 only)
   maestria auth setup [--force]     Set the password and enrol an authenticator app (TOTP)
   maestria auth logout-all          Invalidate every panel session
+  maestria tunnel on|off|status     Enable/disable the tunnel locally or inspect kill-switch state
 
   maestria workspace list|add|remove ...
   maestria post --kind notice|approve|input|choice [--option <val> ...] [--workspace|-w <ws>] [--by <agent>] <markdown>
@@ -74,6 +76,7 @@ async function main(argv: string[]): Promise<void> {
   if (cmd === 'serve') return serve();
   if (cmd === 'auth' && sub === 'setup') return authSetup({ configDir, force: rest.includes('--force') });
   if (cmd === 'auth' && sub === 'logout-all') return logoutAll();
+  if (cmd === 'tunnel') return runTunnelCommand(argv.slice(1), { configDir });
   if (cmd === 'workspace') return runWorkspaceCommand(argv.slice(1), { configDir });
   if (cmd === 'post') return runPostCommand(argv.slice(1), { configDir });
   if (cmd === 'inbox') return runInboxCommand(argv.slice(1), { configDir });

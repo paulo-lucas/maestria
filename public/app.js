@@ -49,6 +49,16 @@
     chatInput: document.getElementById('chat-input'),
     chatSend: document.getElementById('chat-send'),
     chatErr: document.getElementById('chat-err'),
+    toggleAudit: document.getElementById('toggle-audit'),
+    killBtn: document.getElementById('kill-btn'),
+    killConfirm: document.getElementById('kill-confirm'),
+    killConfirmBtn: document.getElementById('kill-confirm-btn'),
+    killCancelBtn: document.getElementById('kill-cancel-btn'),
+    auditSection: document.getElementById('audit-section'),
+    auditCount: document.getElementById('audit-count'),
+    auditRefresh: document.getElementById('audit-refresh'),
+    auditClose: document.getElementById('audit-close'),
+    auditBody: document.getElementById('audit-body'),
   };
 
   let workspaces = [];
@@ -1079,6 +1089,45 @@
     }
   }
 
+  async function refreshAudit() {
+    try {
+      const data = await api('/api/audit?limit=100');
+      const entries = data.entries || [];
+      el.auditCount.textContent = `(${entries.length})`;
+      el.auditBody.textContent = '';
+      if (entries.length === 0) {
+        const p = document.createElement('p');
+        p.className = 'muted small';
+        p.textContent = 'No audit events recorded yet.';
+        el.auditBody.appendChild(p);
+        return;
+      }
+      el.auditBody.appendChild(
+        makeTableElement({
+          headers: ['Time', 'Event', 'IP', 'Detail'],
+          rows: entries.map((e) => [fmtTime(e.ts), e.event, e.ip || 'local', e.detail || '']),
+        }),
+      );
+    } catch (err) {
+      if (err.message !== 'unauthenticated') {
+        showBanner(`Could not load audit log: ${err.message}`);
+      }
+    }
+  }
+
+  async function triggerKillSwitch() {
+    el.killConfirmBtn.disabled = true;
+    try {
+      await api('/api/kill-switch', { method: 'POST' });
+      window.location.href = '/login';
+    } catch (err) {
+      el.killConfirmBtn.disabled = false;
+      if (err.message !== 'unauthenticated') {
+        showBanner(`Kill switch failed: ${err.message}`);
+      }
+    }
+  }
+
   async function poll() {
     try {
       await refreshWorkspaces();
@@ -1129,6 +1178,23 @@
   el.chatForm.addEventListener('submit', (e) => {
     e.preventDefault();
     void submitChat();
+  });
+
+  el.killBtn.addEventListener('click', () => {
+    el.killConfirm.hidden = !el.killConfirm.hidden;
+  });
+  el.killCancelBtn.addEventListener('click', () => {
+    el.killConfirm.hidden = true;
+  });
+  el.killConfirmBtn.addEventListener('click', () => void triggerKillSwitch());
+
+  el.toggleAudit.addEventListener('click', () => {
+    el.auditSection.hidden = !el.auditSection.hidden;
+    if (!el.auditSection.hidden) void refreshAudit();
+  });
+  el.auditRefresh.addEventListener('click', () => void refreshAudit());
+  el.auditClose.addEventListener('click', () => {
+    el.auditSection.hidden = true;
   });
 
   el.toggleHistory.addEventListener('click', () => {

@@ -18,6 +18,7 @@ import { ConflictError, InboxStore, ValidationError, type InboxStatus } from './
 import { EventStore } from './events.ts';
 import { readWorkspaceRoadmap } from './roadmap.ts';
 import { StandbyGuard, type StandbyNotifier } from './standby.ts';
+import { TunnelController, type CommandRunner } from './tunnel.ts';
 import { UsageService, type FallbackRunner } from './usage.ts';
 import { WorkspaceError, WorkspaceRegistry, type WorkspaceProvider } from './workspaces.ts';
 import { homePage, loginPage } from './web/html.ts';
@@ -45,6 +46,7 @@ export interface ServerDeps {
   jwksFetcher?: JwksFetcher;
   fallbackRunner?: FallbackRunner;
   standbyNotifier?: StandbyNotifier;
+  tunnelRunner?: CommandRunner;
   enableUsagePoll?: boolean;
 }
 
@@ -91,6 +93,7 @@ export interface Server {
   chat: ChatStore;
   usage: UsageService;
   standby: StandbyGuard;
+  tunnel: TunnelController;
 }
 
 export async function buildServer(deps: ServerDeps): Promise<Server> {
@@ -105,6 +108,7 @@ export async function buildServer(deps: ServerDeps): Promise<Server> {
   const usage = new UsageService(config, now, deps.fallbackRunner);
   const standby = new StandbyGuard(db, audit, config, events, now, deps.standbyNotifier);
   const sessions = new SessionStore(db, { idleMs: config.session.idleMinutes * 60_000, absoluteMs: config.session.absoluteHours * 3_600_000 }, now);
+  const tunnel = new TunnelController(db, audit, sessions, config, now, deps.tunnelRunner);
   const limiter = new LoginLimiter(
     {
       maxFailuresPerIp: config.login.maxFailuresPerIp,
@@ -245,13 +249,21 @@ export async function buildServer(deps: ServerDeps): Promise<Server> {
   });
 
   app.post('/login', { config: { public: true, loginCsrf: true } }, async (req, reply) => {
+    const csrf = crypto.randomBytes(32).toString('base64url');
+    if (tunnel.isKilled()) {
+      audit.logThrottled(`killed:${req.clientIp}`, 'login_blocked_killed', { ip: req.clientIp });
+      reply.setCookie(loginCsrfCookie, csrf, cookieOpts);
+      return reply
+        .code(403)
+        .type('text/html; charset=utf-8')
+        .send(loginPage({ csrf, error: 'Panel access is disabled by the kill switch. Re-enable locally via "maestria tunnel on".' }));
+    }
     const result = auth.login({
       ip: req.clientIp,
       userAgent: String(req.headers['user-agent'] ?? ''),
       password: formString(req.body, 'password', 256),
       code: formString(req.body, 'code', 16),
     });
-    const csrf = crypto.randomBytes(32).toString('base64url');
     if (!result.ok) {
       reply.setCookie(loginCsrfCookie, csrf, cookieOpts);
       if (result.reason === 'locked') {
@@ -479,6 +491,21 @@ export async function buildServer(deps: ServerDeps): Promise<Server> {
     return { ...snap, standby: standbyState };
   });
 
+  app.get('/api/tunnel', async () => tunnel.status());
+
+  app.post('/api/kill-switch', async (req, reply) => {
+    const result = await tunnel.killSwitch({ via: 'web', ip: req.clientIp });
+    reply.clearCookie(sessionCookie, { path: '/' });
+    return { ok: true, ...result };
+  });
+
+  app.get('/api/audit', async (req) => {
+    const q = (req.query ?? {}) as { limit?: string };
+    const n = q.limit ? Number(q.limit) : 100;
+    const limit = Number.isInteger(n) && n >= 1 ? Math.min(n, 200) : 100;
+    return { entries: audit.recent(limit) };
+  });
+
   app.setNotFoundHandler(async (_req, reply) => deny(reply, 404, 'Not found'));
 
   app.setErrorHandler(async (err, req, reply) => {
@@ -524,5 +551,5 @@ export async function buildServer(deps: ServerDeps): Promise<Server> {
     if (usageTimer) clearInterval(usageTimer);
   });
 
-  return { app, sessions, audit, limiter, workspaces, events, inbox, chat, usage, standby };
+  return { app, sessions, audit, limiter, workspaces, events, inbox, chat, usage, standby, tunnel };
 }
