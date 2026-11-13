@@ -233,6 +233,14 @@ export async function buildServer(deps: ServerDeps): Promise<Server> {
     }
     if (!expected || !supplied || !safeEqual(expected, supplied)) {
       audit.log('csrf_reject', { ip: req.clientIp, detail: { path: req.url.slice(0, 100) } });
+      if (req.routeOptions.config?.loginCsrf) {
+        const csrf = crypto.randomBytes(32).toString('base64url');
+        reply.setCookie(loginCsrfCookie, csrf, cookieOpts);
+        return reply
+          .code(403)
+          .type('text/html; charset=utf-8')
+          .send(loginPage({ csrf, error: 'Your login form expired or did not match its security token. Please try again.' }));
+      }
       return deny(reply, 403, 'Invalid CSRF token');
     }
   });

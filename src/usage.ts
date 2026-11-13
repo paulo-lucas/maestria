@@ -23,6 +23,7 @@ export interface UsageProviderEntry {
   limitsApply: boolean;
   lastSuccessAt: string | null;
   stale: boolean;
+  hidden: boolean;
   source: 'maestri' | 'fallback';
   notes: string[];
   meters: MappedMeter[];
@@ -46,6 +47,22 @@ interface FallbackCacheEntry {
 
 const MAX_STATUS_BYTES = 1024 * 1024;
 const NO_FALLBACK_STATES = new Set(['off', 'executableNotFound', 'fileError', 'needsNewerMaestri']);
+const ERROR_STATES = new Set(['failed', 'executableNotFound', 'fileError', 'needsNewerMaestri']);
+const RECENT_SUCCESS_MS = 24 * 3600_000;
+
+function isProviderError(entry: Pick<UsageProviderEntry, 'state' | 'error'>): boolean {
+  return ERROR_STATES.has(entry.state) || Boolean(entry.error);
+}
+
+function hasRecentSuccess(lastSuccessAt: string | null, nowMs: number): boolean {
+  if (!lastSuccessAt) return false;
+  const ms = Date.parse(lastSuccessAt);
+  return Number.isFinite(ms) && nowMs - ms >= -60_000 && nowMs - ms <= RECENT_SUCCESS_MS;
+}
+
+function hasUsableValues(entry: Pick<UsageProviderEntry, 'meters' | 'limitsApply'>): boolean {
+  return entry.meters.length > 0 || entry.limitsApply === false;
+}
 
 function asStringOrNull(v: unknown): string | null {
   return typeof v === 'string' && v.trim() ? v : null;
@@ -93,6 +110,7 @@ function isTimestampStale(iso: string | null, nowMs: number, cutoffMs: number): 
 
 export class UsageService {
   private cache = new Map<string, FallbackCacheEntry>();
+  private lastSuccessCache = new Map<string, { atMs: number; entry: UsageProviderEntry }>();
   private inFlight = new Map<string, Promise<MappedProviderRun>>();
 
   constructor(
@@ -196,6 +214,7 @@ export class UsageService {
         limitsApply: typeof p.limitsApply === 'boolean' ? p.limitsApply : true,
         lastSuccessAt,
         stale,
+        hidden: false,
         source: 'maestri',
         notes: Array.isArray(p.notes) ? p.notes.filter((n): n is string => typeof n === 'string') : [],
         meters: normalizeMeters(p.meters),
@@ -219,7 +238,32 @@ export class UsageService {
               notes: fb.notes,
               meters: fb.meters.length > 0 ? fb.meters : entry.meters,
             };
+          } else {
+            // Preserve the last readings from .status.json and surface that fallback refresh failed.
+            entry = { ...entry, error: fb.error ?? entry.error, stale: true };
           }
+        }
+      }
+
+      if (entry.state === 'ready' && !entry.error && hasUsableValues(entry)) {
+        const atMs = entry.lastSuccessAt && Number.isFinite(Date.parse(entry.lastSuccessAt)) ? Date.parse(entry.lastSuccessAt) : nowMs;
+        this.lastSuccessCache.set(id, { atMs, entry });
+      } else if (isProviderError(entry)) {
+        const recentStatus = hasRecentSuccess(entry.lastSuccessAt, nowMs);
+        const cachedGood = this.lastSuccessCache.get(id);
+        const recentCached = cachedGood && nowMs - cachedGood.atMs <= RECENT_SUCCESS_MS ? cachedGood.entry : null;
+        if (recentStatus || recentCached) {
+          entry = {
+            ...entry,
+            plan: entry.plan ?? recentCached?.plan ?? null,
+            limitsApply: entry.meters.length > 0 ? entry.limitsApply : (recentCached?.limitsApply ?? entry.limitsApply),
+            lastSuccessAt: entry.lastSuccessAt ?? recentCached?.lastSuccessAt ?? null,
+            meters: entry.meters.length > 0 ? entry.meters : (recentCached?.meters ?? []),
+            stale: true,
+            hidden: false,
+          };
+        } else {
+          entry = { ...entry, hidden: true };
         }
       }
 

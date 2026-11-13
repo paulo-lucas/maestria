@@ -34,6 +34,7 @@
   }
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body {
   margin: 0;
   background: var(--bg);
@@ -244,6 +245,18 @@ button.ghost {
   border: 1px solid var(--border);
   font-weight: 500;
 }
+button.ghost.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+.audit-drawer {
+  border-color: var(--accent);
+}
+.audit-body {
+  max-height: 22rem;
+  overflow: auto;
+}
 button.small-btn { padding: 0.34rem 0.75rem; font-size: 0.85rem; }
 button.btn-ok { background: var(--ok); color: #ffffff; }
 button.btn-danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
@@ -417,6 +430,15 @@ pre code { background: transparent; padding: 0; }
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(15.5rem, 1fr));
   gap: 0.75rem;
+}
+.usage-hidden-wrap { margin-top: 0.65rem; }
+.usage-hidden-note summary {
+  cursor: pointer;
+  user-select: none;
+}
+.usage-hidden-list {
+  margin: 0.4rem 0 0;
+  padding-left: 1.2rem;
 }
 .usage-card {
   border: 1px solid var(--border);

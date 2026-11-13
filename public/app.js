@@ -23,6 +23,7 @@
     usageSetupError: document.getElementById('usage-setup-error'),
     usageStandbyNote: document.getElementById('usage-standby-note'),
     usageGrid: document.getElementById('usage-grid'),
+    usageHidden: document.getElementById('usage-hidden'),
     filterBar: document.getElementById('filter-bar'),
     noWorkspaces: document.getElementById('no-workspaces'),
     needsSection: document.getElementById('needs-section'),
@@ -62,8 +63,9 @@
   };
 
   let workspaces = [];
-  let routeWsId = readWorkspaceFromHash(); // null => Home, string => workspace page
-  let wsTab = 'inbox'; // 'inbox' | 'chat' | 'roadmap'
+  const initialRoute = readRouteFromHash();
+  let routeWsId = initialRoute.wsId; // null => Home, string => workspace page
+  let wsTab = initialRoute.tab; // 'inbox' | 'chat' | 'roadmap'
   let chatMessages = [];
   let homeFilterWsId = null; // null => All workspaces on Home
   let showHistory = false;
@@ -117,7 +119,8 @@
   function fmtTime(ms) {
     if (!ms) return '';
     try {
-      return new Date(ms).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      const val = typeof ms === 'string' && /^\d+$/.test(ms) ? Number(ms) : ms;
+      return new Date(val).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
     } catch {
       return '';
     }
@@ -149,10 +152,21 @@
     return res.json();
   }
 
-  function readWorkspaceFromHash() {
-    const h = window.location.hash || '';
-    const m = /^#ws=([^&]+)$/.exec(h);
-    return m ? decodeURIComponent(m[1]) : null;
+  function readRouteFromHash() {
+    const raw = (window.location.hash || '').replace(/^#/, '');
+    if (!raw) return { wsId: null, tab: 'inbox' };
+    const params = new URLSearchParams(raw);
+    const wsId = params.get('ws') || null;
+    const rawTab = params.get('tab');
+    const tab = wsId && (rawTab === 'chat' || rawTab === 'roadmap' || rawTab === 'inbox') ? rawTab : 'inbox';
+    return { wsId, tab };
+  }
+
+  function buildHash(wsId, tab) {
+    if (!wsId) return '';
+    return tab && tab !== 'inbox'
+      ? `ws=${encodeURIComponent(wsId)}&tab=${encodeURIComponent(tab)}`
+      : `ws=${encodeURIComponent(wsId)}`;
   }
 
   function openWorkspace(id, tab = 'inbox') {
@@ -160,13 +174,18 @@
     wsTab = id ? tab : 'inbox';
     showHistory = false;
     el.historySection.hidden = true;
-    window.location.hash = id ? `ws=${encodeURIComponent(id)}` : '';
+    const nextHash = buildHash(routeWsId, wsTab);
+    if ((window.location.hash || '').replace(/^#/, '') !== nextHash) {
+      window.location.hash = nextHash;
+    }
     renderNavigation();
     if (routeWsId === null) {
       void refreshUsage(false);
-    }
-    if (routeWsId !== null && wsTab === 'roadmap') {
+      void refreshInbox();
+    } else if (wsTab === 'roadmap') {
       void refreshRoadmap();
+    } else if (wsTab === 'chat') {
+      void refreshChat();
     } else {
       void refreshInbox();
     }
@@ -486,7 +505,11 @@
       el.toggleHistory.hidden = true;
     }
 
-    const isTyping = document.activeElement instanceof HTMLTextAreaElement && el.needsList.contains(document.activeElement);
+    const activeItem =
+      document.activeElement instanceof HTMLTextAreaElement && el.needsList.contains(document.activeElement)
+        ? document.activeElement.closest('.inbox-item')
+        : null;
+    const isTyping = Boolean(activeItem && needsYou.some((i) => i.id === activeItem.dataset.itemId));
     if (!isTyping) {
       reconcileList(el.needsList, needsYou);
     }
@@ -723,19 +746,37 @@
       el.usageSetupError.textContent = data.setupError || 'Usage data unavailable.';
       el.usageSetupError.hidden = false;
       el.usageGrid.textContent = '';
+      if (el.usageHidden) {
+        el.usageHidden.hidden = true;
+        el.usageHidden.textContent = '';
+      }
       return;
     }
 
     el.usageSetupError.hidden = true;
     el.usageGrid.textContent = '';
+    if (el.usageHidden) {
+      el.usageHidden.hidden = true;
+      el.usageHidden.textContent = '';
+    }
 
-    const providers = data.providers || [];
-    if (providers.length === 0) {
+    const allProviders = data.providers || [];
+    if (allProviders.length === 0) {
       const p = document.createElement('p');
       p.className = 'muted small';
       p.textContent = 'No usage providers enabled in Maestri.';
       el.usageGrid.appendChild(p);
       return;
+    }
+
+    const providers = allProviders.filter((p) => !p.hidden);
+    const hiddenProviders = allProviders.filter((p) => p.hidden);
+
+    if (providers.length === 0) {
+      const p = document.createElement('p');
+      p.className = 'muted small';
+      p.textContent = 'No active usage providers with recent readings.';
+      el.usageGrid.appendChild(p);
     }
 
     for (const prov of providers) {
@@ -758,11 +799,12 @@
       const badges = document.createElement('div');
       const st = document.createElement('span');
       let stCls = 'state-pill';
-      if (prov.state === 'ready') stCls += prov.stale ? ' warn' : ' ready';
+      if (prov.stale) stCls += ' warn';
+      else if (prov.state === 'ready') stCls += ' ready';
       else if (prov.state === 'failed' || prov.state === 'executableNotFound' || prov.state === 'fileError') stCls += ' err';
       else stCls += ' warn';
       st.className = stCls;
-      st.textContent = prov.stale && prov.state === 'ready' ? 'stale' : prov.state;
+      st.textContent = prov.stale ? 'stale' : prov.state;
       badges.appendChild(st);
 
       if (prov.source === 'fallback') {
@@ -777,8 +819,8 @@
 
       if (prov.error) {
         const errP = document.createElement('div');
-        errP.className = 'inline-err';
-        errP.textContent = prov.error;
+        errP.className = prov.stale ? 'muted small' : 'inline-err';
+        errP.textContent = prov.stale ? `Refresh failed (${prov.error}) — showing last reading.` : prov.error;
         card.appendChild(errP);
       } else if (prov.limitsApply === false) {
         const p = document.createElement('p');
@@ -833,6 +875,25 @@
       }
 
       el.usageGrid.appendChild(card);
+    }
+
+    if (el.usageHidden && hiddenProviders.length > 0) {
+      const details = document.createElement('details');
+      details.className = 'usage-hidden-note';
+      const summary = document.createElement('summary');
+      summary.className = 'muted small';
+      summary.textContent = `${hiddenProviders.length} provider${hiddenProviders.length === 1 ? '' : 's'} hidden (not installed or failing)`;
+      details.appendChild(summary);
+      const ul = document.createElement('ul');
+      ul.className = 'usage-hidden-list muted small';
+      for (const hp of hiddenProviders) {
+        const li = document.createElement('li');
+        li.textContent = `${hp.name || hp.id}: ${hp.error || hp.state}`;
+        ul.appendChild(li);
+      }
+      details.appendChild(ul);
+      el.usageHidden.appendChild(details);
+      el.usageHidden.hidden = false;
     }
   }
 
@@ -1089,10 +1150,20 @@
     }
   }
 
+  function fmtAuditDetail(detail) {
+    if (detail === null || detail === undefined || detail === '') return '';
+    if (typeof detail === 'string') return detail;
+    try {
+      return JSON.stringify(detail);
+    } catch {
+      return String(detail);
+    }
+  }
+
   async function refreshAudit() {
     try {
       const data = await api('/api/audit?limit=100');
-      const entries = data.entries || [];
+      const entries = Array.isArray(data.entries) ? data.entries : [];
       el.auditCount.textContent = `(${entries.length})`;
       el.auditBody.textContent = '';
       if (entries.length === 0) {
@@ -1105,7 +1176,12 @@
       el.auditBody.appendChild(
         makeTableElement({
           headers: ['Time', 'Event', 'IP', 'Detail'],
-          rows: entries.map((e) => [fmtTime(e.ts), e.event, e.ip || 'local', e.detail || '']),
+          rows: entries.map((e) => [
+            fmtTime(e.ts ?? e.createdAt),
+            String(e.event ?? ''),
+            e.ip || 'local',
+            fmtAuditDetail(e.detail),
+          ]),
         }),
       );
     } catch (err) {
@@ -1140,6 +1216,9 @@
       } else {
         await refreshInbox();
       }
+      if (!el.auditSection.hidden) {
+        await refreshAudit();
+      }
       el.sync.textContent = `Updated ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
     } catch (err) {
       if (err.message !== 'unauthenticated') {
@@ -1148,23 +1227,17 @@
     }
   }
 
+  function switchTab(targetTab) {
+    const targetWs = routeWsId || homeFilterWsId || (workspaces[0] ? workspaces[0].id : null);
+    if (!targetWs) return;
+    openWorkspace(targetWs, targetTab);
+  }
+
   el.backHome.addEventListener('click', () => openWorkspace(null));
   el.refreshUsage.addEventListener('click', () => void refreshUsage(true));
-  el.tabInbox.addEventListener('click', () => {
-    wsTab = 'inbox';
-    renderNavigation();
-    void refreshInbox();
-  });
-  el.tabChat.addEventListener('click', () => {
-    wsTab = 'chat';
-    renderNavigation();
-    void refreshChat();
-  });
-  el.tabRoadmap.addEventListener('click', () => {
-    wsTab = 'roadmap';
-    renderNavigation();
-    void refreshRoadmap();
-  });
+  el.tabInbox.addEventListener('click', () => switchTab('inbox'));
+  el.tabChat.addEventListener('click', () => switchTab('chat'));
+  el.tabRoadmap.addEventListener('click', () => switchTab('roadmap'));
   el.chatInput.addEventListener('input', () => {
     el.chatErr.textContent = '';
     if (routeWsId) setDraft(`chat:${routeWsId}`, el.chatInput.value);
@@ -1188,13 +1261,21 @@
   });
   el.killConfirmBtn.addEventListener('click', () => void triggerKillSwitch());
 
+  function setAuditOpen(open) {
+    el.auditSection.hidden = !open;
+    el.toggleAudit.classList.toggle('active', open);
+    el.toggleAudit.setAttribute('aria-expanded', String(open));
+    if (open) {
+      void refreshAudit();
+    }
+  }
+
   el.toggleAudit.addEventListener('click', () => {
-    el.auditSection.hidden = !el.auditSection.hidden;
-    if (!el.auditSection.hidden) void refreshAudit();
+    setAuditOpen(el.auditSection.hidden);
   });
   el.auditRefresh.addEventListener('click', () => void refreshAudit());
   el.auditClose.addEventListener('click', () => {
-    el.auditSection.hidden = true;
+    setAuditOpen(false);
   });
 
   el.toggleHistory.addEventListener('click', () => {
@@ -1208,15 +1289,23 @@
   });
 
   window.addEventListener('hashchange', () => {
-    const id = readWorkspaceFromHash();
-    if (id !== routeWsId) {
-      routeWsId = id;
-      wsTab = 'inbox';
+    const { wsId, tab } = readRouteFromHash();
+    if (wsId !== routeWsId || tab !== wsTab) {
+      routeWsId = wsId;
+      wsTab = tab;
       showHistory = false;
       el.historySection.hidden = true;
       renderNavigation();
-      if (id === null) void refreshUsage(false);
-      void refreshInbox();
+      if (routeWsId === null) {
+        void refreshUsage(false);
+        void refreshInbox();
+      } else if (wsTab === 'roadmap') {
+        void refreshRoadmap();
+      } else if (wsTab === 'chat') {
+        void refreshChat();
+      } else {
+        void refreshInbox();
+      }
     }
   });
 

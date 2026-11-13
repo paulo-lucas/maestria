@@ -232,7 +232,7 @@ describe('rate limit and lockout', () => {
 });
 
 describe('CSRF', () => {
-  it('rejects a login POST without the CSRF token', async () => {
+  it('rejects a login POST without the CSRF token and re-renders the login form with a fresh token', async () => {
     const ctx = await setup();
     const page = await ctx.srv.app.inject({ method: 'GET', url: '/login', headers: base });
     const res = await ctx.srv.app.inject({
@@ -242,9 +242,23 @@ describe('CSRF', () => {
       payload: new URLSearchParams({ password: PASSWORD, code: totp(ctx.totpSecret, ctx.clock.now()) }).toString(),
     });
     expect(res.statusCode).toBe(403);
+    expect(res.headers['content-type']).toContain('text/html');
+    expect(res.body).toContain('Your login form expired or did not match its security token. Please try again.');
+    expect(res.body).not.toBe('Invalid CSRF token');
+
+    // Submitting immediately with the refreshed form token and cookie succeeds.
+    ctx.clock.advance(31_000);
+    const freshCsrf = csrfFrom(res.body);
+    const retry = await ctx.srv.app.inject({
+      method: 'POST',
+      url: '/login',
+      headers: { ...base, origin: ORIGIN, 'content-type': 'application/x-www-form-urlencoded', cookie: cookieHeader(res) },
+      payload: new URLSearchParams({ _csrf: freshCsrf, password: PASSWORD, code: totp(ctx.totpSecret, ctx.clock.now()) }).toString(),
+    });
+    expect(retry.statusCode).toBe(303);
   });
 
-  it('rejects a login POST whose token does not match the cookie', async () => {
+  it('rejects a login POST whose token does not match the cookie and re-renders login cleanly', async () => {
     const ctx = await setup();
     const page = await ctx.srv.app.inject({ method: 'GET', url: '/login', headers: base });
     const res = await ctx.srv.app.inject({
@@ -254,6 +268,31 @@ describe('CSRF', () => {
       payload: new URLSearchParams({ _csrf: 'forged', password: PASSWORD, code: totp(ctx.totpSecret, ctx.clock.now()) }).toString(),
     });
     expect(res.statusCode).toBe(403);
+    expect(res.headers['content-type']).toContain('text/html');
+    expect(res.body).toContain('Please try again.');
+  });
+
+  it('reuses a well-formed login CSRF cookie across double GET /login so the first form token still logs in', async () => {
+    const ctx = await setup();
+    ctx.clock.advance(31_000);
+    const first = await ctx.srv.app.inject({ method: 'GET', url: '/login', headers: base });
+    const firstCsrf = csrfFrom(first.body);
+    const second = await ctx.srv.app.inject({
+      method: 'GET',
+      url: '/login',
+      headers: { ...base, cookie: cookieHeader(first) },
+    });
+    expect(csrfFrom(second.body)).toBe(firstCsrf);
+
+    const post = await ctx.srv.app.inject({
+      method: 'POST',
+      url: '/login',
+      headers: { ...base, origin: ORIGIN, 'content-type': 'application/x-www-form-urlencoded', cookie: cookieHeader(second) },
+      payload: new URLSearchParams({ _csrf: firstCsrf, password: PASSWORD, code: totp(ctx.totpSecret, ctx.clock.now()) }).toString(),
+    });
+    expect(post.statusCode).not.toBe(403);
+    expect(post.statusCode).toBe(303);
+    expect(post.cookies.find((x) => x.name === 'maestria_session')).toBeDefined();
   });
 
   it('requires the session CSRF token on logout', async () => {

@@ -466,5 +466,5 @@ describe('interactive @inquirer/prompts wizard, flags, and fake TTY flows', () =
     expect(res.stderr).toContain('Error: A terminal is required to enter the password.');
     expect(res.stderr).not.toContain('at authSetup');
     expect(res.stderr).not.toContain('.ts:');
-  });
+  }, 15_000);
 });

@@ -77,6 +77,20 @@ export function homePage(opts: { csrf: string }): string {
     </div>
   </div>
 
+  <section id="audit-section" class="section audit-drawer" hidden>
+    <div class="section-head">
+      <div class="section-title">
+        <h2>Audit log</h2>
+        <span id="audit-count" class="count-pill"></span>
+      </div>
+      <div class="bar-actions">
+        <button id="audit-refresh" type="button" class="ghost small-btn">Refresh</button>
+        <button id="audit-close" type="button" class="ghost small-btn">Close</button>
+      </div>
+    </div>
+    <div id="audit-body" class="audit-body"></div>
+  </section>
+
   <div id="view-header" class="view-header">
     <div>
       <h1 id="view-title">Home</h1>
@@ -103,6 +117,7 @@ export function homePage(opts: { csrf: string }): string {
     <div id="usage-setup-error" class="warn-box" hidden></div>
     <div id="usage-standby-note" class="warn-box" hidden></div>
     <div id="usage-grid" class="usage-grid"></div>
+    <div id="usage-hidden" class="usage-hidden-wrap" hidden></div>
   </section>
 
   <div id="filter-bar" class="filter-bar" hidden></div>
@@ -167,20 +182,6 @@ export function homePage(opts: { csrf: string }): string {
         <span id="chat-err" class="inline-err"></span>
       </div>
     </form>
-  </section>
-
-  <section id="audit-section" class="section" hidden>
-    <div class="section-head">
-      <div class="section-title">
-        <h2>Audit log</h2>
-        <span id="audit-count" class="count-pill"></span>
-      </div>
-      <div class="bar-actions">
-        <button id="audit-refresh" type="button" class="ghost small-btn">Refresh</button>
-        <button id="audit-close" type="button" class="ghost small-btn">Close</button>
-      </div>
-    </div>
-    <div id="audit-body"></div>
   </section>
 </main>`,
     {

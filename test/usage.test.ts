@@ -299,4 +299,100 @@ describe('Maestri usage reader, fallback runner, and standby guard', () => {
     expect(rRes.statusCode).toBe(200);
     expect(rRes.json().roadmap.done[0].title).toBe('Boot');
   });
+
+  it('hides error providers without a recent reading, but keeps failing providers with a <24h reading as stale with last values', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'maestria-usage-hide-'));
+    const maestriDir = path.join(tmp, 'maestri');
+    const providersDir = mkProvidersDir(maestriDir);
+    const statusFile = path.join(providersDir, '.status.json');
+    let nowMs = Date.parse('2026-11-13T12:00:00Z');
+    const twoHoursAgo = new Date(nowMs - 2 * 3600_000).toISOString();
+    const thirtyHoursAgo = new Date(nowMs - 30 * 3600_000).toISOString();
+
+    fs.writeFileSync(
+      statusFile,
+      JSON.stringify({
+        updatedAt: new Date(nowMs).toISOString(),
+        providers: [
+          {
+            id: 'codex',
+            name: 'Codex',
+            enabled: true,
+            state: 'executableNotFound',
+            error: "The executable wasn't found on PATH",
+            lastSuccessAt: null,
+            meters: [],
+          },
+          {
+            id: 'old-fail',
+            name: 'Old Fail',
+            enabled: true,
+            state: 'failed',
+            error: 'Auth expired',
+            lastSuccessAt: thirtyHoursAgo,
+            meters: [{ id: 'plan', label: 'Plan limits', windows: [{ id: 'w1', title: '5h', usedPercent: 25 }] }],
+          },
+          {
+            id: 'recent-status-fail',
+            name: 'Recent Status Fail',
+            enabled: true,
+            state: 'failed',
+            error: 'Temporary timeout',
+            lastSuccessAt: twoHoursAgo,
+            meters: [{ id: 'plan', label: 'Plan limits', windows: [{ id: 'w1', title: '5h', usedPercent: 64 }] }],
+          },
+          {
+            id: 'cached-then-fail',
+            name: 'Cached Then Fail',
+            enabled: true,
+            state: 'ready',
+            error: null,
+            plan: 'Pro',
+            lastSuccessAt: twoHoursAgo,
+            meters: [{ id: 'plan', label: 'Plan limits', windows: [{ id: 'w1', title: 'Daily', usedPercent: 51 }] }],
+          },
+        ],
+      }),
+    );
+
+    const cfg = parseConfig({ cookieSecure: false, maestriDir, usage: { fallbackEnabled: false } }, tmp);
+    const svc = new UsageService(cfg, () => nowMs);
+
+    const snap1 = await svc.read();
+    const byId1 = new Map(snap1.providers.map((p) => [p.id, p]));
+    expect(byId1.get('codex')?.hidden).toBe(true);
+    expect(byId1.get('old-fail')?.hidden).toBe(true);
+    expect(byId1.get('recent-status-fail')?.hidden).toBe(false);
+    expect(byId1.get('recent-status-fail')?.stale).toBe(true);
+    expect(byId1.get('recent-status-fail')?.meters[0]?.windows[0]?.usedPercent).toBe(64);
+    expect(byId1.get('cached-then-fail')?.hidden).toBe(false);
+
+    // Now cached-then-fail transitions to failed with empty meters in .status.json 1 hour later:
+    // because it succeeded within the last 24h, it must NOT be hidden and must retain its last values as stale.
+    nowMs += 3600_000;
+    fs.writeFileSync(
+      statusFile,
+      JSON.stringify({
+        updatedAt: new Date(nowMs).toISOString(),
+        providers: [
+          {
+            id: 'cached-then-fail',
+            name: 'Cached Then Fail',
+            enabled: true,
+            state: 'failed',
+            error: 'Probe crashed',
+            lastSuccessAt: null,
+            meters: [],
+          },
+        ],
+      }),
+    );
+
+    const snap2 = await svc.read();
+    const p2 = snap2.providers[0]!;
+    expect(p2.hidden).toBe(false);
+    expect(p2.stale).toBe(true);
+    expect(p2.plan).toBe('Pro');
+    expect(p2.meters[0]?.windows[0]?.usedPercent).toBe(51);
+  });
 });
