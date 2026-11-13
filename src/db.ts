@@ -30,6 +30,33 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX audit_ts ON audit (ts);
   `,
+  `
+  CREATE TABLE tasks (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('task', 'question')),
+    text TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'done', 'dismissed')),
+    answer TEXT,
+    created_by TEXT NOT NULL DEFAULT 'Maestro',
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    done_at INTEGER,
+    dismissed_at INTEGER
+  );
+  CREATE INDEX tasks_ws_status ON tasks (workspace_id, status, created_at);
+
+  CREATE TABLE notices (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL,
+    body TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'dismissed')),
+    created_by TEXT NOT NULL DEFAULT 'Maestro',
+    created_at INTEGER NOT NULL,
+    dismissed_at INTEGER
+  );
+  CREATE INDEX notices_ws_status ON notices (workspace_id, status, created_at);
+  `,
 ];
 
 export function migrate(db: Db): void {
