@@ -2,15 +2,28 @@ import readline from 'node:readline';
 
 export type PromptInput = NodeJS.ReadableStream & {
   isTTY?: boolean;
+  readableLength?: number;
+  isPaused?: () => boolean;
   setRawMode?: (mode: boolean) => void;
   pause?: () => unknown;
   resume?: () => unknown;
 };
 
+export interface WatchdogEvent {
+  question: string;
+  wasPaused: boolean;
+  questionPrinted: boolean;
+}
+
 export interface PromptIO {
   input: PromptInput;
   output: NodeJS.WritableStream;
+  /** Override silent-wait watchdog delay (ms); 0 disables. Defaults to 15_000 ms. */
+  watchdogMs?: number;
+  onWatchdog?: (event: WatchdogEvent) => void;
 }
+
+export const DEFAULT_WATCHDOG_MS = 15_000;
 
 export function defaultPromptIO(): PromptIO {
   return {
@@ -21,21 +34,35 @@ export function defaultPromptIO(): PromptIO {
 
 let promptInFlight = false;
 
-/** Discard any chunks already sitting in the readable buffer before showing a prompt. */
+/** For tests/diagnostics: whether a prompt currently holds the single-prompt lock. */
+export function isPromptInFlight(): boolean {
+  return promptInFlight;
+}
+
+/**
+ * Discard bytes already sitting in the stream's readable buffer before showing a prompt.
+ * Never calls `.read()` speculatively on an empty TTY stream (which can leave it in pull mode).
+ */
 export function drainBufferedInput(input: PromptInput): number {
   let dropped = 0;
   if (typeof input.read !== 'function') return 0;
-  // Calling pause before read prevents async flowing data races while draining.
   input.pause?.();
-  while (((input as { readableLength?: number }).readableLength ?? 0) > 0) {
-    const chunk = input.read();
-    if (chunk === null) break;
-    dropped += Buffer.isBuffer(chunk) ? chunk.length : String(chunk).length;
+
+  if (typeof input.readableLength === 'number') {
+    let reads = 0;
+    while (input.readableLength > 0 && reads < 64) {
+      reads += 1;
+      const chunk = input.read();
+      if (chunk === null) break;
+      dropped += Buffer.isBuffer(chunk) ? chunk.length : String(chunk).length;
+    }
+    return dropped;
   }
-  // One extra non-blocking read handles streams whose internal buffer needs a pull without readableLength.
-  if (dropped === 0 && typeof (input as { readable?: boolean }).readable === 'boolean') {
-    let chunk: unknown;
-    while ((chunk = input.read()) !== null) {
+
+  // Fallback for minimal non-TTY test streams without readableLength.
+  if (!input.isTTY) {
+    const chunk = input.read();
+    if (chunk !== null) {
       dropped += Buffer.isBuffer(chunk) ? chunk.length : String(chunk).length;
     }
   }
@@ -53,40 +80,138 @@ function resetTtyBetweenPrompts(input: PromptInput): void {
   input.pause?.();
 }
 
-/**
- * Ask a single-line prompt using a dedicated readline interface that is created and closed
- * strictly per question. Only one prompt may be active at a time so stdin listeners/echo
- * never stack.
- */
-export function askLine(question: string, io: PromptIO = defaultPromptIO()): Promise<string> {
+function runSinglePrompt(opts: {
+  question: string;
+  hidden: boolean;
+  io: PromptIO;
+}): Promise<string> {
+  const { question, hidden, io } = opts;
+
+  if (hidden && !io.input.isTTY) {
+    return Promise.reject(new Error('A terminal is required to enter the password.'));
+  }
   if (promptInFlight) {
     return Promise.reject(new Error('Concurrent CLI prompt attempted while another prompt is active'));
   }
   promptInFlight = true;
-  drainBufferedInput(io.input);
 
   return new Promise<string>((resolve, reject) => {
-    const rl = readline.createInterface({
-      input: io.input,
-      output: io.output,
-      terminal: Boolean(io.input.isTTY),
-    });
+    let rl: readline.Interface | null = null;
     let done = false;
-    const finish = (err: Error | null, val?: string) => {
+    let sawInput = false;
+    let questionPrinted = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const onData = () => {
+      sawInput = true;
+    };
+    const onInputClose = () => {
+      cleanupAndFinish(new Error('Input stream closed before answer was received'));
+    };
+    const onInputError = (err: Error) => {
+      cleanupAndFinish(err);
+    };
+
+    const cleanupAndFinish = (err: Error | null, val?: string) => {
       if (done) return;
       done = true;
-      promptInFlight = false;
-      rl.close();
-      resetTtyBetweenPrompts(io.input);
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      io.input.removeListener?.('data', onData);
+      io.input.removeListener?.('close', onInputClose);
+      io.input.removeListener?.('error', onInputError);
+      try {
+        rl?.close();
+        resetTtyBetweenPrompts(io.input);
+        if (hidden) io.output.write('\n');
+      } finally {
+        promptInFlight = false;
+      }
       if (err) reject(err);
       else resolve(val ?? '');
     };
-    rl.once('SIGINT', () => finish(new Error('Prompt cancelled by user')));
-    rl.once('close', () => {
-      if (!done) finish(new Error('Input stream closed before answer was received'));
-    });
-    rl.question(question, (answer) => finish(null, answer));
+
+    try {
+      drainBufferedInput(io.input);
+
+      rl = readline.createInterface({
+        input: io.input,
+        output: io.output,
+        terminal: hidden ? true : Boolean(io.input.isTTY),
+      });
+
+      const rlAny = rl as unknown as { _writeToOutput?: (s: string) => void };
+      if (hidden) {
+        rlAny._writeToOutput = () => {};
+      } else {
+        const origWrite = rlAny._writeToOutput;
+        rlAny._writeToOutput = (chunk: string) => {
+          if (question.length > 0 && chunk.includes(question)) {
+            questionPrinted = true;
+          }
+          origWrite?.call(rl, chunk);
+        };
+      }
+
+      rl.once('SIGINT', () => cleanupAndFinish(new Error('Prompt cancelled by user')));
+      rl.once('close', () => {
+        if (!done) cleanupAndFinish(new Error('Input stream closed before answer was received'));
+      });
+      io.input.on?.('data', onData);
+      io.input.once?.('close', onInputClose);
+      io.input.once?.('error', onInputError);
+
+      if (hidden) {
+        if (question.length > 0) {
+          io.output.write(question);
+          questionPrinted = true;
+        }
+        io.input.resume?.();
+        rl.resume();
+        rl.question('', (answer) => cleanupAndFinish(null, answer));
+      } else {
+        io.input.resume?.();
+        rl.resume();
+        rl.question(question, (answer) => cleanupAndFinish(null, answer));
+        if (!questionPrinted && question.length > 0) {
+          io.output.write(question);
+          questionPrinted = true;
+        }
+      }
+
+      const watchdogMs = io.watchdogMs ?? DEFAULT_WATCHDOG_MS;
+      if (watchdogMs > 0) {
+        timer = setTimeout(() => {
+          if (done || sawInput) return;
+          const wasPaused = Boolean(io.input.isPaused?.());
+          io.input.resume?.();
+          rl?.resume();
+          const alreadyPrinted = questionPrinted;
+          if (!alreadyPrinted && question.length > 0) {
+            io.output.write(question);
+            questionPrinted = true;
+          } else if (wasPaused && question.length > 0) {
+            io.output.write(`\n${question}`);
+          }
+          io.onWatchdog?.({ question, wasPaused, questionPrinted: alreadyPrinted });
+        }, watchdogMs);
+        timer.unref?.();
+      }
+    } catch (err) {
+      cleanupAndFinish(err instanceof Error ? err : new Error(String(err)));
+    }
   });
+}
+
+/**
+ * Ask a single-line prompt using a dedicated readline interface that is created and closed
+ * strictly per question. Only one prompt may be active at a time so stdin listeners/echo
+ * never stack, and stdin is always resumed after draining buffered input.
+ */
+export function askLine(question: string, io: PromptIO = defaultPromptIO()): Promise<string> {
+  return runSinglePrompt({ question, hidden: false, io });
 }
 
 /**
@@ -94,43 +219,10 @@ export function askLine(question: string, io: PromptIO = defaultPromptIO()): Pro
  * Uses the same single-prompt lock and closes its interface on completion.
  */
 export function askHidden(question: string, io: PromptIO = defaultPromptIO()): Promise<string> {
-  if (!io.input.isTTY) {
-    return Promise.reject(new Error('A terminal is required to enter the password.'));
-  }
-  if (promptInFlight) {
-    return Promise.reject(new Error('Concurrent CLI prompt attempted while another prompt is active'));
-  }
-  promptInFlight = true;
-  drainBufferedInput(io.input);
-
-  return new Promise<string>((resolve, reject) => {
-    io.output.write(question);
-    const rl = readline.createInterface({
-      input: io.input,
-      output: io.output,
-      terminal: true,
-    });
-    (rl as unknown as { _writeToOutput: (s: string) => void })._writeToOutput = () => {};
-    let done = false;
-    const finish = (err: Error | null, val?: string) => {
-      if (done) return;
-      done = true;
-      promptInFlight = false;
-      rl.close();
-      resetTtyBetweenPrompts(io.input);
-      io.output.write('\n');
-      if (err) reject(err);
-      else resolve(val ?? '');
-    };
-    rl.once('SIGINT', () => finish(new Error('Prompt cancelled by user')));
-    rl.once('close', () => {
-      if (!done) finish(new Error('Input stream closed before answer was received'));
-    });
-    rl.question('', (answer) => finish(null, answer));
-  });
+  return runSinglePrompt({ question, hidden: true, io });
 }
 
-/** Prompt repeatedly until `validate` returns a non-null parsed result. Re-asks on empty/invalid input. */
+/** Prompt repeatedly until `validate` returns an ok parsed result. Re-asks on empty/invalid input. */
 export async function askValidated<T>(
   question: string,
   validate: (raw: string) => { ok: true; value: T } | { ok: false; error: string },

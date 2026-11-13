@@ -3,10 +3,20 @@ import os from 'node:os';
 import path from 'node:path';
 import { PassThrough } from 'node:stream';
 import { describe, expect, it } from 'vitest';
-import { loadSecrets } from '../src/auth/secrets.ts';
+import { hashPassword } from '../src/auth/password.ts';
+import { loadSecrets, saveSecrets } from '../src/auth/secrets.ts';
 import { totp } from '../src/auth/totp.ts';
 import { parseSkillSelection, runInitCommand } from '../src/commands/init.ts';
-import { askHidden, askLine, drainBufferedInput, type PromptInput, type PromptIO } from '../src/commands/prompt.ts';
+import {
+  askHidden,
+  askKeepOrRedo,
+  askLine,
+  drainBufferedInput,
+  isPromptInFlight,
+  type PromptInput,
+  type PromptIO,
+  type WatchdogEvent,
+} from '../src/commands/prompt.ts';
 import { loadConfig, loadRawConfig } from '../src/config.ts';
 
 function setupSampleEnv(baseDir: string): { homeDir: string; configDir: string; maestriDir: string; projDir: string } {
@@ -300,5 +310,91 @@ describe('prompt helpers and init wizard bugs', () => {
     expect(fs.existsSync(path.join(env.homeDir, '.claude', 'skills', 'maestria', 'SKILL.md'))).toBe(true);
     expect(fs.existsSync(path.join(env.homeDir, '.gemini', 'config', 'skills', 'maestria', 'SKILL.md'))).toBe(false);
     expect(tty2.allOutput).not.toContain('maestria-new-pass-456');
+  });
+
+  it('reproduces existing config + existing auth (no workspaces) choosing redo -> askHidden without deadlock', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'maestria-auth-redo-'));
+    const homeDir = path.join(tmp, 'home');
+    const configDir = path.join(tmp, 'cfg');
+    const maestriDir = path.join(homeDir, '.maestri');
+    fs.mkdirSync(path.join(maestriDir, 'usage', 'providers'), { recursive: true });
+    fs.writeFileSync(path.join(maestriDir, 'usage', 'providers', '.status.json'), '{"providers":[]}');
+    fs.mkdirSync(configDir, { recursive: true });
+    fs.writeFileSync(path.join(configDir, 'config.json'), '{}\n');
+    saveSecrets(configDir, {
+      passwordHash: hashPassword('old-password-12345'),
+      totpSecret: 'JBSWY3DPEHPK3PXP',
+      createdAt: '2026-01-01T00:00:00Z',
+    });
+
+    const tty = new FakeTtyHarness();
+    const run = runInitCommand([], { configDir, homeDir, io: tty.io });
+
+    await tty.waitFor('Keep existing config or redo? [keep/redo, default: keep]: ');
+    tty.sendLine('keep');
+
+    await tty.waitFor('Keep existing credentials or redo password & TOTP? [keep/redo, default: keep]: ');
+    // Pre-pause check + redo -> immediately transitions to askHidden('New password...')
+    tty.sendLine('redo');
+
+    await tty.waitFor('New password (min 12 characters): ');
+    expect(tty.input.isPaused()).toBe(false);
+    expect(isPromptInFlight()).toBe(true);
+    await tty.typeCharByChar('updated-pass-98765');
+
+    await tty.waitFor('Repeat password: ');
+    await tty.typeCharByChar('updated-pass-98765');
+
+    await tty.waitFor('Or enter the key manually: ');
+    const afterManual = await tty.waitFor('Enter the 6-digit code shown by the app to confirm: ');
+    const secret = /([A-Z2-7]{16,})/.exec(afterManual)![1]!;
+    await tty.typeCharByChar(totp(secret, Date.now()));
+
+    await tty.waitFor('Install Maestro protocol skill for');
+    tty.sendLine('none');
+    await tty.waitFor('Confirm: skip installing Maestro protocol skill?');
+    tty.sendLine('y');
+
+    await run;
+    expect(isPromptInFlight()).toBe(false);
+    expect(loadSecrets(configDir)?.totpSecret).toBe(secret);
+    expect(tty.allOutput).not.toContain('updated-pass-98765');
+  });
+
+  it('watchdog resumes paused TTY, ensures question is printed, and releases lock on stream close/error', async () => {
+    const tty = new FakeTtyHarness();
+    const events: WatchdogEvent[] = [];
+    tty.io.watchdogMs = 25;
+    tty.io.onWatchdog = (ev) => events.push(ev);
+
+    // Step 1: askKeepOrRedo -> 'redo', followed by askHidden where stdin gets paused before watchdog fires
+    const p1 = askKeepOrRedo('Keep existing credentials or redo? [keep/redo]: ', tty.io);
+    await tty.waitFor('Keep existing credentials or redo? [keep/redo]: ');
+    tty.sendLine('redo');
+    expect(await p1).toBe('redo');
+
+    const p2 = askHidden('New password (min 12 characters): ', tty.io);
+    await tty.waitFor('New password (min 12 characters): ');
+    // Simulate stdin stuck paused before user types
+    tty.input.pause();
+    expect(tty.input.isPaused()).toBe(true);
+
+    // Wait past watchdogMs -> watchdog must fire, resume stdin, and re-print question
+    await tty.waitFor('\nNew password (min 12 characters): ');
+    expect(events.length).toBe(1);
+    expect(events[0]).toMatchObject({ question: 'New password (min 12 characters): ', wasPaused: true });
+    expect(tty.input.isPaused()).toBe(false);
+
+    await tty.typeCharByChar('watchdog-pass-1234');
+    expect(await p2).toBe('watchdog-pass-1234');
+    expect(isPromptInFlight()).toBe(false);
+
+    // Step 2: if stream closes mid-prompt, promptInFlight lock must still reset so next prompt works
+    const ttyErr = new FakeTtyHarness();
+    const aborted = askLine('Will EOF: ', ttyErr.io);
+    await ttyErr.waitFor('Will EOF: ');
+    ttyErr.input.destroy();
+    await expect(aborted).rejects.toThrow(/Input stream closed/);
+    expect(isPromptInFlight()).toBe(false);
   });
 });
