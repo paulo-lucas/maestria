@@ -109,8 +109,8 @@ export async function waitForEvents(opts: {
       return { events: [], timedOut: true };
     }
     await new Promise<void>((resolve) => {
+      // Do not unref: this timer is what keeps the CLI process alive while it waits.
       const t = setTimeout(resolve, pollMs);
-      t.unref?.();
       if (opts.signal) {
         const onAbort = () => {
           clearTimeout(t);
