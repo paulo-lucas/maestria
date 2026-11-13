@@ -293,10 +293,8 @@ describe('Panel UI views & client/API integration (public/app.js + public/app.cs
       }),
     );
 
-    fs.writeFileSync(
-      path.join(wsDir, 'docs', 'roadmap.md'),
-      '# Chapter Roadmap\n\n_Updated today_\n\n## Pipeline\n\n| Feature | State |\n| --- | --- |\n| Chat & Roadmap Tabs | Ready |\n\n## Done\n\n- Initial setup\n',
-    );
+    const fixtureRoadmap = fs.readFileSync(path.resolve(import.meta.dirname, 'fixtures', 'chapter-roadmap.md'), 'utf8');
+    fs.writeFileSync(path.join(wsDir, 'docs', 'roadmap.md'), fixtureRoadmap);
 
     const cfg = parseConfig({ cookieSecure: false, maestriDir, usage: { fallbackEnabled: false } }, tmp);
     const db = openMemoryDb();
@@ -424,8 +422,12 @@ describe('Panel UI views & client/API integration (public/app.js + public/app.cs
 
     await flushAsync();
 
-    // 1. Home state & Usage cards
+    // 1. Home state & Usage cards (workspace tabs hidden on Home, static assets use no-store + default-hidden CSS)
     expect(doc.getElementById('ws-tabs')!.hidden).toBe(true);
+    const cssRes = await srv.app.inject({ method: 'GET', url: '/static/app.css', headers: { host: 'localhost:4777' } });
+    expect(cssRes.headers['cache-control']).toBe('no-store');
+    expect(cssRes.body).toMatch(/\.ws-tabs\s*\{[^}]*display:\s*none;/);
+    expect(cssRes.body).toMatch(/\.ws-tabs:not\(\[hidden\]\)\s*\{[^}]*display:\s*flex;/);
     expect(doc.getElementById('usage-section')!.hidden).toBe(false);
     const usageCards = doc.getElementById('usage-grid')!.children;
     expect(usageCards).toHaveLength(2);
@@ -498,14 +500,27 @@ describe('Panel UI views & client/API integration (public/app.js + public/app.cs
     expect(doc.getElementById('chat-list')!.children).toHaveLength(1);
     expect(doc.getElementById('chat-list')!.fullText()).toContain('Ping Maestro');
 
-    // Roadmap tab
+    // Roadmap tab with full GFM fixture
     doc.getElementById('tab-roadmap')!.click();
     await flushAsync();
     expect(windowObj.location.hash).toBe('#ws=chapter&tab=roadmap');
     expect(doc.getElementById('roadmap-section')!.hidden).toBe(false);
-    expect(doc.getElementById('roadmap-counts')!.textContent).toBe('(1 in pipeline · 1 done)');
-    expect(doc.getElementById('roadmap-body')!.fullText()).toContain('Chat & Roadmap Tabs');
-    expect(doc.getElementById('roadmap-body')!.fullText()).toContain('Done (1)');
+    expect(doc.getElementById('roadmap-counts')!.textContent).toBe('(7 in pipeline · 19 done)');
+    const rmHtml = doc.getElementById('roadmap-body')!
+      .querySelectorAll('.md')
+      .map((m) => m.innerHTML)
+      .join('\n');
+    expect(rmHtml).toContain('<strong>one at a time</strong>');
+    expect(rmHtml).toContain('<strong>Profile customization</strong>');
+    expect(rmHtml).toContain('<code>/u/[username]</code>');
+    expect(doc.getElementById('roadmap-body')!.fullText()).toContain('Known gaps carried along');
+    expect(doc.getElementById('roadmap-body')!.fullText()).toContain('Done (19)');
+
+    // Returning Home hides workspace tabs again
+    doc.getElementById('back-home')!.click();
+    await flushAsync();
+    expect(windowObj.location.hash).toBe('');
+    expect(doc.getElementById('ws-tabs')!.hidden).toBe(true);
 
     // 4. Audit log drawer
     doc.getElementById('toggle-audit')!.click();

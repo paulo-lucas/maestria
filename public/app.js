@@ -983,16 +983,26 @@
 
     const rm = data.roadmap;
     el.roadmapCounts.textContent = `(${rm.pipeline.length} in pipeline · ${rm.done.length} done)`;
-    if (rm.updatedNote) {
+    if (rm.updatedNoteHtml) {
+      el.roadmapUpdated.innerHTML = rm.updatedNoteHtml;
+    } else if (rm.updatedNote) {
       el.roadmapUpdated.textContent = rm.updatedNote;
+    }
+
+    if (rm.introHtml) {
+      const intro = document.createElement('div');
+      intro.className = 'roadmap-intro md';
+      intro.innerHTML = rm.introHtml;
+      el.roadmapBody.appendChild(intro);
     }
 
     const activeSections = [];
     let doneSection = null;
     for (const sec of rm.sections || []) {
-      if (sec.heading.toLowerCase() === 'done') {
+      const lower = sec.heading.toLowerCase();
+      if (lower === 'done' || lower.startsWith('done ')) {
         doneSection = sec;
-      } else if (sec.tables.length > 0 || sec.listItems.length > 0) {
+      } else if (sec.bodyHtml || sec.tables.length > 0 || sec.listItems.length > 0) {
         activeSections.push(sec);
       }
     }
@@ -1001,55 +1011,73 @@
       const block = document.createElement('div');
       block.className = 'roadmap-block';
       const h3 = document.createElement('h3');
-      h3.textContent = sec.heading;
+      if (sec.headingHtml) {
+        h3.innerHTML = sec.headingHtml;
+      } else {
+        h3.textContent = sec.heading;
+      }
       block.appendChild(h3);
 
-      for (const tbl of sec.tables) {
-        if (tbl.milestone) {
-          const h4 = document.createElement('h4');
-          h4.textContent = tbl.milestone;
-          block.appendChild(h4);
+      if (sec.bodyHtml) {
+        const body = document.createElement('div');
+        body.className = 'md';
+        body.innerHTML = sec.bodyHtml;
+        block.appendChild(body);
+      } else {
+        for (const tbl of sec.tables) {
+          if (tbl.milestone) {
+            const h4 = document.createElement('h4');
+            h4.textContent = tbl.milestone;
+            block.appendChild(h4);
+          }
+          if (tbl.rows.length > 0) {
+            block.appendChild(makeTableElement(tbl));
+          } else if (tbl.milestone) {
+            const empty = document.createElement('p');
+            empty.className = 'muted small';
+            empty.textContent = 'Completed.';
+            block.appendChild(empty);
+          }
         }
-        if (tbl.rows.length > 0) {
-          block.appendChild(makeTableElement(tbl));
-        } else if (tbl.milestone) {
-          const empty = document.createElement('p');
-          empty.className = 'muted small';
-          empty.textContent = 'Completed.';
-          block.appendChild(empty);
-        }
-      }
 
-      if (sec.listItems.length > 0) {
-        const ul = document.createElement('ul');
-        for (const item of sec.listItems) {
-          const li = document.createElement('li');
-          li.textContent = (item.checked === true ? '[done] ' : item.checked === false ? '[ ] ' : '') + item.text;
-          ul.appendChild(li);
+        if (sec.listItems.length > 0) {
+          const ul = document.createElement('ul');
+          for (const item of sec.listItems) {
+            const li = document.createElement('li');
+            li.textContent = (item.checked === true ? '[done] ' : item.checked === false ? '[ ] ' : '') + item.text;
+            ul.appendChild(li);
+          }
+          block.appendChild(ul);
         }
-        block.appendChild(ul);
       }
 
       el.roadmapBody.appendChild(block);
     }
 
-    if (doneSection && (doneSection.tables.length > 0 || doneSection.listItems.length > 0)) {
+    if (doneSection && (doneSection.bodyHtml || doneSection.tables.length > 0 || doneSection.listItems.length > 0)) {
       const details = document.createElement('details');
       details.className = 'roadmap-details';
       const summary = document.createElement('summary');
       summary.textContent = `Done (${rm.done.length})`;
       details.appendChild(summary);
-      for (const tbl of doneSection.tables) {
-        if (tbl.rows.length > 0) details.appendChild(makeTableElement(tbl));
-      }
-      if (doneSection.listItems.length > 0) {
-        const ul = document.createElement('ul');
-        for (const item of doneSection.listItems) {
-          const li = document.createElement('li');
-          li.textContent = item.text;
-          ul.appendChild(li);
+      if (doneSection.bodyHtml) {
+        const body = document.createElement('div');
+        body.className = 'md';
+        body.innerHTML = doneSection.bodyHtml;
+        details.appendChild(body);
+      } else {
+        for (const tbl of doneSection.tables) {
+          if (tbl.rows.length > 0) details.appendChild(makeTableElement(tbl));
         }
-        details.appendChild(ul);
+        if (doneSection.listItems.length > 0) {
+          const ul = document.createElement('ul');
+          for (const item of doneSection.listItems) {
+            const li = document.createElement('li');
+            li.textContent = item.text;
+            ul.appendChild(li);
+          }
+          details.appendChild(ul);
+        }
       }
       el.roadmapBody.appendChild(details);
     }
@@ -1057,7 +1085,7 @@
     if (el.roadmapBody.children.length === 0) {
       const p = document.createElement('p');
       p.className = 'muted';
-      p.textContent = 'Roadmap has no tables or list items yet.';
+      p.textContent = 'Roadmap has no content yet.';
       el.roadmapBody.appendChild(p);
     }
   }

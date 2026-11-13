@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { parseGfmTableAlignments, renderInlineMarkdown, renderMarkdown, splitGfmTableRow } from './web/markdown.ts';
 import type { Workspace } from './workspaces.ts';
 
 export interface RoadmapDoneItem {
@@ -31,6 +32,8 @@ export interface RoadmapListItem {
 
 export interface RoadmapSection {
   heading: string;
+  headingHtml: string;
+  bodyHtml: string;
   tables: RoadmapTable[];
   listItems: RoadmapListItem[];
 }
@@ -38,6 +41,8 @@ export interface RoadmapSection {
 export interface ParsedRoadmap {
   title: string | null;
   updatedNote: string | null;
+  updatedNoteHtml: string | null;
+  introHtml: string | null;
   done: RoadmapDoneItem[];
   pipeline: RoadmapPipelineItem[];
   currentSprint: RoadmapTable[];
@@ -64,24 +69,17 @@ function stripBoldAndMarkers(s: string): { clean: string; review: boolean } {
   return { clean, review };
 }
 
-function splitTableRow(line: string): string[] {
-  const trimmed = line.trim();
-  const inner = trimmed.replace(/^\|/, '').replace(/\|$/, '');
-  return inner.split('|').map((c) => c.trim());
-}
-
-function isSeparatorRow(cells: string[]): boolean {
-  return cells.length > 0 && cells.every((c) => /^:?-{2,}:?$/.test(c));
-}
-
 export function parseRoadmapMarkdown(markdown: string): ParsedRoadmap {
   const lines = markdown.split(/\r?\n/);
   let title: string | null = null;
   let updatedNote: string | null = null;
 
   const sections: RoadmapSection[] = [];
+  const sectionLines = new Map<RoadmapSection, string[]>();
+  const introLines: string[] = [];
   let currentSection: RoadmapSection | null = null;
   let currentMilestone: string | null = null;
+  let inFence = false;
 
   let activeTableHeaders: string[] | null = null;
   let activeTableSeenSep = false;
@@ -103,14 +101,35 @@ export function parseRoadmapMarkdown(markdown: string): ParsedRoadmap {
   const ensureSection = (heading: string): RoadmapSection => {
     let sec = sections.find((s) => s.heading === heading);
     if (!sec) {
-      sec = { heading, tables: [], listItems: [] };
+      sec = { heading, headingHtml: renderInlineMarkdown(heading), bodyHtml: '', tables: [], listItems: [] };
       sections.push(sec);
+      sectionLines.set(sec, []);
     }
     return sec;
   };
 
+  const pushBodyLine = (raw: string) => {
+    if (currentSection) {
+      sectionLines.get(currentSection)!.push(raw);
+    } else {
+      introLines.push(raw);
+    }
+  };
+
   for (const rawLine of lines) {
     const line = rawLine.trimEnd();
+
+    if (/^```/.test(line.trim())) {
+      inFence = !inFence;
+      if (activeTableHeaders) flushTable();
+      pushBodyLine(rawLine);
+      continue;
+    }
+
+    if (inFence) {
+      pushBodyLine(rawLine);
+      continue;
+    }
 
     if (!title && line.startsWith('# ')) {
       title = line.slice(2).trim();
@@ -136,25 +155,28 @@ export function parseRoadmapMarkdown(markdown: string): ParsedRoadmap {
       flushTable();
       currentMilestone = line.slice(4).trim();
       if (!currentSection) currentSection = ensureSection('Roadmap');
+      pushBodyLine(rawLine);
       continue;
     }
 
+    pushBodyLine(rawLine);
+
     if (line.trimStart().startsWith('|')) {
       if (!currentSection) currentSection = ensureSection('Overview');
-      const cells = splitTableRow(line);
+      const cells = splitGfmTableRow(line);
       if (!activeTableHeaders) {
         activeTableHeaders = cells;
         activeTableSeenSep = false;
         activeTableRows = [];
       } else if (!activeTableSeenSep) {
-        if (isSeparatorRow(cells)) {
+        if (parseGfmTableAlignments(line)) {
           activeTableSeenSep = true;
         } else {
           // Not a valid markdown table header; reset.
           activeTableHeaders = cells;
           activeTableRows = [];
         }
-      } else if (!isSeparatorRow(cells)) {
+      } else if (!parseGfmTableAlignments(line)) {
         activeTableRows.push(cells);
       }
       continue;
@@ -164,7 +186,7 @@ export function parseRoadmapMarkdown(markdown: string): ParsedRoadmap {
       flushTable();
     }
 
-    const listMatch = /^-\s+(?:\[(x|X| )\]\s+)?(.+)$/.exec(line.trim());
+    const listMatch = /^[-*]\s+(?:\[(x|X| )\]\s+)?(.+)$/.exec(line.trim());
     if (listMatch && currentSection) {
       const checked = listMatch[1] === undefined ? null : listMatch[1].toLowerCase() === 'x';
       currentSection.listItems.push({ text: listMatch[2]!.trim(), checked });
@@ -172,6 +194,15 @@ export function parseRoadmapMarkdown(markdown: string): ParsedRoadmap {
   }
 
   flushTable();
+
+  for (const sec of sections) {
+    const rawBody = (sectionLines.get(sec) ?? []).join('\n').trim();
+    sec.bodyHtml = rawBody ? renderMarkdown(rawBody) : '';
+  }
+
+  const introRaw = introLines.join('\n').trim();
+  const introHtml = introRaw ? renderMarkdown(introRaw) : null;
+  const updatedNoteHtml = updatedNote ? renderInlineMarkdown(updatedNote) : null;
 
   const done: RoadmapDoneItem[] = [];
   const pipeline: RoadmapPipelineItem[] = [];
@@ -215,7 +246,7 @@ export function parseRoadmapMarkdown(markdown: string): ParsedRoadmap {
     }
   }
 
-  return { title, updatedNote, done, pipeline, currentSprint, sections };
+  return { title, updatedNote, updatedNoteHtml, introHtml, done, pipeline, currentSprint, sections };
 }
 
 export function resolveRoadmapFile(ws: Workspace): string | null {

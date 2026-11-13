@@ -168,11 +168,14 @@ h2 {
   margin: 0.15rem 0 0.85rem;
 }
 .filter-bar {
-  display: flex;
+  display: none;
   align-items: center;
   gap: 0.4rem;
   flex-wrap: wrap;
   margin-bottom: 0.9rem;
+}
+.filter-bar:not([hidden]) {
+  display: flex;
 }
 .filter-chip {
   display: inline-flex;
@@ -376,6 +379,38 @@ button.btn-choice:hover { border-color: var(--accent); color: var(--accent); }
   border-left: 3px solid var(--border);
   color: var(--muted);
 }
+.md hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 0.85rem 0;
+}
+.md li.task-item {
+  list-style: none;
+  margin-left: -1.1rem;
+}
+.task-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.05em;
+  height: 1.05em;
+  margin-right: 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  font-size: 0.75em;
+  vertical-align: -0.1em;
+  color: transparent;
+}
+.task-check.checked {
+  background: var(--ok-bg);
+  border-color: var(--ok);
+  color: var(--ok);
+  font-weight: 700;
+}
+.md-table-wrap {
+  overflow-x: auto;
+  margin: 0.45rem 0 0.75rem;
+}
 .md pre {
   margin: 0.4rem 0;
   padding: 0.6rem 0.75rem;
@@ -395,11 +430,14 @@ pre code { background: transparent; padding: 0; }
 .md a { color: var(--accent); }
 
 .ws-tabs {
-  display: flex;
+  display: none;
   gap: 0.4rem;
   border-bottom: 1px solid var(--border);
   margin-bottom: 1rem;
   padding-bottom: 0.5rem;
+}
+.ws-tabs:not([hidden]) {
+  display: flex;
 }
 .ws-tab {
   padding: 0.35rem 0.85rem;
@@ -513,27 +551,36 @@ progress.usage-bar::-moz-progress-bar {
 progress.usage-bar.warn::-moz-progress-bar { background: var(--warn); }
 progress.usage-bar.over::-moz-progress-bar { background: var(--danger); }
 
+.roadmap-intro {
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
 .roadmap-block { margin-bottom: 1.15rem; }
 .roadmap-block h3 { margin: 0.5rem 0 0.45rem; font-size: 1rem; }
-.roadmap-block h4 { margin: 0.55rem 0 0.3rem; font-size: 0.88rem; color: var(--muted); }
-.roadmap-table {
+.roadmap-block h4, .roadmap-block .md h4 { margin: 0.7rem 0 0.35rem; font-size: 0.9rem; color: var(--muted); }
+.roadmap-table, .md table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.87rem;
   margin-bottom: 0.65rem;
 }
-.roadmap-table th, .roadmap-table td {
+.md-table-wrap table { margin-bottom: 0; }
+.roadmap-table th, .roadmap-table td, .md th, .md td {
   text-align: left;
   padding: 0.42rem 0.55rem;
   border-bottom: 1px solid var(--border);
   vertical-align: top;
 }
-.roadmap-table th {
+.roadmap-table th, .md th {
   font-size: 0.76rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--muted);
+  white-space: nowrap;
 }
+.md th.align-center, .md td.align-center { text-align: center; }
+.md th.align-right, .md td.align-right { text-align: right; }
 .roadmap-details { margin-top: 0.75rem; }
 .roadmap-details summary {
   cursor: pointer;

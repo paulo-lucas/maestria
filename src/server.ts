@@ -250,7 +250,7 @@ export async function buildServer(deps: ServerDeps): Promise<Server> {
     const name = (req.params as { file: string }).file;
     const meta = Object.hasOwn(STATIC_FILES, name) ? STATIC_FILES[name] : undefined;
     if (!meta) return deny(reply, 404, 'Not found');
-    return reply.header('Cache-Control', 'no-cache').type(meta.type).send(fs.readFileSync(path.join(PUBLIC_DIR, name)));
+    return reply.header('Cache-Control', 'no-store').type(meta.type).send(fs.readFileSync(path.join(PUBLIC_DIR, name)));
   });
 
   app.get('/login', { config: { public: true } }, async (req, reply) => {

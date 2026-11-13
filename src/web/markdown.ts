@@ -24,10 +24,82 @@ export function safeHttpUrl(raw: string): string | null {
 
 function formatTextSegment(text: string): string {
   let out = escHtml(text);
+  out = out.replace(/~~([^~\n]+?)~~/g, '<del>$1</del>');
   out = out.replace(/\*\*([^*\n]+?)\*\*/g, '<strong>$1</strong>');
   out = out.replace(/(^|[^\w*])\*([^*\n]+?)\*(?=[^\w*]|$)/g, '$1<em>$2</em>');
   out = out.replace(/(^|[^\w_])_([^_\n]+?)_(?=[^\w_]|$)/g, '$1<em>$2</em>');
   return out;
+}
+
+export type TableAlign = 'left' | 'center' | 'right' | null;
+
+/** Split a GFM table row on unescaped `|` outside backtick code spans. */
+export function splitGfmTableRow(line: string): string[] {
+  let trimmed = line.trim();
+  if (trimmed.startsWith('|')) trimmed = trimmed.slice(1);
+  if (trimmed.endsWith('|') && !trimmed.endsWith('\\|')) trimmed = trimmed.slice(0, -1);
+
+  const cells: string[] = [];
+  let cur = '';
+  let inBacktick = false;
+
+  for (let i = 0; i < trimmed.length; i++) {
+    const ch = trimmed[i]!;
+    if (ch === '\\' && !inBacktick && trimmed[i + 1] === '|') {
+      cur += '|';
+      i++;
+      continue;
+    }
+    if (ch === '`') {
+      inBacktick = !inBacktick;
+      cur += ch;
+      continue;
+    }
+    if (ch === '|' && !inBacktick) {
+      cells.push(cur.trim());
+      cur = '';
+      continue;
+    }
+    cur += ch;
+  }
+  cells.push(cur.trim());
+  return cells;
+}
+
+/** Parse a GFM table delimiter row (e.g. `| --- | :---: | ---: |`). Returns null if invalid. */
+export function parseGfmTableAlignments(line: string): TableAlign[] | null {
+  const trimmed = line.trim();
+  if (!trimmed.includes('|')) return null;
+  const cells = splitGfmTableRow(trimmed);
+  if (cells.length === 0) return null;
+  const aligns: TableAlign[] = [];
+  for (const c of cells) {
+    if (!/^:?-{2,}:?$/.test(c) && !(trimmed.startsWith('|') && /^:?-{1,}:?$/.test(c))) {
+      return null;
+    }
+    const left = c.startsWith(':');
+    const right = c.endsWith(':');
+    aligns.push(left && right ? 'center' : right ? 'right' : left ? 'left' : null);
+  }
+  return aligns;
+}
+
+function alignAttr(align: TableAlign | undefined): string {
+  if (align === 'center') return ' class="align-center"';
+  if (align === 'right') return ' class="align-right"';
+  return '';
+}
+
+function renderTaskListBody(rawItem: string): { isTask: boolean; html: string } {
+  const taskMatch = /^\[( |x|X)\]\s+(.*)$/.exec(rawItem);
+  if (!taskMatch) {
+    return { isTask: false, html: renderInlineMarkdown(rawItem) };
+  }
+  const checked = taskMatch[1]!.toLowerCase() === 'x';
+  const box = checked
+    ? '<span class="task-check checked">✓</span>'
+    : '<span class="task-check"></span>';
+  return { isTask: true, html: `${box}${renderInlineMarkdown(taskMatch[2]!)}` };
 }
 
 /**
@@ -64,8 +136,9 @@ export function renderInlineMarkdown(src: string, allowLinks = true): string {
 }
 
 /**
- * Render block + inline Markdown (headings, lists, blockquotes, fenced code, paragraphs)
- * into sanitized HTML. Raw HTML is always escaped, and links are restricted to http/https.
+ * Render block + inline Markdown (headings, GFM tables, lists/task lists, blockquotes,
+ * horizontal rules, fenced code, paragraphs) into sanitized HTML.
+ * Raw HTML is always escaped, and links are restricted to http/https.
  */
 export function renderMarkdown(src: string): string {
   const lines = src.replace(/\r\n?/g, '\n').split('\n');
@@ -88,7 +161,8 @@ export function renderMarkdown(src: string): string {
     }
   };
 
-  for (const raw of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i]!;
     if (inCode) {
       if (/^```/.test(raw.trim())) {
         out.push(`<pre><code>${escHtml(codeLines.join('\n'))}</code></pre>`);
@@ -131,6 +205,42 @@ export function renderMarkdown(src: string): string {
       continue;
     }
 
+    if (/^(?:-{3,}|\*{3,}|_{3,})$/.test(line.trim())) {
+      closeList();
+      out.push('<hr>');
+      continue;
+    }
+
+    // GFM pipe table: header row + delimiter row, followed by zero or more body rows.
+    if (line.includes('|') && i + 1 < lines.length) {
+      const aligns = parseGfmTableAlignments(lines[i + 1]!);
+      if (aligns) {
+        const headers = splitGfmTableRow(line);
+        if (headers.length === aligns.length && headers.length > 0) {
+          closeList();
+          const theadCells = headers
+            .map((h, idx) => `<th${alignAttr(aligns[idx])}>${renderInlineMarkdown(h)}</th>`)
+            .join('');
+          const rowsHtml: string[] = [];
+          let j = i + 2;
+          while (j < lines.length) {
+            const rowLine = lines[j]!.trimEnd();
+            if (!rowLine.trim() || !rowLine.includes('|') || parseGfmTableAlignments(rowLine)) break;
+            const cells = splitGfmTableRow(rowLine);
+            const tds = aligns
+              .map((al, idx) => `<td${alignAttr(al)}>${renderInlineMarkdown(cells[idx] ?? '')}</td>`)
+              .join('');
+            rowsHtml.push(`<tr>${tds}</tr>`);
+            j++;
+          }
+          const tbody = rowsHtml.length > 0 ? `<tbody>${rowsHtml.join('')}</tbody>` : '';
+          out.push(`<div class="md-table-wrap"><table><thead><tr>${theadCells}</tr></thead>${tbody}</table></div>`);
+          i = j - 1;
+          continue;
+        }
+      }
+    }
+
     const ulMatch = /^\s*[-*]\s+(.*)$/.exec(line);
     if (ulMatch) {
       if (list !== 'ul') {
@@ -138,7 +248,8 @@ export function renderMarkdown(src: string): string {
         out.push('<ul>');
         list = 'ul';
       }
-      out.push(`<li>${renderInlineMarkdown(ulMatch[1]!)}</li>`);
+      const task = renderTaskListBody(ulMatch[1]!);
+      out.push(task.isTask ? `<li class="task-item">${task.html}</li>` : `<li>${task.html}</li>`);
       continue;
     }
 
