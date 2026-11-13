@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>dev.maestria.panel</string>
+  <key>ProgramArguments</key>
+  <array>
+    <!-- Update to your Node >= 24.7 path and global or repo maestria path -->
+    <string>/opt/homebrew/bin/node</string>
+    <string>/usr/local/lib/node_modules/maestria/dist/cli.js</string>
+    <string>serve</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <!-- Optional overrides:
+    <key>MAESTRIA_CONFIG_DIR</key>
+    <string>/Users/you/.config/maestria</string>
+    <key>MAESTRI_HOME</key>
+    <string>/Users/you/.maestri</string>
+    -->
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/tmp/maestria.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/maestria.err.log</string>
+</dict>
+</plist>
