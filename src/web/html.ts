@@ -77,6 +77,7 @@ export function homePage(opts: { csrf: string }): string {
 
   <div id="ws-tabs" class="ws-tabs" hidden>
     <button id="tab-inbox" type="button" class="ws-tab active">Inbox</button>
+    <button id="tab-chat" type="button" class="ws-tab">Chat</button>
     <button id="tab-roadmap" type="button" class="ws-tab">Roadmap</button>
   </div>
 
@@ -138,6 +139,24 @@ export function homePage(opts: { csrf: string }): string {
       <span id="roadmap-updated" class="muted small"></span>
     </div>
     <div id="roadmap-body"></div>
+  </section>
+
+  <section id="chat-section" class="section" hidden>
+    <div class="section-head">
+      <div class="section-title">
+        <h2>Chat with Maestro</h2>
+        <span id="chat-agent" class="muted small"></span>
+      </div>
+    </div>
+    <div id="chat-list" class="chat-list"></div>
+    <p id="chat-empty" class="muted" hidden>No messages yet. Write a message below to wake the Maestro.</p>
+    <form id="chat-form" class="chat-form">
+      <textarea id="chat-input" placeholder="Message the Maestro… (Ctrl/Cmd+Enter to send)" maxlength="16000"></textarea>
+      <div class="inbox-actions">
+        <button id="chat-send" type="submit" class="small-btn">Send</button>
+        <span id="chat-err" class="inline-err"></span>
+      </div>
+    </form>
   </section>
 </main>`,
     {

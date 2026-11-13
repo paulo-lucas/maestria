@@ -10,6 +10,7 @@ import {
   runStatusCommand,
   runWorkspaceCommand,
 } from './commands/inbox.ts';
+import { runSayCommand, runWaitCommand } from './commands/chat.ts';
 import { openDb } from './db.ts';
 import { Audit } from './audit.ts';
 import { SessionStore } from './auth/sessions.ts';
@@ -28,6 +29,8 @@ Usage:
   maestria post --kind notice|approve|input|choice [--option <val> ...] [--workspace|-w <ws>] [--by <agent>] <markdown>
   maestria inbox [--workspace|-w <ws>] [--status open|responded|dismissed|history|all] [--kind ...] [--json]
   maestria answers [--workspace|-w <ws>] [--all] [--json]
+  maestria say [--workspace|-w <ws>] [--by <agent>] [--json] <text>
+  maestria wait [--workspace|-w <ws>] [--cursor <name>] [--since <id>] [--from-now] [--timeout <sec>] [--json]
   maestria status [--workspace|-w <ws>] [--json]
 
 Config directory: $MAESTRIA_CONFIG_DIR or ~/.config/maestria
@@ -75,6 +78,8 @@ async function main(argv: string[]): Promise<void> {
   if (cmd === 'post') return runPostCommand(argv.slice(1), { configDir });
   if (cmd === 'inbox') return runInboxCommand(argv.slice(1), { configDir });
   if (cmd === 'answers') return runAnswersCommand(argv.slice(1), { configDir });
+  if (cmd === 'say') return runSayCommand(argv.slice(1), { configDir });
+  if (cmd === 'wait') return runWaitCommand(argv.slice(1), { configDir });
   if (cmd === 'status') return runStatusCommand(argv.slice(1), { configDir });
   if (!cmd || cmd === 'help' || cmd === '--help' || cmd === '-h') {
     process.stdout.write(HELP);

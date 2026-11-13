@@ -14,6 +14,7 @@
     backHome: document.getElementById('back-home'),
     wsTabs: document.getElementById('ws-tabs'),
     tabInbox: document.getElementById('tab-inbox'),
+    tabChat: document.getElementById('tab-chat'),
     tabRoadmap: document.getElementById('tab-roadmap'),
     usageSection: document.getElementById('usage-section'),
     standbyPill: document.getElementById('standby-pill'),
@@ -40,11 +41,20 @@
     roadmapCounts: document.getElementById('roadmap-counts'),
     roadmapUpdated: document.getElementById('roadmap-updated'),
     roadmapBody: document.getElementById('roadmap-body'),
+    chatSection: document.getElementById('chat-section'),
+    chatAgent: document.getElementById('chat-agent'),
+    chatList: document.getElementById('chat-list'),
+    chatEmpty: document.getElementById('chat-empty'),
+    chatForm: document.getElementById('chat-form'),
+    chatInput: document.getElementById('chat-input'),
+    chatSend: document.getElementById('chat-send'),
+    chatErr: document.getElementById('chat-err'),
   };
 
   let workspaces = [];
   let routeWsId = readWorkspaceFromHash(); // null => Home, string => workspace page
-  let wsTab = 'inbox'; // 'inbox' | 'roadmap'
+  let wsTab = 'inbox'; // 'inbox' | 'chat' | 'roadmap'
+  let chatMessages = [];
   let homeFilterWsId = null; // null => All workspaces on Home
   let showHistory = false;
   let state = { needsYou: [], updates: [], historyCount: 0, history: [] };
@@ -210,10 +220,12 @@
     el.usageSection.hidden = routeWsId !== null;
     el.wsTabs.hidden = routeWsId === null;
     el.tabInbox.classList.toggle('active', wsTab === 'inbox');
+    el.tabChat.classList.toggle('active', wsTab === 'chat');
     el.tabRoadmap.classList.toggle('active', wsTab === 'roadmap');
     el.needsSection.hidden = !showInboxSections;
     el.updatesSection.hidden = !showInboxSections;
     if (!showInboxSections) el.historySection.hidden = true;
+    el.chatSection.hidden = routeWsId === null || wsTab !== 'chat';
     el.roadmapSection.hidden = routeWsId === null || wsTab !== 'roadmap';
 
     if (routeWsId === null) {
@@ -972,6 +984,101 @@
     }
   }
 
+  function renderChat(messages) {
+    chatMessages = messages || [];
+    const ws = workspaces.find((w) => w.id === routeWsId);
+    el.chatAgent.textContent = ws ? `· ${ws.maestroAgent}` : '';
+    el.chatEmpty.hidden = chatMessages.length > 0;
+
+    const draftKey = routeWsId ? `chat:${routeWsId}` : null;
+    if (draftKey && document.activeElement !== el.chatInput) {
+      el.chatInput.value = Object.hasOwn(drafts, draftKey) ? drafts[draftKey] : '';
+    }
+
+    const existing = new Map();
+    for (const node of Array.from(el.chatList.children)) {
+      if (node.dataset.msgId) existing.set(node.dataset.msgId, node);
+    }
+    const desiredIds = new Set(chatMessages.map((m) => m.id));
+    for (const [id, node] of existing) {
+      if (!desiredIds.has(id)) node.remove();
+    }
+
+    let appended = false;
+    for (const msg of chatMessages) {
+      if (existing.has(msg.id)) continue;
+      appended = true;
+      const box = document.createElement('div');
+      box.className = `chat-msg ${msg.sender}`;
+      box.dataset.msgId = msg.id;
+      box.dataset.ws = msg.workspaceId;
+
+      const head = document.createElement('div');
+      head.className = 'chat-msg-head';
+      const author = document.createElement('span');
+      author.className = 'chat-msg-author';
+      author.textContent = msg.author;
+      const ts = document.createElement('span');
+      ts.textContent = fmtTime(msg.createdAt);
+      head.append(author, ts);
+
+      const md = document.createElement('div');
+      md.className = 'md';
+      md.innerHTML = msg.bodyHtml;
+
+      box.append(head, md);
+      el.chatList.appendChild(box);
+    }
+    if (appended) {
+      el.chatList.scrollTop = el.chatList.scrollHeight;
+    }
+  }
+
+  async function refreshChat() {
+    if (!routeWsId) return;
+    const target = routeWsId;
+    try {
+      const data = await api(`/api/workspaces/${encodeURIComponent(target)}/chat`);
+      if (routeWsId === target && wsTab === 'chat') {
+        renderChat(data.messages || []);
+      }
+    } catch (err) {
+      if (err.message !== 'unauthenticated') {
+        showBanner(`Could not load chat: ${err.message}`);
+      }
+    }
+  }
+
+  async function submitChat() {
+    if (!routeWsId) return;
+    const target = routeWsId;
+    const text = el.chatInput.value.trim();
+    if (!text) {
+      el.chatErr.textContent = 'Please write a message first.';
+      el.chatInput.focus();
+      return;
+    }
+    el.chatErr.textContent = '';
+    el.chatSend.disabled = true;
+    try {
+      const res = await api(`/api/workspaces/${encodeURIComponent(target)}/chat`, {
+        method: 'POST',
+        body: JSON.stringify({ body: el.chatInput.value }),
+      });
+      clearDraft(`chat:${target}`);
+      el.chatInput.value = '';
+      if (routeWsId === target) {
+        renderChat([...chatMessages, res.message]);
+      }
+    } catch (err) {
+      if (err.message !== 'unauthenticated') {
+        el.chatErr.textContent = err.message;
+      }
+    } finally {
+      el.chatSend.disabled = false;
+    }
+  }
+
   async function poll() {
     try {
       await refreshWorkspaces();
@@ -979,6 +1086,8 @@
         await Promise.all([refreshUsage(false), refreshInbox()]);
       } else if (wsTab === 'roadmap') {
         await refreshRoadmap();
+      } else if (wsTab === 'chat') {
+        await refreshChat();
       } else {
         await refreshInbox();
       }
@@ -997,10 +1106,29 @@
     renderNavigation();
     void refreshInbox();
   });
+  el.tabChat.addEventListener('click', () => {
+    wsTab = 'chat';
+    renderNavigation();
+    void refreshChat();
+  });
   el.tabRoadmap.addEventListener('click', () => {
     wsTab = 'roadmap';
     renderNavigation();
     void refreshRoadmap();
+  });
+  el.chatInput.addEventListener('input', () => {
+    el.chatErr.textContent = '';
+    if (routeWsId) setDraft(`chat:${routeWsId}`, el.chatInput.value);
+  });
+  el.chatInput.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault();
+      void submitChat();
+    }
+  });
+  el.chatForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    void submitChat();
   });
 
   el.toggleHistory.addEventListener('click', () => {

@@ -13,6 +13,7 @@ import { SessionStore, type Session } from './auth/sessions.ts';
 import { LoginLimiter } from './auth/ratelimit.ts';
 import { AccessVerifier, type JwksFetcher, fetchJwks } from './auth/cloudflare.ts';
 import type { AuthSecrets } from './auth/secrets.ts';
+import { ChatStore } from './chat.ts';
 import { ConflictError, InboxStore, ValidationError, type InboxStatus } from './inbox.ts';
 import { EventStore } from './events.ts';
 import { readWorkspaceRoadmap } from './roadmap.ts';
@@ -87,6 +88,7 @@ export interface Server {
   workspaces: WorkspaceProvider;
   events: EventStore;
   inbox: InboxStore;
+  chat: ChatStore;
   usage: UsageService;
   standby: StandbyGuard;
 }
@@ -99,6 +101,7 @@ export async function buildServer(deps: ServerDeps): Promise<Server> {
   const workspaces = deps.workspaces ?? new WorkspaceRegistry(config.configDir);
   const events = new EventStore(db, now);
   const inbox = new InboxStore(db, audit, now, events);
+  const chat = new ChatStore(db, audit, events, now);
   const usage = new UsageService(config, now, deps.fallbackRunner);
   const standby = new StandbyGuard(db, audit, config, events, now, deps.standbyNotifier);
   const sessions = new SessionStore(db, { idleMs: config.session.idleMinutes * 60_000, absoluteMs: config.session.absoluteHours * 3_600_000 }, now);
@@ -121,7 +124,7 @@ export async function buildServer(deps: ServerDeps): Promise<Server> {
 
   const app = Fastify({
     logger: deps.logger ? { level: 'info' } : false,
-    bodyLimit: 16 * 1024,
+    bodyLimit: 32 * 1024,
     trustProxy: false,
     routerOptions: { maxParamLength: 100 },
   });
@@ -428,6 +431,32 @@ export async function buildServer(deps: ServerDeps): Promise<Server> {
     return { item: { ...updated, workspaceName: ws.name, workspaceColor: ws.color } };
   });
 
+  app.get('/api/workspaces/:id/chat', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const ws = workspaces.get(id);
+    if (!ws) return reply.code(404).send({ error: 'workspace_not_found' });
+    return {
+      workspace: { id: ws.id, name: ws.name, color: ws.color, maestroAgent: ws.maestroAgent },
+      messages: chat.list(ws.id),
+    };
+  });
+
+  app.post('/api/workspaces/:id/chat', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const ws = workspaces.get(id);
+    if (!ws) return reply.code(404).send({ error: 'workspace_not_found' });
+    const body = req.body ?? {};
+    if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+      return reply.code(400).send({ error: 'invalid_body' });
+    }
+    const text = (body as Record<string, unknown>).body;
+    if (typeof text !== 'string') {
+      return reply.code(400).send({ error: 'invalid_message_body' });
+    }
+    const message = chat.send(ws.id, { sender: 'human', author: 'Human', body: text }, { via: 'web', ip: req.clientIp });
+    return { message };
+  });
+
   app.get('/api/workspaces/:id/roadmap', async (req, reply) => {
     const { id } = req.params as { id: string };
     const ws = workspaces.get(id);
@@ -495,5 +524,5 @@ export async function buildServer(deps: ServerDeps): Promise<Server> {
     if (usageTimer) clearInterval(usageTimer);
   });
 
-  return { app, sessions, audit, limiter, workspaces, events, inbox, usage, standby };
+  return { app, sessions, audit, limiter, workspaces, events, inbox, chat, usage, standby };
 }
