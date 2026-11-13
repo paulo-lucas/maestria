@@ -8,12 +8,26 @@ export interface Workspace {
   path: string;
   roadmapPath: string | null;
   maestroAgent: string;
+  color: string;
 }
 
 export class WorkspaceError extends Error {}
 
+/** Accessible, high-contrast accent colors for workspace tags and borders. */
+export const WORKSPACE_PALETTE: readonly string[] = [
+  '#5b4bd6',
+  '#0e7490',
+  '#b45309',
+  '#15803d',
+  '#be185d',
+  '#2563eb',
+  '#0f766e',
+  '#9a3412',
+];
+
 const ID_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
-const KNOWN_KEYS = new Set(['id', 'name', 'path', 'roadmapPath', 'maestroAgent']);
+const HEX_COLOR_RE = /^#[0-9a-f]{6}$/i;
+const KNOWN_KEYS = new Set(['id', 'name', 'path', 'roadmapPath', 'maestroAgent', 'color']);
 
 export function slugifyWorkspaceId(name: string): string {
   return name
@@ -42,7 +56,8 @@ export function parseWorkspaces(raw: unknown): Workspace[] {
 
   const seenIds = new Set<string>();
   const seenPaths = new Set<string>();
-  const out: Workspace[] = [];
+  const usedColors = new Set<string>();
+  const parsed: (Omit<Workspace, 'color'> & { color: string | null })[] = [];
 
   for (let i = 0; i < raw.length; i++) {
     const item = raw[i];
@@ -83,9 +98,30 @@ export function parseWorkspaces(raw: unknown): Workspace[] {
         ? nonEmptyString(item.maestroAgent, `workspaces[${i}].maestroAgent`, 64)
         : 'Maestro';
 
-    out.push({ id, name, path: resolvedPath, roadmapPath, maestroAgent });
+    let color: string | null = null;
+    if (item.color !== undefined && item.color !== null) {
+      const c = nonEmptyString(item.color, `workspaces[${i}].color`, 16);
+      if (!HEX_COLOR_RE.test(c)) {
+        throw new WorkspaceError(`workspaces[${i}].color: must be a #RRGGBB hex color`);
+      }
+      color = c.toLowerCase();
+      usedColors.add(color);
+    }
+
+    parsed.push({ id, name, path: resolvedPath, roadmapPath, maestroAgent, color });
   }
-  return out;
+
+  let paletteIdx = 0;
+  return parsed.map((ws) => {
+    if (ws.color !== null) return { ...ws, color: ws.color };
+    let picked = WORKSPACE_PALETTE.find((c) => !usedColors.has(c));
+    if (!picked) {
+      picked = WORKSPACE_PALETTE[paletteIdx % WORKSPACE_PALETTE.length]!;
+      paletteIdx += 1;
+    }
+    usedColors.add(picked);
+    return { ...ws, color: picked };
+  });
 }
 
 export function workspacesFile(configDir: string): string {
@@ -104,7 +140,7 @@ export function loadWorkspaces(configDir: string): Workspace[] {
   return parseWorkspaces(raw);
 }
 
-export function saveWorkspaces(configDir: string, workspaces: readonly Workspace[]): void {
+export function saveWorkspaces(configDir: string, workspaces: readonly Partial<Workspace>[]): void {
   const validated = parseWorkspaces(workspaces);
   ensureConfigDir(configDir);
   const file = workspacesFile(configDir);

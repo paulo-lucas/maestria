@@ -93,6 +93,56 @@ const MIGRATIONS: string[] = [
   ALTER TABLE tasks_v2 RENAME TO tasks;
   CREATE INDEX tasks_ws_status ON tasks (workspace_id, status, created_at);
   `,
+  `
+  CREATE TABLE inbox (
+    id TEXT PRIMARY KEY,
+    workspace_id TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('notice', 'approve', 'input', 'choice')),
+    body TEXT NOT NULL,
+    options TEXT,
+    status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'responded', 'dismissed')),
+    decision TEXT,
+    response TEXT,
+    created_by TEXT NOT NULL DEFAULT 'Maestro',
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    resolved_at INTEGER
+  );
+  INSERT INTO inbox (id, workspace_id, kind, body, options, status, decision, response, created_by, created_at, updated_at, resolved_at)
+  SELECT
+    id,
+    workspace_id,
+    CASE WHEN type = 'ack' THEN 'notice' ELSE type END,
+    text,
+    options,
+    CASE WHEN type = 'ack' AND status = 'responded' THEN 'dismissed' ELSE status END,
+    decision,
+    response,
+    created_by,
+    created_at,
+    updated_at,
+    COALESCE(responded_at, dismissed_at)
+  FROM tasks;
+  INSERT OR IGNORE INTO inbox (id, workspace_id, kind, body, options, status, decision, response, created_by, created_at, updated_at, resolved_at)
+  SELECT
+    id,
+    workspace_id,
+    'notice',
+    body,
+    NULL,
+    CASE WHEN status = 'active' THEN 'open' ELSE 'dismissed' END,
+    CASE WHEN status = 'dismissed' THEN 'ack' ELSE NULL END,
+    NULL,
+    created_by,
+    created_at,
+    COALESCE(dismissed_at, created_at),
+    dismissed_at
+  FROM notices;
+  DROP TABLE tasks;
+  DROP TABLE notices;
+  CREATE INDEX inbox_ws_status ON inbox (workspace_id, status, created_at);
+  CREATE INDEX inbox_status_created ON inbox (status, created_at);
+  `,
 ];
 
 export function migrate(db: Db): void {

@@ -3,11 +3,17 @@ import { loadConfig, defaultConfigDir, ConfigError } from './config.ts';
 import { SecretsError, loadSecrets } from './auth/secrets.ts';
 import { authSetup } from './commands/auth-setup.ts';
 import { ArgError } from './commands/args.ts';
-import { runNoticeCommand, runStatusCommand, runTaskCommand, runWorkspaceCommand } from './commands/board.ts';
+import {
+  runAnswersCommand,
+  runInboxCommand,
+  runPostCommand,
+  runStatusCommand,
+  runWorkspaceCommand,
+} from './commands/inbox.ts';
 import { openDb } from './db.ts';
 import { Audit } from './audit.ts';
 import { SessionStore } from './auth/sessions.ts';
-import { ConflictError, ValidationError } from './tasks.ts';
+import { ConflictError, ValidationError } from './inbox.ts';
 import { WorkspaceError } from './workspaces.ts';
 import { buildServer } from './server.ts';
 
@@ -19,11 +25,9 @@ Usage:
   maestria auth logout-all          Invalidate every panel session
 
   maestria workspace list|add|remove ...
-  maestria task add --type approve|ack|input|choice [--option <val> ...] [--workspace|-w <ws>] [--by <agent>] <text>
-  maestria task list [--workspace|-w <ws>] [--status open|responded|dismissed|history|all] [--json]
-  maestria task answers [--workspace|-w <ws>] [--all] [--json]
-  maestria notice add [--workspace|-w <ws>] [--by <agent>] <text>
-  maestria notice list [--workspace|-w <ws>] [--status active|dismissed|all] [--json]
+  maestria post --kind notice|approve|input|choice [--option <val> ...] [--workspace|-w <ws>] [--by <agent>] <markdown>
+  maestria inbox [--workspace|-w <ws>] [--status open|responded|dismissed|history|all] [--kind ...] [--json]
+  maestria answers [--workspace|-w <ws>] [--all] [--json]
   maestria status [--workspace|-w <ws>] [--json]
 
 Config directory: $MAESTRIA_CONFIG_DIR or ~/.config/maestria
@@ -68,8 +72,9 @@ async function main(argv: string[]): Promise<void> {
   if (cmd === 'auth' && sub === 'setup') return authSetup({ configDir, force: rest.includes('--force') });
   if (cmd === 'auth' && sub === 'logout-all') return logoutAll();
   if (cmd === 'workspace') return runWorkspaceCommand(argv.slice(1), { configDir });
-  if (cmd === 'task') return runTaskCommand(argv.slice(1), { configDir });
-  if (cmd === 'notice') return runNoticeCommand(argv.slice(1), { configDir });
+  if (cmd === 'post') return runPostCommand(argv.slice(1), { configDir });
+  if (cmd === 'inbox') return runInboxCommand(argv.slice(1), { configDir });
+  if (cmd === 'answers') return runAnswersCommand(argv.slice(1), { configDir });
   if (cmd === 'status') return runStatusCommand(argv.slice(1), { configDir });
   if (!cmd || cmd === 'help' || cmd === '--help' || cmd === '-h') {
     process.stdout.write(HELP);
@@ -89,10 +94,9 @@ main(process.argv.slice(2)).catch((err: unknown) => {
     err instanceof ArgError
   ) {
     process.stderr.write(`${err.message}\n`);
-    if (err instanceof ArgError) process.exitCode = 2;
-    else process.exitCode = 1;
+    process.exitCode = err instanceof ArgError ? 2 : 1;
     return;
   }
   process.stderr.write(`${err instanceof Error ? (err.stack ?? err.message) : String(err)}\n`);
-  process.exit(1);
+  process.exitCode = 1;
 });
