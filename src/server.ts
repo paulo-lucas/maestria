@@ -1,0 +1,278 @@
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import net from 'node:net';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
+import cookie from '@fastify/cookie';
+import type { Config } from './config.ts';
+import type { Db } from './db.ts';
+import { Audit } from './audit.ts';
+import { AuthService } from './auth/service.ts';
+import { SessionStore, type Session } from './auth/sessions.ts';
+import { LoginLimiter } from './auth/ratelimit.ts';
+import { AccessVerifier, type JwksFetcher, fetchJwks } from './auth/cloudflare.ts';
+import type { AuthSecrets } from './auth/secrets.ts';
+import { homePage, loginPage } from './web/html.ts';
+
+declare module 'fastify' {
+  interface FastifyRequest {
+    session: Session | null;
+    clientIp: string;
+  }
+  interface FastifyContextConfig {
+    /** Reachable without a session. */
+    public?: boolean;
+    /** CSRF token comes from the pre-login cookie instead of the session. */
+    loginCsrf?: boolean;
+  }
+}
+
+export interface ServerDeps {
+  config: Config;
+  db: Db;
+  secrets: AuthSecrets;
+  now?: () => number;
+  logger?: boolean;
+  jwksFetcher?: JwksFetcher;
+}
+
+const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
+const STATIC_FILES: Record<string, { type: string }> = { 'app.css': { type: 'text/css; charset=utf-8' } };
+
+export const CSP = [
+  "default-src 'none'",
+  "script-src 'self'",
+  "style-src 'self'",
+  "img-src 'self' data:",
+  "connect-src 'self'",
+  "font-src 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+  "base-uri 'none'",
+].join('; ');
+
+const SAFE_METHODS = new Set(['GET', 'HEAD']);
+
+function safeEqual(a: string, b: string): boolean {
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  return ab.length === bb.length && crypto.timingSafeEqual(ab, bb);
+}
+
+function formString(body: unknown, key: string, max: number): string {
+  if (typeof body !== 'object' || body === null) return '';
+  const v = (body as Record<string, unknown>)[key];
+  return typeof v === 'string' ? v.slice(0, max) : '';
+}
+
+export interface Server {
+  app: FastifyInstance;
+  sessions: SessionStore;
+  audit: Audit;
+  limiter: LoginLimiter;
+}
+
+export async function buildServer(deps: ServerDeps): Promise<Server> {
+  const { config, db, secrets } = deps;
+  const now = deps.now ?? Date.now;
+
+  const audit = new Audit(db, now);
+  const sessions = new SessionStore(db, { idleMs: config.session.idleMinutes * 60_000, absoluteMs: config.session.absoluteHours * 3_600_000 }, now);
+  const limiter = new LoginLimiter(
+    {
+      maxFailuresPerIp: config.login.maxFailuresPerIp,
+      maxFailuresGlobal: config.login.maxFailuresGlobal,
+      windowMs: config.login.windowSeconds * 1000,
+      lockoutMs: config.login.lockoutSeconds * 1000,
+    },
+    now,
+  );
+  const auth = new AuthService({ db, secrets, sessions, limiter, audit, now });
+  const access = config.cloudflareAccess ? new AccessVerifier(config.cloudflareAccess, deps.jwksFetcher ?? fetchJwks, now) : null;
+
+  const allowedHosts = new Set<string>([`localhost:${config.port}`, `127.0.0.1:${config.port}`, ...config.allowedHosts]);
+  const sessionCookie = config.cookieSecure ? '__Host-maestria_session' : 'maestria_session';
+  const loginCsrfCookie = config.cookieSecure ? '__Host-maestria_login_csrf' : 'maestria_login_csrf';
+  const cookieOpts = { path: '/', httpOnly: true, secure: config.cookieSecure, sameSite: 'strict' as const };
+
+  const app = Fastify({
+    logger: deps.logger ? { level: 'info' } : false,
+    bodyLimit: 16 * 1024,
+    trustProxy: false,
+    routerOptions: { maxParamLength: 100 },
+  });
+
+  await app.register(cookie);
+
+  app.addContentTypeParser('application/x-www-form-urlencoded', { parseAs: 'string', bodyLimit: 8 * 1024 }, (_req, body, done) => {
+    try {
+      done(null, Object.fromEntries(new URLSearchParams(body as string)));
+    } catch (err) {
+      done(err as Error);
+    }
+  });
+
+  app.decorateRequest('session', null);
+  app.decorateRequest('clientIp', '');
+
+  // --- security headers on every response ---
+  app.addHook('onSend', async (req, reply, payload) => {
+    reply.header('Content-Security-Policy', CSP);
+    reply.header('X-Frame-Options', 'DENY');
+    reply.header('X-Content-Type-Options', 'nosniff');
+    reply.header('Referrer-Policy', 'no-referrer');
+    reply.header('Cross-Origin-Opener-Policy', 'same-origin');
+    reply.header('Cross-Origin-Resource-Policy', 'same-origin');
+    reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()');
+    if (config.cookieSecure) reply.header('Strict-Transport-Security', 'max-age=31536000');
+    if (!reply.hasHeader('Cache-Control')) reply.header('Cache-Control', 'no-store');
+    return payload;
+  });
+
+  function resolveClientIp(req: FastifyRequest): string {
+    if (config.trustCfConnectingIp) {
+      const h = req.headers['cf-connecting-ip'];
+      if (typeof h === 'string' && net.isIP(h.trim())) return h.trim();
+    }
+    return req.socket.remoteAddress ?? 'unknown';
+  }
+
+  function deny(reply: FastifyReply, code: number, message: string): FastifyReply {
+    return reply.code(code).type('text/plain; charset=utf-8').send(message);
+  }
+
+  // --- gate: host, Cloudflare Access, origin, session ---
+  app.addHook('onRequest', async (req, reply) => {
+    req.clientIp = resolveClientIp(req);
+
+    // DNS-rebinding defence: only answer to known Host names.
+    const host = (req.headers.host ?? '').toLowerCase();
+    if (!allowedHosts.has(host)) return deny(reply, 421, 'Misdirected request');
+
+    if (access) {
+      const ok = await access.verify(req.headers['cf-access-jwt-assertion'] as string | undefined);
+      if (!ok) {
+        audit.logThrottled(`cf:${req.clientIp}`, 'access_jwt_reject', { ip: req.clientIp });
+        return deny(reply, 403, 'Forbidden');
+      }
+    }
+
+    // Cross-site write defence (in addition to CSRF tokens): browsers always send Origin on POST.
+    if (!SAFE_METHODS.has(req.method)) {
+      const origin = req.headers.origin;
+      let sameOrigin = false;
+      if (typeof origin === 'string') {
+        try {
+          sameOrigin = new URL(origin).host.toLowerCase() === host;
+        } catch {
+          sameOrigin = false;
+        }
+      }
+      const fetchSite = req.headers['sec-fetch-site'];
+      if (!sameOrigin || (typeof fetchSite === 'string' && fetchSite !== 'same-origin')) {
+        audit.logThrottled(`origin:${req.clientIp}`, 'origin_reject', { ip: req.clientIp, detail: { path: req.url.slice(0, 100) } });
+        return deny(reply, 403, 'Forbidden');
+      }
+    }
+
+    // Session resolution. Routes marked `public` skip the requirement.
+    const token = req.cookies[sessionCookie];
+    req.session = sessions.validate(token);
+    if (!req.session && !req.routeOptions.config?.public) {
+      if (req.url.startsWith('/api/')) return reply.code(401).send({ error: 'unauthenticated' });
+      if (req.method === 'GET') return reply.redirect('/login', 303);
+      return deny(reply, 401, 'Unauthorized');
+    }
+  });
+
+  // --- CSRF: every state-changing request must carry the matching token ---
+  app.addHook('preHandler', async (req, reply) => {
+    if (SAFE_METHODS.has(req.method)) return;
+    const given = req.headers['x-csrf-token'] ?? formString(req.body, '_csrf', 200);
+    const supplied = typeof given === 'string' ? given : '';
+    let expected = '';
+    if (req.routeOptions.config?.loginCsrf) {
+      expected = req.cookies[loginCsrfCookie] ?? '';
+    } else if (req.session) {
+      expected = req.session.csrfToken;
+    }
+    if (!expected || !supplied || !safeEqual(expected, supplied)) {
+      audit.log('csrf_reject', { ip: req.clientIp, detail: { path: req.url.slice(0, 100) } });
+      return deny(reply, 403, 'Invalid CSRF token');
+    }
+  });
+
+  // --- routes ---
+  app.get('/static/:file', { config: { public: true } }, async (req, reply) => {
+    const name = (req.params as { file: string }).file;
+    const meta = Object.hasOwn(STATIC_FILES, name) ? STATIC_FILES[name] : undefined;
+    if (!meta) return deny(reply, 404, 'Not found');
+    return reply.header('Cache-Control', 'no-cache').type(meta.type).send(fs.readFileSync(path.join(PUBLIC_DIR, name)));
+  });
+
+  app.get('/login', { config: { public: true } }, async (req, reply) => {
+    if (req.session) return reply.redirect('/', 303);
+    const csrf = crypto.randomBytes(32).toString('base64url');
+    reply.setCookie(loginCsrfCookie, csrf, cookieOpts);
+    return reply.type('text/html; charset=utf-8').send(loginPage({ csrf }));
+  });
+
+  app.post('/login', { config: { public: true, loginCsrf: true } }, async (req, reply) => {
+    const result = auth.login({
+      ip: req.clientIp,
+      userAgent: String(req.headers['user-agent'] ?? ''),
+      password: formString(req.body, 'password', 256),
+      code: formString(req.body, 'code', 16),
+    });
+    const csrf = crypto.randomBytes(32).toString('base64url');
+    if (!result.ok) {
+      reply.setCookie(loginCsrfCookie, csrf, cookieOpts);
+      if (result.reason === 'locked') {
+        reply.header('Retry-After', String(result.retryAfterSeconds));
+        const minutes = Math.ceil(result.retryAfterSeconds / 60);
+        return reply.code(429).type('text/html; charset=utf-8').send(loginPage({ csrf, error: `Too many failed attempts. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.` }));
+      }
+      return reply.code(401).type('text/html; charset=utf-8').send(loginPage({ csrf, error: 'Invalid credentials.' }));
+    }
+    reply.clearCookie(loginCsrfCookie, { path: '/' });
+    reply.setCookie(sessionCookie, result.token, cookieOpts);
+    return reply.redirect('/', 303);
+  });
+
+  app.post('/logout', async (req, reply) => {
+    sessions.destroy(req.cookies[sessionCookie]);
+    audit.log('logout', { ip: req.clientIp });
+    reply.clearCookie(sessionCookie, { path: '/' });
+    return reply.redirect('/login', 303);
+  });
+
+  app.post('/logout-all', async (req, reply) => {
+    const n = sessions.destroyAll();
+    audit.log('logout_all', { ip: req.clientIp, detail: { sessions: n } });
+    reply.clearCookie(sessionCookie, { path: '/' });
+    return reply.redirect('/login', 303);
+  });
+
+  app.get('/', async (req, reply) => {
+    return reply.type('text/html; charset=utf-8').send(homePage({ csrf: req.session!.csrfToken }));
+  });
+
+  app.get('/api/session', async (req) => ({ csrfToken: req.session!.csrfToken, expiresAt: req.session!.expiresAt }));
+
+  app.setNotFoundHandler(async (_req, reply) => deny(reply, 404, 'Not found'));
+
+  app.setErrorHandler(async (err, req, reply) => {
+    const status = (err as { statusCode?: number }).statusCode;
+    if (status && status >= 400 && status < 500) return deny(reply, status, 'Bad request');
+    req.log.error(err);
+    return deny(reply, 500, 'Internal error');
+  });
+
+  // Expired sessions are also rejected on use; this just keeps the table small.
+  const purge = setInterval(() => sessions.purgeExpired(), 10 * 60_000);
+  purge.unref();
+  app.addHook('onClose', async () => clearInterval(purge));
+
+  return { app, sessions, audit, limiter };
+}
