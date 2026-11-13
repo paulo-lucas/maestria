@@ -2,9 +2,13 @@
 import { loadConfig, defaultConfigDir, ConfigError } from './config.ts';
 import { SecretsError, loadSecrets } from './auth/secrets.ts';
 import { authSetup } from './commands/auth-setup.ts';
+import { ArgError } from './commands/args.ts';
+import { runNoticeCommand, runStatusCommand, runTaskCommand, runWorkspaceCommand } from './commands/board.ts';
 import { openDb } from './db.ts';
 import { Audit } from './audit.ts';
 import { SessionStore } from './auth/sessions.ts';
+import { ValidationError } from './tasks.ts';
+import { WorkspaceError } from './workspaces.ts';
 import { buildServer } from './server.ts';
 
 const HELP = `maestria: control panel and protocol for Maestri workspaces
@@ -13,6 +17,14 @@ Usage:
   maestria serve                    Start the panel (127.0.0.1 only)
   maestria auth setup [--force]     Set the password and enrol an authenticator app (TOTP)
   maestria auth logout-all          Invalidate every panel session
+
+  maestria workspace list|add|remove ...
+  maestria task add [--question|-q] [--workspace|-w <ws>] [--by <agent>] <text>
+  maestria task list [--workspace|-w <ws>] [--status open|done|dismissed|all] [--json]
+  maestria task answers [--workspace|-w <ws>] [--all] [--json]
+  maestria notice add [--workspace|-w <ws>] [--by <agent>] <text>
+  maestria notice list [--workspace|-w <ws>] [--status active|dismissed|all] [--json]
+  maestria status [--workspace|-w <ws>] [--json]
 
 Config directory: $MAESTRIA_CONFIG_DIR or ~/.config/maestria
 `;
@@ -51,9 +63,14 @@ function logoutAll(): void {
 
 async function main(argv: string[]): Promise<void> {
   const [cmd, sub, ...rest] = argv;
+  const configDir = defaultConfigDir();
   if (cmd === 'serve') return serve();
-  if (cmd === 'auth' && sub === 'setup') return authSetup({ configDir: defaultConfigDir(), force: rest.includes('--force') });
+  if (cmd === 'auth' && sub === 'setup') return authSetup({ configDir, force: rest.includes('--force') });
   if (cmd === 'auth' && sub === 'logout-all') return logoutAll();
+  if (cmd === 'workspace') return runWorkspaceCommand(argv.slice(1), { configDir });
+  if (cmd === 'task') return runTaskCommand(argv.slice(1), { configDir });
+  if (cmd === 'notice') return runNoticeCommand(argv.slice(1), { configDir });
+  if (cmd === 'status') return runStatusCommand(argv.slice(1), { configDir });
   if (!cmd || cmd === 'help' || cmd === '--help' || cmd === '-h') {
     process.stdout.write(HELP);
     return;
@@ -63,10 +80,18 @@ async function main(argv: string[]): Promise<void> {
 }
 
 main(process.argv.slice(2)).catch((err: unknown) => {
-  if (err instanceof ConfigError || err instanceof SecretsError) {
+  if (
+    err instanceof ConfigError ||
+    err instanceof SecretsError ||
+    err instanceof WorkspaceError ||
+    err instanceof ValidationError ||
+    err instanceof ArgError
+  ) {
     process.stderr.write(`${err.message}\n`);
-  } else {
-    process.stderr.write(`${err instanceof Error ? (err.stack ?? err.message) : String(err)}\n`);
+    if (err instanceof ArgError) process.exitCode = 2;
+    else process.exitCode = 1;
+    return;
   }
+  process.stderr.write(`${err instanceof Error ? (err.stack ?? err.message) : String(err)}\n`);
   process.exit(1);
 });
