@@ -361,7 +361,7 @@ Then copy `/var/backups/maestria-cloud` **off the VM**. The backup holds passwor
 
 ## Good to know
 
-- **Time must be right.** Machines sign requests with a timestamp and reject any that are more than 60 seconds off. Ubuntu keeps the clock right by default. If machines report `stale_timestamp`, check the VM clock (`timedatectl`).
+- **Clocks.** Browsers sign requests with the time, and your users' machines reject any that are more than 60 seconds off. That compares the browser's clock with the machine's, not with your server's. Still, keep the VM's clock right (Ubuntu does by default, check with `timedatectl`).
 - **Monitor** with `https://maestria.example.com/healthz`.
 - **You are the trust anchor.** Your server sends the web page that your users' browsers run. People who use your server trust you not to send them a hostile page. Be honest about that with them. See [Security](security.md).
 - **Release assets.** Each release ships `maestria-cloud` for the same five targets as `maestria`, with checksums in `SHA256SUMS`.
