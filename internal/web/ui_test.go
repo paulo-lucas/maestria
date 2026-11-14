@@ -228,7 +228,7 @@ func TestConnectorPagesRenderOverviewTasksChatAndUsage(t *testing.T) {
 		t.Fatalf("GET chat status = %d", chatRes.Code)
 	}
 	for _, want := range []string{
-		"Today", "<strong>review</strong>", "Looks good, carry on.", `data-chat-form`,
+		"Today", "<strong>review</strong>", "Looks good, carry on.", `Chat is off until Maestri Wire is connected`,
 	} {
 		if !strings.Contains(chatRes.body, want) {
 			t.Fatalf("GET chat missing %q", want)

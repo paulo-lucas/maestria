@@ -12,7 +12,6 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/maestria-dev/maestria/internal/chat"
 	"github.com/maestria-dev/maestria/internal/docs"
 	"github.com/maestria-dev/maestria/internal/floors"
 	"github.com/maestria-dev/maestria/internal/inbox"
@@ -160,34 +159,16 @@ func (s *Server) getWorkspaceChat(w http.ResponseWriter, r *http.Request) {
 	d.Title = ws.Name + " · Chat"
 	now := s.Now()
 
-	// With Wire live, the Maestro's terminal chat is the conversation. Otherwise the local log.
-	if wc := s.wireChatView(ws, now); wc != nil {
-		d.WireChat = wc
+	// With Wire live, the Maestro's terminal chat is the conversation. Without it the page says
+	// why and what to do, the composer is off, and the local log (`maestria say`) stays readable.
+	wc, err := s.wireChatView(r, ws, now)
+	if err != nil {
+		d.Wire = wireStateView(s.wireStatus(), err, ws.Name)
+		d.ChatMessages = s.localChat(ws, now)
 		s.render(w, ui.PageChat, d)
 		return
 	}
-	msgs, err := chat.List(s.DB, ws.ID, 0, 200)
-	if err == nil {
-		lastDay := ""
-		for _, m := range msgs {
-			t := time.UnixMilli(m.CreatedAt).Local()
-			day := formatDayDivider(t, now.Local())
-			dayLabel := ""
-			if day != lastDay {
-				dayLabel = day
-				lastDay = day
-			}
-			d.ChatMessages = append(d.ChatMessages, ui.ChatMessageView{
-				ID:        m.ID,
-				Author:    m.Sender,
-				BodyHTML:  template.HTML(m.BodyHTML),
-				TimeLabel: t.Format("15:04"),
-				TimeISO:   t.Format(time.RFC3339),
-				DayLabel:  dayLabel,
-			})
-		}
-	}
-
+	d.WireChat = wc
 	s.render(w, ui.PageChat, d)
 }
 

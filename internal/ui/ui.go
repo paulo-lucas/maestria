@@ -564,4 +564,27 @@ type WireChatView struct {
 	CanSend     bool
 	SendNote    string // why sending is off, when it is
 	Messages    []ChatMessageView
+
+	// Threads is the colour selector: seven slots, empty when the host has no threads.
+	Threads       []ChatThreadChip
+	ThreadSlot    int
+	ThreadColor   string // colour of the thread shown
+	ThreadLabel   string
+	ActiveLabel   string // the thread selected in Maestri, the only one a message can go to
+	ViewingActive bool
+	ThreadError   string // set when another thread could not be read
+}
+
+// ChatThreadChip is one colour of the thread selector.
+type ChatThreadChip struct {
+	Slot        int
+	Color       string // Maestri's key: blue purple pink red orange yellow green
+	Label       string
+	Tone        string // design tone for the swatch
+	Href        string // ?thread=<colour>
+	Current     bool   // the thread being shown
+	Active      bool   // the thread selected in Maestri
+	HasMessages bool
+	Unread      bool
+	Disabled    bool // other threads can't be read on this Maestri
 }
