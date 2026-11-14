@@ -178,4 +178,19 @@ func TestConnectorTablesAndConstraints(t *testing.T) {
 	); err != nil {
 		t.Fatalf("insert wait_cursors: %v", err)
 	}
+	if _, err := db.Exec(
+		"INSERT INTO floors (workspace_id, name, brief, state, updated_at) VALUES ('ws1', 'auth', 'Add auth', 'planned', 1000)",
+	); err != nil {
+		t.Fatalf("insert floors: %v", err)
+	}
+	if _, err := db.Exec(
+		"INSERT INTO floors (workspace_id, name, brief, state, updated_at) VALUES ('ws1', 'auth', 'Dup', 'active', 1000)",
+	); err == nil {
+		t.Fatal("duplicate live floor name in workspace must fail unique index")
+	}
+	if _, err := db.Exec(
+		"INSERT INTO floors (workspace_id, name, brief, state, updated_at) VALUES ('ws1', 'bad', 'Bad', 'unknown', 1000)",
+	); err == nil {
+		t.Fatal("invalid floor state must fail CHECK constraint")
+	}
 }

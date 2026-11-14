@@ -109,6 +109,30 @@ var migrations = []string{
 		PRIMARY KEY (workspace_id, name)
 	);
 	`,
+	// 4: floors module — planned (future), active (present), and landed/cancelled (past) floors.
+	`
+	CREATE TABLE IF NOT EXISTS floors (
+		id           INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id TEXT NOT NULL,
+		name         TEXT NOT NULL,
+		brief        TEXT NOT NULL DEFAULT '',
+		state        TEXT NOT NULL CHECK (state IN ('planned','active','landed','cancelled')),
+		ongoing      INTEGER NOT NULL DEFAULT 0,
+		progress     REAL,
+		status       TEXT NOT NULL DEFAULT 'working' CHECK (status IN ('working','blocked','review','done')),
+		status_text  TEXT NOT NULL DEFAULT '',
+		agents_json  TEXT NOT NULL DEFAULT '[]',
+		outcome      TEXT NOT NULL DEFAULT '',
+		sort_order   INTEGER NOT NULL DEFAULT 0,
+		planned_at   INTEGER,
+		started_at   INTEGER,
+		ended_at     INTEGER,
+		updated_at   INTEGER NOT NULL,
+		rev          INTEGER NOT NULL DEFAULT 1
+	);
+	CREATE INDEX IF NOT EXISTS idx_floors_ws_state ON floors (workspace_id, state, sort_order, id);
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_floors_live_name ON floors (workspace_id, name) WHERE state IN ('planned','active');
+	`,
 }
 
 // Open opens (creating if needed) the v2 database in configDir and migrates it.
