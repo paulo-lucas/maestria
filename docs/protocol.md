@@ -27,6 +27,21 @@ This workspace uses Maestria (`maestria` CLI) to talk to the human:
 | `maestria wait [--cursor <name>] [--since <id>] [--from-now] [--timeout <sec>] [--json]` | Block until new events arrive for the workspace, advance the named SQLite cursor, print events, and exit. |
 | `maestria status [--json]` | Show workspace counts (`needsYou`, `updates`, `history`) and panel server reachability. |
 
+## Floors
+
+Floors track planned (**Future**), active (**Present**), and landed or cancelled (**Past**) work in the workspace. Every `maestria floor` command infers the workspace from the current working directory (`-w` / `--workspace` overrides it) and supports `--json`.
+
+| Command | Purpose |
+| --- | --- |
+| `maestria floor plan <name> --brief <md> [--ongoing]` | Add a Future floor in planned order (`--ongoing` marks recurring/indefinite work with no progress bar). |
+| `maestria floor start <name> [--brief <md>] [--ongoing]` | Move a planned floor to Present (or create and start one directly when `--brief` is passed). |
+| `maestria floor status <name> [--state working\|blocked\|review\|done] [--progress 0.4\|2/5\|40%] [--text <msg>] [--agents a,b]` | Update a Present floor's status, progress, status text (≤120 chars), or agents; omit flags to inspect it. |
+| `maestria floor land <name> [--outcome <md>] [--force]` | Record a floor as Landed in Past. Planned floors that never started require `--force`. |
+| `maestria floor cancel <name> [--outcome <md>]` | Record a planned or active floor as Cancelled in Past. |
+| `maestria floor list [--all]` | List Present and Future floors (pass `--all` to include Past). |
+| `maestria floor edit <name> [--brief <md>] [--rename <new>] [--ongoing[=true\|false]]` | Edit a planned or active floor's brief, name, or ongoing flag. |
+| `maestria floor reorder <name> --before\|--after <other>` | Move a Future floor before or after another Future floor. |
+
 ## Event Types (`maestria wait`)
 
 Each event row belongs to a single workspace and carries an auto-incrementing `id`, `type`, `payload`, and `createdAt` (epoch ms):

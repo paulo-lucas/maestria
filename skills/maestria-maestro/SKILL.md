@@ -55,6 +55,22 @@ When `maestria wait` exits:
 2. Act on them (`maestria answers` for inbox replies, `maestria say` for chat replies; see **Standby** below for `standby` / `resume`).
 3. Start `maestria wait` in the background again.
 
+### 5. Track Floors (Future / Present / Past)
+
+Keep the panel's **Floors** page current as you plan, start, update, and finish floors:
+
+```sh
+maestria floor plan billing-webhooks --brief "Signature checks and retries for payment webhooks."
+maestria floor reorder billing-webhooks --before sso-login
+maestria floor start billing-webhooks
+maestria floor status billing-webhooks --state review --progress 4/5 --text "Tests green; ready to land" --agents Orin,Vesper
+maestria floor land billing-webhooks --outcome "Added webhook signature checks and retry queue."
+maestria floor cancel old-experiment --outcome "Dropped in favor of REST endpoints."
+maestria floor list --all
+```
+
+Use `--ongoing` on `plan` / `start` for recurring work with no progress bar, and `--force` on `land` if landing a planned floor that was never started.
+
 ## Standby
 
 Maestria monitors the provider configured for this workspace (`maestroProvider` in `workspaces.json`, default `claude`) and emits `standby` / `resume` events. The panel never controls or interrupts agents directly — you own your team.
