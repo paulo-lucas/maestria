@@ -34,7 +34,6 @@ Usage:
   maestria agent brief <name> <text> Set the one-line brief the panel shows for an agent
   maestria wire pair|status|unpair   Connect to Maestri Wire (live agents, chat, floors)
   maestria workspace list|add|remove Manage registered workspaces
-  maestria import-v1 [--from path]   Import V1 SQLite inbox, chat, and events (read-only)
   maestria auth setup [--force]      Set the password, enrol an authenticator app, print recovery codes
   maestria auth reset-sessions       Sign out every browser session
   maestria tunnel on|off|status      Turn the kill switch off (locally) or on, or show its state
@@ -167,8 +166,6 @@ func run(args []string, env *Env) error {
 		return cmdWait(rest, env)
 	case "status":
 		return cmdStatus(rest, env)
-	case "import-v1":
-		return cmdImportV1(rest, env)
 	}
 	return usagef("Unknown command: %s\n\n%s", strings.Join(args, " "), help)
 }
