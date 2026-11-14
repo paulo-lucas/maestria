@@ -146,8 +146,9 @@ func AgentPromptRef(db *sql.DB, workspaceID string, id int64) (string, error) {
 	return ref.String, nil
 }
 
-// ResolveAgentPrompt records the human's answer (ResponseApproved or ResponseRejected) on an open
-// agent_prompt. No Maestro event is emitted.
+// ResolveAgentPrompt records the human's answer (ResponseApproved or ResponseRejected) on an
+// agent_prompt. It also accepts one the feed sync just closed, because the agent moving on is the
+// usual result of the answer itself. No Maestro event is emitted.
 func ResolveAgentPrompt(db *sql.DB, workspaceID string, id int64, response string, nowMs int64) (Item, error) {
 	if response != ResponseApproved && response != ResponseRejected {
 		return Item{}, fmt.Errorf("%w: agent prompt response must be approve or reject", ErrInvalidInput)
@@ -156,15 +157,16 @@ func ResolveAgentPrompt(db *sql.DB, workspaceID string, id int64, response strin
 		nowMs = time.Now().UnixMilli()
 	}
 	res, err := db.Exec(`UPDATE inbox SET status = 'answered', response = ?, answered_at = ?, acknowledged = 1, postponed_until = NULL
-		WHERE id = ? AND workspace_id = ? AND kind = 'agent_prompt' AND status = 'open'`, response, nowMs, id, workspaceID)
+		WHERE id = ? AND workspace_id = ? AND kind = 'agent_prompt' AND status IN ('open', 'dismissed')`, response, nowMs, id, workspaceID)
 	if err != nil {
 		return Item{}, err
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
-		if _, err := getOne(db, workspaceID, id, nowMs); err != nil {
+		it, err := getOne(db, workspaceID, id, nowMs)
+		if err != nil {
 			return Item{}, err
 		}
-		return Item{}, ErrNotOpen
+		return it, ErrNotOpen
 	}
 	return getOne(db, workspaceID, id, nowMs)
 }

@@ -73,7 +73,7 @@ func TestResolveAgentPromptEmitsNoEvent(t *testing.T) {
 	if n != 0 {
 		t.Fatalf("%d events emitted", n)
 	}
-	if _, err := ResolveAgentPrompt(db, "ws", id, ResponseApproved, 3000); err != ErrNotOpen {
+	if _, err := ResolveAgentPrompt(db, "ws", id, ResponseRejected, 3000); err != ErrNotOpen {
 		t.Fatalf("second resolve: %v", err)
 	}
 }

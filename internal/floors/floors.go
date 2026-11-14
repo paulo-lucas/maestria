@@ -55,13 +55,17 @@ type Floor struct {
 	Status      string   `json:"status"`
 	StatusText  string   `json:"statusText,omitempty"`
 	Agents      []string `json:"agents,omitempty"`
-	Outcome     string   `json:"outcome,omitempty"`
-	OutcomeHTML string   `json:"outcomeHtml,omitempty"`
-	SortOrder   int      `json:"sortOrder"`
-	PlannedAt   *int64   `json:"plannedAt,omitempty"`
-	StartedAt   *int64   `json:"startedAt,omitempty"`
-	EndedAt     *int64   `json:"endedAt,omitempty"`
-	UpdatedAt   int64    `json:"updatedAt"`
+	// Branch and Attention come from the live runtime (Wire); they are never stored.
+	Branch      string `json:"branch,omitempty"`
+	Attention   int    `json:"attention,omitempty"`
+	Live        bool   `json:"live,omitempty"`
+	Outcome     string `json:"outcome,omitempty"`
+	OutcomeHTML string `json:"outcomeHtml,omitempty"`
+	SortOrder   int    `json:"sortOrder"`
+	PlannedAt   *int64 `json:"plannedAt,omitempty"`
+	StartedAt   *int64 `json:"startedAt,omitempty"`
+	EndedAt     *int64 `json:"endedAt,omitempty"`
+	UpdatedAt   int64  `json:"updatedAt"`
 }
 
 // LiveInfo holds live status, progress, and agent info from an external runtime (e.g. Maestri Wire).
@@ -72,6 +76,9 @@ type LiveInfo struct {
 	Progress   *float64
 	Agents     []string
 	Ongoing    *bool
+	// Branch is the floor's git branch, Attention the number of agents that need the human.
+	Branch    string
+	Attention int
 }
 
 // LiveSource supplies live floor data for a workspace so Wire can enrich CLI-managed floors.
@@ -748,6 +755,11 @@ func MergeLive(workspaceID string, stored []Floor, live []LiveInfo) []Floor {
 }
 
 func applyLive(f *Floor, li LiveInfo) {
+	f.Live = true
+	f.Branch = strings.TrimSpace(li.Branch)
+	if li.Attention > 0 {
+		f.Attention = li.Attention
+	}
 	if li.Ongoing != nil {
 		f.Ongoing = *li.Ongoing
 		if f.Ongoing {
