@@ -424,6 +424,15 @@ func toTaskView(it inbox.Item, byID map[string]workspaces.Workspace, now time.Ti
 		}
 	}
 
+	bodyHTML := ""
+	trimmedBody := strings.TrimSpace(it.Body)
+	if idx := strings.IndexByte(trimmedBody, '\n'); idx >= 0 {
+		rest := strings.TrimSpace(trimmedBody[idx+1:])
+		if rest != "" {
+			bodyHTML = inbox.RenderMarkdown(rest)
+		}
+	}
+
 	kindIcon, kindLabel := taskKindMeta(it.Kind)
 	return ui.TaskView{
 		ID:            it.ID,
@@ -435,7 +444,7 @@ func toTaskView(it inbox.Item, byID map[string]workspaces.Workspace, now time.Ti
 		KindIcon:      kindIcon,
 		By:            authorStr,
 		Title:         it.Title,
-		BodyHTML:      template.HTML(it.BodyHTML),
+		BodyHTML:      template.HTML(bodyHTML),
 		Options:       it.Options,
 		Status:        it.Status,
 		Response:      displayResp,

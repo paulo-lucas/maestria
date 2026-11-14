@@ -523,7 +523,7 @@
 
   if (typeof EventSource === 'function') {
     const es = new EventSource('/api/stream');
-    ['refresh', 'inbox', 'chat', 'standby', 'usage', 'workspaces'].forEach((ev) => {
+    ['update', 'refresh', 'inbox', 'chat', 'standby', 'usage', 'workspaces'].forEach((ev) => {
       es.addEventListener(ev, scheduleRefresh);
     });
     es.onmessage = scheduleRefresh;

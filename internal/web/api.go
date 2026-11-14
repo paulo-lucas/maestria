@@ -323,6 +323,7 @@ func (s *Server) apiInboxRespond(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Decision string `json:"decision"`
 		Response string `json:"response"`
+		Comment  string `json:"comment"`
 	}
 	if err := decodeJSONBody(r, &body); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_json"})
@@ -343,11 +344,13 @@ func (s *Server) apiInboxRespond(w http.ResponseWriter, r *http.Request) {
 		updated, _, err = inbox.Dismiss(s.DB, ws.ID, itemID, nowMs)
 	case inbox.KindApprove:
 		decision := strings.TrimSpace(body.Decision)
+		comment := strings.TrimSpace(body.Comment)
 		if decision == "" {
 			decision = strings.TrimSpace(body.Response)
-			body.Response = ""
+		} else if comment == "" {
+			comment = strings.TrimSpace(body.Response)
 		}
-		updated, _, err = inbox.RespondWithComment(s.DB, ws.ID, itemID, decision, body.Response, nowMs)
+		updated, _, err = inbox.RespondWithComment(s.DB, ws.ID, itemID, decision, comment, nowMs)
 	case inbox.KindChoice:
 		val := strings.TrimSpace(body.Decision)
 		if val == "" {

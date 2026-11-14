@@ -81,7 +81,7 @@ func TestConnectorPagesRenderOverviewTasksChatAndUsage(t *testing.T) {
 	nowMs := h.clock.now().UnixMilli()
 	if _, err := inbox.Post(h.srv.DB, ws.ID, inbox.PostInput{
 		Kind: inbox.KindApprove,
-		Body: "Land `billing-webhooks` into main?\nAll **214 tests** pass <script>xss()</script>.",
+		Body: "Land billing-webhooks into main?\nIn `src/billing`, all **214 tests** pass <script>xss()</script>.",
 	}, nowMs-60_000); err != nil {
 		t.Fatal(err)
 	}
@@ -187,7 +187,8 @@ func TestConnectorPagesRenderOverviewTasksChatAndUsage(t *testing.T) {
 	}
 	for _, want := range []string{
 		"Atlas", "Nimbus",
-		"Land <code>billing-webhooks</code> into main?",
+		"Land billing-webhooks into main?",
+		"<code>src/billing</code>",
 		"<strong>214 tests</strong>",
 		"Pick default format", "Staging base URL?",
 		"Live agent stream comes with Wire",
@@ -209,7 +210,8 @@ func TestConnectorPagesRenderOverviewTasksChatAndUsage(t *testing.T) {
 		t.Fatalf("GET tasks status = %d", taskRes.Code)
 	}
 	for _, want := range []string{
-		"Land <code>billing-webhooks</code> into main?",
+		"Land billing-webhooks into main?",
+		"<code>src/billing</code>",
 		"In 1 hour", "This evening, 18:00", "Tomorrow, 09:00",
 		"Postponed", "Rotate staging API key?", "Bring back",
 		"PDF exporter ready", "Mark all as read", "Got it",

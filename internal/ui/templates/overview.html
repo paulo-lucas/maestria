@@ -159,6 +159,7 @@
               <div class="usage-provider">
                 <div class="usage-provider__head">
                   <span class="usage-provider__name">{{.ProviderLabel}}</span>
+                  {{if .Subline}}<span class="subtle">{{.Subline}}</span>{{end}}
                   {{if .StatusLabel}}
                   <span class="status{{if .StatusBadge}} status--badge{{end}}" data-status="{{.StatusTone}}">{{.StatusLabel}}</span>
                   {{end}}
