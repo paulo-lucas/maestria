@@ -675,7 +675,10 @@ func TestCloudCannotSwapDeviceKeyAtPairing(t *testing.T) {
 	// The machine now shows a pairing, but its code is computed from the attacker's key.
 	shown := genuine.Code(t, gp, m.R)
 	var pending string
-	waitFor(t, "the pairing to show on the machine", func() bool { _, pending = n.cli("", "devices", "pending"); return strings.Contains(pending, "expires in") })
+	waitFor(t, "the pairing to show on the machine", func() bool {
+		_, pending = n.cli("", "devices", "pending")
+		return strings.Contains(pending, "expires in")
+	})
 	if strings.Contains(pending, relay.FormatPairCode(shown)) {
 		t.Fatalf("the machine shows the same code as the genuine browser: a swapped key would be approved\n%s", pending)
 	}
