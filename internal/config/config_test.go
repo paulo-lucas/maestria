@@ -242,3 +242,46 @@ func TestInspectMaestriDir(t *testing.T) {
 		t.Fatalf("%+v", st)
 	}
 }
+
+func TestStandbyActionsWakeAndSave(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "cfg")
+	env := testEnv(t.TempDir(), nil)
+	if err := SaveRaw(dir, []byte(`{"port":4788,"allowedHosts":["panel.example.com"]}`+"\n"), env); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load(dir, env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.Standby.WakeOnReset {
+		t.Fatal("WakeOnReset should default to true")
+	}
+
+	resume := 70
+	next := Standby{
+		Thresholds:         map[string]map[string]int{"claude": {"session": 85}},
+		Actions:            map[string]map[string]string{"claude": {"session": StandbyActionInterrupt}},
+		ResumeBelowPercent: &resume,
+		WakeOnReset:        false,
+		NotifyViaCLI:       true,
+	}
+	if err := SaveStandby(dir, next, env); err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := Load(dir, env)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reloaded.Port != 4788 || len(reloaded.AllowedHosts) != 1 || reloaded.AllowedHosts[0] != "panel.example.com" {
+		t.Fatalf("unrelated keys lost: %+v", reloaded)
+	}
+	if reloaded.Standby.WakeOnReset || !reloaded.Standby.NotifyViaCLI || *reloaded.Standby.ResumeBelowPercent != 70 {
+		t.Fatalf("standby scalar mismatch: %+v", reloaded.Standby)
+	}
+	if reloaded.Standby.Thresholds["claude"]["session"] != 85 || reloaded.Standby.Actions["claude"]["session"] != StandbyActionInterrupt {
+		t.Fatalf("standby maps mismatch: %+v", reloaded.Standby)
+	}
+	if _, err := Parse([]byte(`{"standby":{"actions":{"claude":{"session":"bogus"}}}}`), dir, env); err == nil {
+		t.Fatal("invalid action should fail parse")
+	}
+}

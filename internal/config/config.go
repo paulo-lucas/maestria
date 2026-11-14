@@ -52,11 +52,19 @@ type Usage struct {
 	PollSeconds     int  `json:"pollSeconds"`
 }
 
-// Standby controls the standby guard (used by later builds; parsed now so V1 configs load).
+// StandbyActionTell notifies Maestro via a standby event without interrupting running agents.
+const StandbyActionTell = "tell"
+
+// StandbyActionInterrupt asks Maestro / Wire to interrupt active agents when a threshold hits.
+const StandbyActionInterrupt = "interrupt"
+
+// Standby controls the standby guard thresholds, actions, and resume behavior.
 type Standby struct {
-	Thresholds         map[string]map[string]int `json:"thresholds"`
-	ResumeBelowPercent *int                      `json:"resumeBelowPercent"`
-	NotifyViaCLI       bool                      `json:"notifyViaCli"`
+	Thresholds         map[string]map[string]int    `json:"thresholds"`
+	Actions            map[string]map[string]string `json:"actions,omitempty"`
+	ResumeBelowPercent *int                         `json:"resumeBelowPercent"`
+	WakeOnReset        bool                         `json:"wakeOnReset"`
+	NotifyViaCLI       bool                         `json:"notifyViaCli"`
 }
 
 // Tunnel holds argv commands (run without a shell) to control the public tunnel.
@@ -187,7 +195,9 @@ func Defaults(configDir string, env Env) (*Config, error) {
 		Usage:        Usage{StaleMinutes: 15, FallbackEnabled: true, PollSeconds: 30},
 		Standby: Standby{
 			Thresholds:         map[string]map[string]int{"claude": {"session": 95, "weekly": 90}},
+			Actions:            map[string]map[string]string{},
 			ResumeBelowPercent: &resume,
+			WakeOnReset:        true,
 		},
 		Tunnel: Tunnel{StopCommand: []string{}, StartCommand: []string{}, StatusCommand: []string{}},
 	}, nil
@@ -404,6 +414,49 @@ func Parse(data []byte, configDir string, env Env) (*Config, error) {
 	return cfg, nil
 }
 
+func parseStandbyWindowMap[T any](raw json.RawMessage, section string, parse func(json.RawMessage, string) (T, error)) (map[string]map[string]T, error) {
+	providers, err := decodeObj(raw, section)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]map[string]T, len(providers))
+	for pid, wraw := range providers {
+		if !idKeyRE.MatchString(pid) {
+			return nil, errorf("config: invalid \"%s.%s\"", section, pid)
+		}
+		windows, err := decodeObj(wraw, section+"."+pid)
+		if err != nil {
+			return nil, err
+		}
+		wm := make(map[string]T, len(windows))
+		for wk, val := range windows {
+			if !idKeyRE.MatchString(wk) {
+				return nil, errorf("config: invalid standby window key %q", wk)
+			}
+			parsed, err := parse(val, section+"."+pid+"."+wk)
+			if err != nil {
+				return nil, err
+			}
+			wm[wk] = parsed
+		}
+		out[pid] = wm
+	}
+	return out, nil
+}
+
+func actionField(raw json.RawMessage, name string) (string, error) {
+	var s string
+	if err := json.Unmarshal(raw, &s); err != nil {
+		return "", errorf("config: %q must be a string", name)
+	}
+	switch s {
+	case StandbyActionTell, StandbyActionInterrupt:
+		return s, nil
+	default:
+		return "", errorf("config: %q must be %q or %q", name, StandbyActionTell, StandbyActionInterrupt)
+	}
+}
+
 func parseStandby(raw json.RawMessage, cfg *Config) error {
 	o, err := decodeObj(raw, "standby")
 	if err != nil {
@@ -411,6 +464,11 @@ func parseStandby(raw json.RawMessage, cfg *Config) error {
 	}
 	if v, ok := o["notifyViaCli"]; ok {
 		if cfg.Standby.NotifyViaCLI, err = boolField(v, "standby.notifyViaCli"); err != nil {
+			return err
+		}
+	}
+	if v, ok := o["wakeOnReset"]; ok {
+		if cfg.Standby.WakeOnReset, err = boolField(v, "standby.wakeOnReset"); err != nil {
 			return err
 		}
 	}
@@ -426,31 +484,20 @@ func parseStandby(raw json.RawMessage, cfg *Config) error {
 		}
 	}
 	if v, ok := o["thresholds"]; ok {
-		providers, err := decodeObj(v, "standby.thresholds")
+		out, err := parseStandbyWindowMap(v, "standby.thresholds", func(val json.RawMessage, name string) (int, error) {
+			return intField(val, name, 1, 100)
+		})
 		if err != nil {
 			return err
 		}
-		out := map[string]map[string]int{}
-		for pid, wraw := range providers {
-			if !idKeyRE.MatchString(pid) {
-				return errorf("config: invalid \"standby.thresholds.%s\"", pid)
-			}
-			windows, err := decodeObj(wraw, "standby.thresholds."+pid)
-			if err != nil {
-				return err
-			}
-			wm := map[string]int{}
-			for wk, pct := range windows {
-				if !idKeyRE.MatchString(wk) {
-					return errorf("config: invalid standby window key %q", wk)
-				}
-				if wm[wk], err = intField(pct, "standby.thresholds."+pid+"."+wk, 1, 100); err != nil {
-					return err
-				}
-			}
-			out[pid] = wm
-		}
 		cfg.Standby.Thresholds = out
+	}
+	if v, ok := o["actions"]; ok {
+		out, err := parseStandbyWindowMap(v, "standby.actions", actionField)
+		if err != nil {
+			return err
+		}
+		cfg.Standby.Actions = out
 	}
 	return nil
 }
@@ -476,6 +523,33 @@ func SaveRaw(configDir string, data []byte, env Env) error {
 		return err
 	}
 	return privfile.WriteAtomic(FilePath(configDir), data)
+}
+
+// SaveStandby updates the "standby" section of config.json while preserving other keys.
+func SaveStandby(configDir string, s Standby, env Env) error {
+	top := obj{}
+	existing, err := os.ReadFile(FilePath(configDir))
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return errorf("config: cannot read %s: %v", FilePath(configDir), err)
+	}
+	if len(bytes.TrimSpace(existing)) > 0 {
+		if err := json.Unmarshal(existing, &top); err != nil {
+			return errorf("config: existing config.json is not valid JSON: %v", err)
+		}
+	}
+	if s.Thresholds == nil {
+		s.Thresholds = map[string]map[string]int{}
+	}
+	rawStandby, err := json.Marshal(s)
+	if err != nil {
+		return err
+	}
+	top["standby"] = rawStandby
+	out, err := json.MarshalIndent(top, "", "  ")
+	if err != nil {
+		return err
+	}
+	return SaveRaw(configDir, append(out, '\n'), env)
 }
 
 // EnsureDir creates the config directory with owner-only permissions.
