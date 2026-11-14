@@ -33,8 +33,8 @@ A terminal's chat keeps **seven threads, one per colour**, slots `0..6` in the f
 - A switch changes `conversationId`: replace the transcript, do not merge.
 
 ## Design implications
-- Maestria would become a Wire client running on the same host (`https://localhost:7434`, pinned key). Keep the V1 CLI path as a fallback when Wire is off or the OS is unsupported.
-- Security: an owner token is far more powerful than V1's "append text to an event stream". Proposal: one **guest** token for every read, and an owner token only if the human opts in to sending. The server would use it for an allowlist of routes only (prompt to the workspace's Maestro terminal, approve/reject). Both tokens go in the config dir with mode 0600, never in the browser. Audit every Wire write.
+- Maestria would become a Wire client running on the same host (`https://localhost:7434`, pinned key). Keep the CLI-only path (local chat log, `maestria wait`) as a fallback when Wire is off or the OS is unsupported.
+- Security: an owner token is far more powerful than appending text to an event stream. Proposal: one **guest** token for every read, and an owner token only if the human opts in to sending. The server would use it for an allowlist of routes only (prompt to the workspace's Maestro terminal, approve/reject). Both tokens go in the config dir with mode 0600, never in the browser. Audit every Wire write.
 - Push relay is not documented enough to use.
 
 ## Implementation notes (Maestria v2, `internal/wire`)

@@ -84,7 +84,7 @@ Use `--ongoing` on `plan` / `start` for recurring work with no progress bar, and
 
 ## Standby
 
-Maestria monitors the provider configured for this workspace (`maestroProvider` in `workspaces.json`, default `claude`) and emits `standby` / `resume` events. The panel never controls or interrupts agents directly — you own your team.
+Maestria monitors the provider configured for this workspace (`maestroProvider` in `workspaces.json`, default `claude`) and emits `standby` / `resume` events. Each usage window has an action the human picks in the panel: **Tell the Maestro** (the default: only the event below, you own your team) or **Interrupt agents** (when Maestri Wire is paired, the panel itself sends Esc to that provider's working agents; the event still arrives so you stop assigning work). With wake-on-reset on, the panel also prompts you in your terminal when the window resets.
 
 When `maestria wait` delivers a **`standby`** event:
 1. Check which provider/window triggered it from the event output (`triggers`: provider, window, `%` vs threshold, and reset time).

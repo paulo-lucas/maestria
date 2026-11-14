@@ -972,7 +972,7 @@ func printInitNextSteps(out io.Writer, serviceResult, goos string, port int, hos
 	default:
 		fmt.Fprintln(out, "  1. Start the panel locally: maestria serve")
 	}
-	fmt.Fprintln(out, "  2. Optionally expose securely via Cloudflare Tunnel + Access (see README.md).")
+	fmt.Fprintln(out, "  2. Optionally reach it from your phone through a Cloudflare Tunnel: see docs/self-host.md.")
 }
 
 // initHostsStep asks for the public host name the panel is reached through (for example a
