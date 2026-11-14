@@ -45,6 +45,7 @@ const (
 	PageUsage      = "usage"
 	PageSecurity   = "security"
 	PageComingSoon = "coming-soon"
+	PageActivity   = "workspace-activity"
 )
 
 // New loads the embedded assets and parses the templates.
@@ -112,6 +113,8 @@ func New() (*UI, error) {
 				return "i-question"
 			case "notice":
 				return "i-bell"
+			case "agent_prompt":
+				return "i-terminal"
 			default:
 				return "i-inbox"
 			}
@@ -126,6 +129,8 @@ func New() (*UI, error) {
 				return "Question"
 			case "notice":
 				return "Update"
+			case "agent_prompt":
+				return "Agent prompt"
 			default:
 				return "Task"
 			}
@@ -135,7 +140,7 @@ func New() (*UI, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, name := range []string{PageLogin, PageTwoFA, PageOverview, PageTasks, PageChat, PageFloors, PageDocs, PageUsage, PageSecurity, PageComingSoon} {
+	for _, name := range []string{PageLogin, PageTwoFA, PageOverview, PageTasks, PageChat, PageFloors, PageDocs, PageUsage, PageSecurity, PageComingSoon, PageActivity} {
 		t, err := template.Must(base.Clone()).ParseFS(files, "templates/"+name+".html")
 		if err != nil {
 			return nil, err
@@ -254,6 +259,7 @@ type TaskView struct {
 // ChatMessageView renders one workspace chat entry.
 type ChatMessageView struct {
 	ID        int64
+	Key       string // stable id of a Wire chat entry
 	Author    string
 	BodyHTML  template.HTML // sanitized via bluemonday before passing into ChatMessageView
 	TimeLabel string
@@ -349,6 +355,8 @@ type FloorView struct {
 	StatusText    string
 	Agents        []FloorAgentView
 	AgentNames    string
+	Branch        string
+	Attention     int
 	OutcomeHTML   template.HTML // sanitized via bluemonday before passing into FloorView
 	EndedLabel    string
 	Next          bool
@@ -406,6 +414,17 @@ type Data struct {
 
 	// Chat page.
 	ChatMessages []ChatMessageView
+	WireChat     *WireChatView
+
+	// Maestri Wire: Activity page, Overview "Agents at work", and the state shown when Wire is
+	// off, unreachable, unpaired or refused.
+	Wire           *WireStateView
+	ActivityGroups []AgentFloorView
+	ActivityCounts ActivityCountsView
+	AgentLines     []AgentLineView
+	AgentsLive     bool
+	AgentsNeeds    int
+	CanWrite       bool
 
 	// Overview & Workspace Floors.
 	ActiveFloors  []FloorView
@@ -436,4 +455,86 @@ type Data struct {
 	ComingSoonTitle string
 	ComingSoonText  string
 	ComingSoonIcon  string
+}
+
+// WireStateView explains why live data is missing and what to do. It is the "Maestri Wire is off"
+// design, with a variant per cause.
+type WireStateView struct {
+	State    string // wire link state, or "unmapped", "locked", "limited"
+	Icon     string
+	Tone     string // banner tone
+	Title    string
+	Text     string
+	Heading  string // empty-state title
+	Steps    string // empty-state text (safe HTML-free text)
+	Commands []string
+	Retry    string
+}
+
+// AgentView is one agent on the Activity page.
+type AgentView struct {
+	TerminalID   string
+	Name         string
+	Initial      string
+	Tone         string // avatar tone
+	AgentType    string
+	IsMaestro    bool
+	State        string
+	StateLabel   string
+	StateTone    string // data-status
+	Brief        string
+	BriefSource  string
+	Prompt       string
+	PromptHash   string
+	Preview      []string
+	DisclosureID string
+	CanAnswer    bool
+	CanMessage   bool
+}
+
+// AgentFloorView is a floor and its agents on the Activity page.
+type AgentFloorView struct {
+	ID            string
+	Name          string
+	AnchorID      string
+	IsGround      bool
+	Branch        string
+	Status        string
+	StatusLabel   string
+	StatusText    string
+	HasProgress   bool
+	ProgressValue string
+	ProgressPct   int
+	Agents        []AgentView
+}
+
+// ActivityCountsView counts agents by state for the filter chips.
+type ActivityCountsView struct {
+	Total, Working, Idle, Needs, NotRunning int
+}
+
+// AgentLineView is one row of the Overview "Agents at work" panel.
+type AgentLineView struct {
+	Name          string
+	WorkspaceID   string
+	WorkspaceName string
+	WorkspaceTone string
+	Floor         string
+	Brief         string
+	StateTone     string
+	Attn          bool
+}
+
+// WireChatView is the Maestro's live terminal chat.
+type WireChatView struct {
+	StatusTone  string // data-status for the header chip ("" = no chip)
+	StatusLabel string
+	Typing      bool
+	Connecting  bool // chat socket not live yet
+	NotRunning  bool
+	OffTitle    string
+	OffText     string
+	CanSend     bool
+	SendNote    string // why sending is off, when it is
+	Messages    []ChatMessageView
 }

@@ -8,6 +8,7 @@
   let refreshTimer = null;
   let refreshing = false;
   let overviewFilter = 'all';
+  let agentsFilter = 'all';
 
   function draftStorageKey(el) {
     const k = el.getAttribute('data-draft-key');
@@ -85,6 +86,31 @@
     list.querySelectorAll('.task').forEach((item) => {
       item.hidden = overviewFilter !== 'all' && item.dataset.key !== overviewFilter;
     });
+  }
+
+  function applyAgentsFilter(root = document) {
+    const row = root.querySelector('.chip-row[data-filter="agents"]');
+    const wrap = root.querySelector('#agents');
+    if (!row || !wrap) return;
+    const chips = [...row.querySelectorAll('.chip')];
+    if (!chips.some((c) => c.dataset.value === agentsFilter)) agentsFilter = 'all';
+    chips.forEach((c) => {
+      c.setAttribute('aria-pressed', c.dataset.value === agentsFilter ? 'true' : 'false');
+    });
+    wrap.querySelectorAll('li[data-key]').forEach((item) => {
+      item.hidden = agentsFilter !== 'all' && item.dataset.key !== agentsFilter;
+    });
+    // Hide a floor card whose agents are all filtered out.
+    wrap.querySelectorAll('section.card').forEach((card) => {
+      const items = [...card.querySelectorAll('li[data-key]')];
+      card.hidden = items.length > 0 && items.every((i) => i.hidden);
+    });
+  }
+
+  function showError(el, message) {
+    if (!el) return;
+    el.textContent = message || '';
+    el.hidden = !message;
   }
 
   function syncDocsNavPicker(root = document) {
@@ -186,6 +212,7 @@
       restoreOpenDisclosures(openDisclosures, newMain);
       restoreDrafts(newMain);
       applyOverviewFilter(newMain);
+      applyAgentsFilter(newMain);
       syncDocsNavPicker(newMain);
 
       if (curChat && wasAtBottom) {
@@ -346,9 +373,50 @@
       return;
     }
 
+    const agentChip = e.target.closest('.chip-row[data-filter="agents"] .chip');
+    if (agentChip) {
+      agentsFilter = agentChip.dataset.value || 'all';
+      applyAgentsFilter(document);
+      return;
+    }
+
+    const copyBtn = e.target.closest('[data-copy]');
+    if (copyBtn) {
+      const code = copyBtn.parentElement && copyBtn.parentElement.querySelector('code');
+      if (code && navigator.clipboard) {
+        navigator.clipboard.writeText(code.textContent).then(() => {
+          copyBtn.setAttribute('title', 'Copied');
+          setTimeout(() => copyBtn.setAttribute('title', 'Copy command'), 1500);
+        }).catch(() => {});
+      }
+      return;
+    }
+
     const btn = e.target.closest('[data-action]');
     if (!btn || btn.tagName === 'FORM') return;
     const action = btn.dataset.action;
+
+    if (action === 'agent-answer') {
+      const agent = btn.closest('.agent');
+      if (!agent) return;
+      const wsId = agent.dataset.wsId;
+      const term = agent.dataset.terminalId;
+      const errEl = agent.querySelector('[data-agent-error]');
+      showError(errEl, '');
+      setBusy(agent, true);
+      try {
+        await api(`/api/workspaces/${encodeURIComponent(wsId)}/agents/${encodeURIComponent(term)}/${btn.dataset.answer === 'approve' ? 'approve' : 'reject'}`, {
+          method: 'POST',
+          body: { promptHash: btn.dataset.promptHash || '' },
+        });
+        await refreshNow(true);
+      } catch (err) {
+        setBusy(agent, false);
+        showError(errEl, err.message);
+        await refreshNow(true);
+      }
+      return;
+    }
 
     if (action === 'respond') {
       const task = btn.closest('.task');
@@ -366,8 +434,9 @@
         });
         clearDraft(commentEl);
         await refreshNow(true);
-      } catch {
+      } catch (err) {
         setBusy(task, false);
+        showError(task.querySelector('[data-task-error]'), err.message);
       }
       return;
     }
@@ -484,6 +553,35 @@
       return;
     }
 
+    if (form.matches('[data-action="agent-prompt"]')) {
+      e.preventDefault();
+      const agent = form.closest('.agent');
+      const input = form.querySelector('input');
+      if (!agent || !input) return;
+      const text = input.value.trim();
+      if (!text) {
+        input.focus();
+        return;
+      }
+      const errEl = agent.querySelector('[data-agent-error]');
+      showError(errEl, '');
+      setBusy(form, true);
+      try {
+        await api(`/api/workspaces/${encodeURIComponent(agent.dataset.wsId)}/agents/${encodeURIComponent(agent.dataset.terminalId)}/prompt`, {
+          method: 'POST',
+          body: { body: text },
+        });
+        input.value = '';
+        clearDraft(input);
+        showError(errEl, 'Sent.');
+      } catch (err) {
+        showError(errEl, err.message);
+      } finally {
+        setBusy(form, false);
+      }
+      return;
+    }
+
     if (form.matches('[data-chat-form]')) {
       e.preventDefault();
       const wsId = form.dataset.wsId;
@@ -494,6 +592,8 @@
         ta.focus();
         return;
       }
+      const chatErr = document.querySelector('[data-chat-error]');
+      showError(chatErr, '');
       setBusy(form, true);
       try {
         await api(`/api/workspaces/${encodeURIComponent(wsId)}/chat`, {
@@ -505,6 +605,9 @@
         clearDraft(ta);
         await refreshNow(true);
         window.scrollTo(0, document.body.scrollHeight);
+      } catch (err) {
+        // The text stays in the box: when delivery is unconfirmed the person decides whether to resend.
+        showError(chatErr, err.message);
       } finally {
         setBusy(form, false);
         ta.focus();
@@ -529,6 +632,7 @@
 
   restoreDrafts(document);
   applyOverviewFilter(document);
+  applyAgentsFilter(document);
   syncDocsNavPicker(document);
 
   if (typeof EventSource === 'function') {

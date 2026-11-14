@@ -117,14 +117,12 @@ func start(t *testing.T, grace time.Duration) *rig {
 		t.Fatal(err)
 	}
 	r := &rig{fake: fake, sqlDB: db, aud: audit.New(db, nil)}
-	cfg := testConfig(t, dir)
 	r.svc = activity.New(activity.Options{
 		DB: db, Audit: r.aud, ConfigDir: dir, Grace: grace,
 		Poll: 30 * time.Millisecond, MaxBackoff: 60 * time.Millisecond,
 		Workspaces: func() []workspaces.Workspace {
 			return []workspaces.Workspace{{ID: "atlas", Name: "Atlas", Path: "/work/atlas", MaestroAgent: "Maestro"}}
 		},
-		Config:   func() *config.Config { return cfg },
 		OnChange: func(k string) { r.mu.Lock(); r.change = append(r.change, k); r.mu.Unlock() },
 	})
 	ctx, cancel := context.WithCancel(context.Background())

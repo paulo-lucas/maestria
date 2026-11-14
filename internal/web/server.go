@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/maestria-dev/maestria/internal/activity"
 	"github.com/maestria-dev/maestria/internal/audit"
 	"github.com/maestria-dev/maestria/internal/auth"
 	"github.com/maestria-dev/maestria/internal/config"
@@ -59,6 +60,9 @@ type Deps struct {
 	Access *auth.AccessVerifier
 	// LiveFloors optionally enriches Present floors with live runtime data (e.g. Wire).
 	LiveFloors floors.LiveSource
+	// Activity is the Maestri Wire mirror and what the panel derives from it. nil means Wire is
+	// not wired in: every Wire view then shows its "not connected" state.
+	Activity *activity.Service
 	// Env overrides OS environment lookup (used in tests).
 	Env config.Env
 	Now func() time.Time
@@ -75,6 +79,7 @@ type Server struct {
 	env   config.Env
 	cfgMu sync.RWMutex
 
+	bg              sync.WaitGroup
 	broker          *sseBroker
 	ssePollInterval time.Duration
 
@@ -104,6 +109,12 @@ func New(d Deps) (*Server, error) {
 		hosts:  map[string]bool{},
 		env:    env,
 		broker: newSSEBroker(),
+	}
+	if d.Activity != nil {
+		d.Activity.SetOnChange(s.notifyStream)
+		if d.LiveFloors == nil {
+			s.LiveFloors = d.Activity
+		}
 	}
 	port := strconv.Itoa(d.Config.Port)
 	s.hosts["localhost:"+port] = true
@@ -139,7 +150,7 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /{$}", s.getOverview)
 	m.HandleFunc("GET /workspaces/{id}/tasks", s.getWorkspaceTasks)
 	m.HandleFunc("GET /workspaces/{id}/chat", s.getWorkspaceChat)
-	m.HandleFunc("GET /workspaces/{id}/activity", s.getWorkspaceComingSoon("activity", "Activity", "i-activity", "Live agent activity per workspace arrives with Wire."))
+	m.HandleFunc("GET /workspaces/{id}/activity", s.getWorkspaceActivity)
 	m.HandleFunc("GET /workspaces/{id}/floors", s.getWorkspaceFloors)
 	m.HandleFunc("GET /workspaces/{id}/docs", s.getWorkspaceDocs)
 	m.HandleFunc("GET /workspaces/{id}/docs/asset", s.getWorkspaceDocsAsset)
@@ -162,6 +173,11 @@ func (s *Server) routes() {
 	m.HandleFunc("POST /api/workspaces/{id}/inbox/{itemId}/postpone", s.apiInboxPostpone)
 	m.HandleFunc("GET /api/workspaces/{id}/chat", s.apiChatList)
 	m.HandleFunc("POST /api/workspaces/{id}/chat", s.apiChatSend)
+	m.HandleFunc("GET /api/wire", s.apiWire)
+	m.HandleFunc("GET /api/workspaces/{id}/activity", s.apiWorkspaceActivity)
+	m.HandleFunc("POST /api/workspaces/{id}/agents/{terminal}/approve", s.apiAgentAnswer(true))
+	m.HandleFunc("POST /api/workspaces/{id}/agents/{terminal}/reject", s.apiAgentAnswer(false))
+	m.HandleFunc("POST /api/workspaces/{id}/agents/{terminal}/prompt", s.apiAgentPrompt)
 	m.HandleFunc("GET /api/floors", s.apiFloors)
 	m.HandleFunc("GET /api/workspaces/{id}/floors", s.apiWorkspaceFloors)
 	m.HandleFunc("GET /api/workspaces/{id}/docs", s.apiWorkspaceDocs)
@@ -172,6 +188,10 @@ func (s *Server) routes() {
 
 // StartBackground launches periodic session cleanup and usage/standby evaluation until ctx cancels.
 func (s *Server) StartBackground(ctx context.Context) {
+	if s.Activity != nil {
+		s.Activity.Start(ctx)
+		go s.forwardWireChanges(ctx)
+	}
 	pollSecs := s.Config.Usage.PollSeconds
 	if pollSecs < 5 {
 		pollSecs = 30

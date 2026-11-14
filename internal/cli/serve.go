@@ -10,12 +10,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/maestria-dev/maestria/internal/activity"
 	"github.com/maestria-dev/maestria/internal/audit"
 	"github.com/maestria-dev/maestria/internal/auth"
 	"github.com/maestria-dev/maestria/internal/config"
 	"github.com/maestria-dev/maestria/internal/store"
 	"github.com/maestria-dev/maestria/internal/tunnel"
 	"github.com/maestria-dev/maestria/internal/web"
+	"github.com/maestria-dev/maestria/internal/workspaces"
 )
 
 // ErrNoCredentials is returned when `auth setup` has not been run.
@@ -53,9 +55,17 @@ func BuildServer(env *Env) (*web.Server, *config.Config, func(), error) {
 	if cfg.CloudflareAccess != nil {
 		access = auth.NewAccessVerifier(cfg.CloudflareAccess.TeamDomain, cfg.CloudflareAccess.Audience, nil, env.Now)
 	}
+	// Maestri Wire: stays off (the "not connected" views) until `maestria wire pair` creates wire.json.
+	act := activity.New(activity.Options{
+		DB: db, Audit: aud, ConfigDir: dir, Now: env.Now,
+		Workspaces: func() []workspaces.Workspace {
+			list, _ := workspaces.Merged(dir, cfg.MaestriDir, env.Config.Home)
+			return list
+		},
+	})
 	srv, err := web.New(web.Deps{
 		Config: cfg, DB: db, Secrets: secrets, Audit: aud, Sessions: sessions, Limiter: limiter,
-		Tunnel: tun, Access: access, Env: env.Config, Now: env.Now,
+		Tunnel: tun, Access: access, Activity: act, Env: env.Config, Now: env.Now,
 	})
 	if err != nil {
 		db.Close()

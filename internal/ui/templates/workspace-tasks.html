@@ -29,7 +29,13 @@
             </div>
             <h3 class="task__title">{{.Title}}</h3>
             {{if .BodyHTML}}<div class="task__body prose">{{.BodyHTML}}</div>{{end}}
-            {{if eq .Kind "approve"}}
+            {{if eq .Kind "agent_prompt"}}
+            <div class="task__actions">
+              <button class="btn btn--primary btn--sm" type="button" data-action="respond" data-value="approve">{{icon "i-check"}}Approve</button>
+              <button class="btn btn--sm" type="button" data-action="respond" data-value="reject">{{icon "i-x"}}Reject</button>
+            </div>
+            <p class="field__error" hidden data-task-error></p>
+            {{else if eq .Kind "approve"}}
             <label class="sr-only" for="c-{{.ID}}">Comment</label>
             <textarea class="textarea" id="c-{{.ID}}" data-draft-key="comment:{{.WorkspaceID}}:{{.ID}}" rows="2" placeholder="Optional comment for the Maestro…"></textarea>
             <div class="task__actions">
@@ -101,7 +107,7 @@
               </div>
               <h3 class="task__title">{{.Title}}</h3>
               {{if .BodyHTML}}<div class="task__body prose">{{.BodyHTML}}</div>{{end}}
-              {{if eq .Kind "approve"}}
+              {{if or (eq .Kind "approve") (eq .Kind "agent_prompt")}}
               <div class="task__actions">
                 <button class="btn btn--primary btn--sm" type="button" data-action="respond" data-value="approve">{{icon "i-check"}}Approve</button>
                 <button class="btn btn--sm" type="button" data-action="respond" data-value="reject">{{icon "i-x"}}Reject</button>

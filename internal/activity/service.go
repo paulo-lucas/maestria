@@ -32,7 +32,6 @@ type Options struct {
 	Audit      *audit.Log
 	ConfigDir  string
 	Workspaces func() []workspaces.Workspace
-	Config     func() *config.Config
 	Now        func() time.Time
 	// Grace is how long a workspace may be unreachable before its Y/n prompts leave Needs you.
 	Grace time.Duration
@@ -50,6 +49,10 @@ type Service struct {
 
 	mu        sync.Mutex // guards floor tracking
 	downSince map[string]time.Time
+
+	wsMu   sync.Mutex
+	wsList []workspaces.Workspace
+	wsAt   time.Time
 }
 
 // New builds the service and its Wire manager. Call Start to run it.
@@ -80,15 +83,36 @@ func New(o Options) *Service {
 	return s
 }
 
-func (s *Service) refs() []wire.WorkspaceRef {
+// workspaces returns the registered workspaces, re-read at most every few seconds.
+func (s *Service) workspaces() []workspaces.Workspace {
 	if s.opts.Workspaces == nil {
 		return nil
 	}
+	s.wsMu.Lock()
+	defer s.wsMu.Unlock()
+	if s.wsList == nil || s.opts.Now().Sub(s.wsAt) > 3*time.Second {
+		s.wsList, s.wsAt = s.opts.Workspaces(), s.opts.Now()
+		if s.wsList == nil {
+			s.wsList = []workspaces.Workspace{}
+		}
+	}
+	return s.wsList
+}
+
+func (s *Service) refs() []wire.WorkspaceRef {
 	var out []wire.WorkspaceRef
-	for _, w := range s.opts.Workspaces() {
+	for _, w := range s.workspaces() {
 		out = append(out, wire.WorkspaceRef{ID: w.ID, Name: w.Name, Path: w.Path, MaestroAgent: w.MaestroAgent})
 	}
 	return out
+}
+
+// SetOnChange sets the change callback (the web server's SSE broker). Call it before Start.
+func (s *Service) SetOnChange(f func(kind string)) {
+	if f == nil {
+		f = func(string) {}
+	}
+	s.opts.OnChange = f
 }
 
 // Start runs the Wire manager and the housekeeping loop until ctx ends.
@@ -171,7 +195,7 @@ func (s *Service) syncPrompts(wsID string, snap *wire.FeedSnapshot) {
 func (s *Service) expirePrompts() {
 	now := s.opts.Now()
 	changed := false
-	for _, w := range s.opts.Workspaces() {
+	for _, w := range s.workspaces() {
 		if _, err := s.Mgr.Feed(w.ID); err == nil {
 			s.mu.Lock()
 			delete(s.downSince, w.ID)
@@ -348,7 +372,7 @@ func (s *Service) MaestroTerminal(wsID string) (wire.FeedTerminal, error) {
 		return wire.FeedTerminal{}, err
 	}
 	agent := ""
-	for _, w := range s.opts.Workspaces() {
+	for _, w := range s.workspaces() {
 		if w.ID == wsID {
 			agent = w.MaestroAgent
 		}
@@ -460,7 +484,7 @@ func (s *Service) interruptProvider(ctx context.Context, provider string) (int, 
 	var errs []string
 	for wsID, snap := range s.Mgr.Feeds() {
 		agent := ""
-		for _, w := range s.opts.Workspaces() {
+		for _, w := range s.workspaces() {
 			if w.ID == wsID {
 				agent = w.MaestroAgent
 			}

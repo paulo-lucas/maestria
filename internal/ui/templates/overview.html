@@ -67,7 +67,7 @@
               </div>
               <h3 class="task__title">{{.Title}}</h3>
               {{if .BodyHTML}}<div class="task__body prose">{{.BodyHTML}}</div>{{end}}
-              {{if eq .Kind "approve"}}
+              {{if or (eq .Kind "approve") (eq .Kind "agent_prompt")}}
               <div class="task__actions">
                 <button class="btn btn--primary btn--sm" type="button" data-action="respond" data-value="approve">{{icon "i-check"}}Approve</button>
                 <button class="btn btn--sm" type="button" data-action="respond" data-value="reject">{{icon "i-x"}}Reject</button>
@@ -82,6 +82,7 @@
                 <span class="spacer"></span>
                 <a class="btn btn--ghost btn--sm" href="/workspaces/{{.WorkspaceID}}/tasks">Details</a>
               </div>
+              <p class="field__error" hidden data-task-error></p>
               {{else if eq .Kind "choice"}}
               <div class="choice-list">
                 {{range .Options}}
@@ -129,19 +130,38 @@
 
         <div class="overview-side">
 
-          <!-- Agents at work (coming soon until Wire) -->
+          <!-- Agents at work -->
           <section class="card panel span-all" aria-labelledby="agents-title">
             <header class="panel__head">
               <h2 class="panel__title" id="agents-title">
                 {{icon "i-activity"}}
-                Agents at work
+                Agents at work{{if .AgentLines}} <span class="count">{{len .AgentLines}}</span>{{end}}
               </h2>
-              <div class="panel__aside">Coming soon</div>
+              {{if .AgentsNeeds}}<div class="panel__aside"><span class="status" data-status="needs">{{.AgentsNeeds}} waiting</span></div>{{end}}
             </header>
+            {{if .Wire}}
             <div class="empty empty--compact">
-              <p class="empty__title">Live agent stream comes with Wire</p>
-              <p class="empty__text">Agent activity across your workspaces will appear here once Wire is connected.</p>
+              <span class="empty__icon">{{icon .Wire.Icon}}</span>
+              <p class="empty__title">{{.Wire.Heading}}</p>
+              <p class="empty__text">{{.Wire.Steps}}</p>
+              {{range .Wire.Commands}}<div class="code-inline"><code>{{.}}</code><button class="btn btn--ghost btn--icon btn--sm" type="button" data-copy aria-label="Copy command" title="Copy command">{{icon "i-copy"}}</button></div>{{end}}
             </div>
+            {{else if .AgentLines}}
+            <ul class="list">
+              {{range .AgentLines}}
+              <li><a class="agent-line" href="/workspaces/{{.WorkspaceID}}/activity">
+                <span class="dot" data-status="{{.StateTone}}"></span>
+                <span class="agent-line__top"><span class="agent-line__name">{{.Name}}</span><span class="ws" data-ws="{{.WorkspaceTone}}">{{.WorkspaceName}}</span><span class="floor-name truncate">{{.Floor}}</span></span>
+                <span class="agent-line__brief truncate{{if .Attn}} is-attn" data-status="needs{{end}}">{{.Brief}}</span>
+              </a></li>
+              {{end}}
+            </ul>
+            {{else}}
+            <div class="empty empty--compact">
+              <p class="empty__title">No agents at work</p>
+              <p class="empty__text">Agents that are working or need you will appear here.</p>
+            </div>
+            {{end}}
           </section>
 
           <!-- Usage -->

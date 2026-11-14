@@ -159,3 +159,20 @@
 </body>
 </html>
 {{end}}
+
+{{define "wirestate"}}{{with .}}<div class="banner" data-status="{{.Tone}}" role="status">
+        {{icon .Icon}}
+        <div class="banner__body">
+          <p class="banner__title">{{.Title}}</p>
+          <p class="banner__text">{{.Text}}</p>
+        </div>
+      </div>
+      <div class="card">
+        <div class="empty">
+          <span class="empty__icon">{{icon .Icon "icon--lg"}}</span>
+          <p class="empty__title">{{.Heading}}</p>
+          <p class="empty__text">{{.Steps}}</p>
+          {{range .Commands}}<div class="code-inline"><code>{{.}}</code><button class="btn btn--ghost btn--icon btn--sm" type="button" data-copy aria-label="Copy command" title="Copy command">{{icon "i-copy"}}</button></div>{{end}}
+          {{if .Retry}}<p class="empty__text">{{.Retry}}</p>{{end}}
+        </div>
+      </div>{{end}}{{end}}

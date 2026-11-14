@@ -1,0 +1,105 @@
+{{define "page"}}{{template "app" .}}{{end}}
+{{define "content"}}
+    <div class="page{{if .Wire}} page--narrow{{end}}" data-live-root="workspace-activity">
+
+      <header class="page-head">
+        <div class="page-head__title">
+          <span class="ws-eyebrow" data-ws="{{.CurrentWS.Tone}}"><span class="swatch swatch--lg"></span>{{.CurrentWS.Name}}{{if .CurrentWS.Machine}} <span class="subtle">· {{.CurrentWS.Machine}}</span>{{end}}</span>
+          <h1>Activity</h1>
+          {{if not .Wire}}
+          <p class="summary-row">
+            {{if .ActivityCounts.Working}}<span class="status" data-status="working">{{.ActivityCounts.Working}} working</span>{{end}}
+            {{if .ActivityCounts.Needs}}<span class="status" data-status="needs">{{.ActivityCounts.Needs}} waiting on you</span>{{end}}
+            {{if .ActivityCounts.Idle}}<span class="status" data-status="idle">{{.ActivityCounts.Idle}} idle</span>{{end}}
+            {{if .ActivityCounts.NotRunning}}<span class="status" data-status="offline">{{.ActivityCounts.NotRunning}} not running</span>{{end}}
+          </p>
+          {{end}}
+        </div>
+      </header>
+
+      {{if .Wire}}
+      {{template "wirestate" .Wire}}
+      {{else if not .ActivityGroups}}
+      <div class="card empty">
+        <span class="empty__icon">{{icon "i-activity"}}</span>
+        <p class="empty__title">No agents in this workspace</p>
+        <p class="empty__text">Agents appear here as soon as a terminal with an agent opens in Maestri.</p>
+      </div>
+      {{else}}
+
+      <div class="chip-row" data-filter="agents" role="group" aria-label="Filter agents">
+        <button class="chip" type="button" aria-pressed="true" data-value="all">All <span class="count">{{.ActivityCounts.Total}}</span></button>
+        {{if .ActivityCounts.Needs}}<button class="chip" type="button" aria-pressed="false" data-value="needs"><span class="dot" data-status="needs"></span>Needs you <span class="count">{{.ActivityCounts.Needs}}</span></button>{{end}}
+        {{if .ActivityCounts.Working}}<button class="chip" type="button" aria-pressed="false" data-value="working"><span class="dot" data-status="working"></span>Working <span class="count">{{.ActivityCounts.Working}}</span></button>{{end}}
+        {{if .ActivityCounts.Idle}}<button class="chip" type="button" aria-pressed="false" data-value="idle"><span class="dot" data-status="idle"></span>Idle <span class="count">{{.ActivityCounts.Idle}}</span></button>{{end}}
+        {{if .ActivityCounts.NotRunning}}<button class="chip" type="button" aria-pressed="false" data-value="offline"><span class="dot" data-status="offline"></span>Not running <span class="count">{{.ActivityCounts.NotRunning}}</span></button>{{end}}
+      </div>
+
+      <div class="section" id="agents">
+        {{range .ActivityGroups}}
+        <section class="card panel" aria-labelledby="{{.AnchorID}}">
+          <header class="panel__head"{{if .Status}} data-status="{{.Status}}"{{end}}>
+            <div class="floor-head">
+              {{icon "i-branch"}}
+              <h2 class="floor-line__name" id="{{.AnchorID}}">{{.Name}}</h2>
+              {{if .StatusLabel}}<span class="status" data-status="{{.Status}}">{{.StatusLabel}}</span>{{end}}
+              {{if .IsGround}}<span class="subtle">Default floor</span>{{end}}
+              {{if .HasProgress}}<progress class="progress floor-head__progress" max="1" value="{{.ProgressValue}}">{{.ProgressPct}}%</progress>{{end}}
+            </div>
+            {{if not .IsGround}}<div class="panel__aside"><a href="/workspaces/{{$.CurrentWS.ID}}/floors">Floor</a></div>{{end}}
+          </header>
+          {{if or .Branch .StatusText}}<p class="panel__note subtle">{{if .Branch}}{{.Branch}}{{end}}{{if and .Branch .StatusText}} · {{end}}{{.StatusText}}</p>{{end}}
+          <ul class="list">
+            {{range .Agents}}
+            <li data-key="{{.StateTone}}">
+              <article class="agent" data-ws-id="{{$.CurrentWS.ID}}" data-terminal-id="{{.TerminalID}}">
+                <span class="avatar{{if .IsMaestro}} avatar--maestro{{end}}"{{if not .IsMaestro}} data-tone="{{.Tone}}"{{end}}>{{.Initial}}</span>
+                <div class="agent__head">
+                  <span class="agent__name">{{.Name}}</span>
+                  {{if .AgentType}}<span class="subtle">{{.AgentType}}</span>{{end}}
+                  <span class="status status--badge" data-status="{{.StateTone}}">{{.StateLabel}}</span>
+                </div>
+                {{if .Brief}}<p class="agent__brief">{{.Brief}}</p>{{end}}
+                {{if .Prompt}}
+                <div class="agent__prompt" data-status="needs">
+                  <p><code>{{.Prompt}}</code></p>
+                  {{if .CanAnswer}}
+                  <div class="btn-row">
+                    <button class="btn btn--primary btn--sm" type="button" data-action="agent-answer" data-answer="approve" data-prompt-hash="{{.PromptHash}}">{{icon "i-check"}}Approve</button>
+                    <button class="btn btn--sm" type="button" data-action="agent-answer" data-answer="reject" data-prompt-hash="{{.PromptHash}}">{{icon "i-x"}}Reject</button>
+                  </div>
+                  {{else}}
+                  <p class="subtle">Answering from here is off: this connector only has read access. Run <code>maestria wire pair</code> to allow it.</p>
+                  {{end}}
+                  <p class="field__error" hidden data-agent-error></p>
+                </div>
+                {{end}}
+                {{if .IsMaestro}}<div class="agent__detail btn-row"><a class="btn btn--sm" href="/workspaces/{{$.CurrentWS.ID}}/chat">{{icon "i-chat"}}Open chat</a></div>{{end}}
+                {{if .Preview}}
+                <details class="disclosure agent__detail" data-disclosure-id="{{.DisclosureID}}">
+                  <summary>{{icon "i-chevron-right"}}Terminal preview</summary>
+<pre class="term">{{range .Preview}}{{.}}
+{{end}}</pre>
+                </details>
+                {{end}}
+                {{if and .CanMessage (not .IsMaestro)}}
+                <details class="disclosure agent__detail" data-disclosure-id="msg-{{.TerminalID}}">
+                  <summary>{{icon "i-chevron-right"}}Send a message</summary>
+                  <form class="inline-form" data-action="agent-prompt">
+                    <label class="sr-only" for="m-{{.TerminalID}}">Message to {{.Name}}</label>
+                    <input class="input" id="m-{{.TerminalID}}" type="text" data-draft-key="agent:{{$.CurrentWS.ID}}:{{.TerminalID}}" placeholder="Type to {{.Name}}…" autocomplete="off" maxlength="4000">
+                    <button class="btn btn--primary" type="submit">Send</button>
+                  </form>
+                  <p class="field__error" hidden data-agent-error></p>
+                </details>
+                {{end}}
+              </article>
+            </li>
+            {{end}}
+          </ul>
+        </section>
+        {{end}}
+      </div>
+      {{end}}
+    </div>
+{{end}}

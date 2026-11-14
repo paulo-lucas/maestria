@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/maestria-dev/maestria/internal/activity"
 	"github.com/maestria-dev/maestria/internal/audit"
 	"github.com/maestria-dev/maestria/internal/auth"
 	"github.com/maestria-dev/maestria/internal/auth/authtest"
@@ -59,6 +60,8 @@ type harness struct {
 type opts struct {
 	mutate func(*config.Config)
 	access *auth.AccessVerifier
+	// activity builds the Wire service once the database, audit log and config exist.
+	activity func(cfg *config.Config, db *sql.DB, aud *audit.Log) *activity.Service
 }
 
 func newHarness(t *testing.T, o ...opts) *harness {
@@ -78,11 +81,13 @@ func newHarness(t *testing.T, o ...opts) *harness {
 	cfg.Tunnel.StopCommand = []string{"stop-tunnel"}
 	cfg.Tunnel.StartCommand = []string{"start-tunnel"}
 	var access *auth.AccessVerifier
+	var actFn func(cfg *config.Config, db *sql.DB, aud *audit.Log) *activity.Service
 	if len(o) > 0 {
 		if o[0].mutate != nil {
 			o[0].mutate(cfg)
 		}
 		access = o[0].access
+		actFn = o[0].activity
 	}
 
 	secret, _ := auth.GenerateTOTPSecret()
@@ -105,9 +110,13 @@ func newHarness(t *testing.T, o ...opts) *harness {
 			return tunnel.CommandResult{OK: true}
 		},
 	}
+	var act *activity.Service
+	if actFn != nil {
+		act = actFn(cfg, db, aud)
+	}
 	srv, err := New(Deps{
 		Config: cfg, DB: db, Secrets: &auth.Secrets{PasswordHash: hash, TOTPSecret: secret, CreatedAt: "now"},
-		Audit: aud, Sessions: sessions, Limiter: limiter, Tunnel: tun, Access: access, Now: clock.now,
+		Audit: aud, Sessions: sessions, Limiter: limiter, Tunnel: tun, Access: access, Activity: act, Now: clock.now,
 	})
 	if err != nil {
 		t.Fatal(err)

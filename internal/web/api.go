@@ -353,6 +353,20 @@ func (s *Server) apiInboxRespond(w http.ResponseWriter, r *http.Request) {
 			comment = strings.TrimSpace(body.Response)
 		}
 		updated, _, err = inbox.RespondWithComment(s.DB, ws.ID, itemID, decision, comment, nowMs)
+	case inbox.KindAgentPrompt:
+		decision := strings.TrimSpace(body.Decision)
+		if decision == "" {
+			decision = strings.TrimSpace(body.Response)
+		}
+		item, ok := s.answerAgentPromptItem(w, r, ws, itemID, decision)
+		if !ok {
+			return
+		}
+		s.notifyStream("inbox")
+		writeJSON(w, http.StatusOK, map[string]any{
+			"item": s.enrichInboxItem(item, map[string]workspaces.Workspace{ws.ID: ws}, now),
+		})
+		return
 	case inbox.KindChoice:
 		val := strings.TrimSpace(body.Decision)
 		if val == "" {
@@ -538,6 +552,9 @@ func (s *Server) apiChatSend(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_json"})
 		return
 	}
+	if s.sendWireChat(w, r, ws, body.Body) {
+		return
+	}
 	msg, _, err := chat.Send(s.DB, ws.ID, chat.SenderHuman, body.Body, s.Now().UnixMilli())
 	if err != nil {
 		if errors.Is(err, chat.ErrInvalidInput) {
@@ -561,6 +578,7 @@ func (s *Server) evaluateUsageAndStandby() (usage.Snapshot, standby.Summary, boo
 		cur, _ := standby.Current(s.DB)
 		return snap, cur, false
 	}
+	s.handleStandbyTransition(tr)
 	return snap, tr.Summary, tr.Changed
 }
 

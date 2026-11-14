@@ -30,6 +30,7 @@
               {{end}}
             </header>
             {{if .BriefHTML}}<div class="floor-card__brief">{{.BriefHTML}}</div>{{end}}
+            {{if or .Branch .Attention}}<p class="floor-card__state subtle">{{if .Branch}}{{icon "i-branch" "icon--sm"}} {{.Branch}}{{end}}{{if .Attention}} <span class="status" data-status="needs">{{.Attention}} need{{if eq .Attention 1}}s{{end}} you</span>{{end}}</p>{{end}}
             {{if .Ongoing}}
               <div class="ongoing" role="img" aria-label="Ongoing, no end"></div>
             {{else if .HasProgress}}

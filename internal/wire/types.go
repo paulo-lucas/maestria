@@ -189,13 +189,13 @@ type ChatSegment struct {
 
 // ChatEntry is one chat line.
 type ChatEntry struct {
-	ID         string        `json:"id"`
-	Role       string        `json:"role"` // user | agent
-	Kind       string        `json:"kind"` // message | progress | final | divider
-	Text       string        `json:"text"`
-	Segments   []ChatSegment `json:"segments,omitempty"`
-	AuthorName string        `json:"authorName,omitempty"`
-	TS         json.Number   `json:"ts,omitempty"`
+	ID         string          `json:"id"`
+	Role       string          `json:"role"` // user | agent
+	Kind       string          `json:"kind"` // message | progress | final | divider
+	Text       string          `json:"text"`
+	Segments   []ChatSegment   `json:"segments,omitempty"`
+	AuthorName string          `json:"authorName,omitempty"`
+	TS         json.RawMessage `json:"ts,omitempty"` // number or string; Wire does not pin it down
 }
 
 // ChatSnapshot is the replacement tail of a terminal chat.

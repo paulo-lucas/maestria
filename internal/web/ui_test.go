@@ -191,7 +191,7 @@ func TestConnectorPagesRenderOverviewTasksChatAndUsage(t *testing.T) {
 		"<code>src/billing</code>",
 		"<strong>214 tests</strong>",
 		"Pick default format", "Staging base URL?",
-		"Live agent stream comes with Wire",
+		"Turn on Maestri Wire", "maestria wire pair",
 		"No active floors",
 		"Claude", "93%", "mark-90",
 		"1 provider hidden: no data (error)",
@@ -253,13 +253,15 @@ func TestConnectorPagesRenderOverviewTasksChatAndUsage(t *testing.T) {
 		}
 	}
 
-	// 5. Coming-soon placeholder preserves nav and workspace scope.
+	// 5. Without Wire paired, Activity shows the "not connected" state and keeps nav and scope.
 	actRes := authed.get("/workspaces/" + ws.ID + "/activity")
 	if actRes.Code != http.StatusOK {
 		t.Fatalf("GET activity status = %d", actRes.Code)
 	}
-	if !strings.Contains(actRes.body, "Coming soon") {
-		t.Fatalf("GET activity missing Coming soon placeholder")
+	for _, want := range []string{"Maestri Wire isn&#39;t connected", "maestria wire pair", "Activity"} {
+		if !strings.Contains(actRes.body, want) {
+			t.Fatalf("GET activity missing %q", want)
+		}
 	}
 
 	// 6. Verify embedded panel.js serves with JS content-type.

@@ -94,6 +94,7 @@ func (s *Server) getOverview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	d.ActiveFloors = s.activeFloorViews(list, byID, now)
+	s.populateAgentsAtWork(d, list)
 	s.populateUsage(d, now, false)
 	s.render(w, ui.PageOverview, d)
 }
@@ -159,6 +160,12 @@ func (s *Server) getWorkspaceChat(w http.ResponseWriter, r *http.Request) {
 	d.Title = ws.Name + " · Chat"
 	now := s.Now()
 
+	// With Wire live, the Maestro's terminal chat is the conversation. Otherwise the local log.
+	if wc := s.wireChatView(ws, now); wc != nil {
+		d.WireChat = wc
+		s.render(w, ui.PageChat, d)
+		return
+	}
 	msgs, err := chat.List(s.DB, ws.ID, 0, 200)
 	if err == nil {
 		lastDay := ""
@@ -292,24 +299,6 @@ func (s *Server) getWorkspaceDocsAsset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, _ = w.Write(asset.Data)
-}
-
-func (s *Server) getWorkspaceComingSoon(nav, title, icon, text string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		wsID := r.PathValue("id")
-		d := s.appData(r, title, nav)
-		list, _ := s.populateShell(d, wsID)
-		ws, ok := s.findWorkspace(list, wsID)
-		if !ok {
-			http.NotFound(w, r)
-			return
-		}
-		d.Title = ws.Name + " · " + title
-		d.ComingSoonTitle = title
-		d.ComingSoonIcon = icon
-		d.ComingSoonText = text
-		s.render(w, ui.PageComingSoon, d)
-	}
 }
 
 func (s *Server) getUsage(w http.ResponseWriter, r *http.Request) {
@@ -584,6 +573,8 @@ func taskKindMeta(kind string) (string, string) {
 		return "i-question", "Question"
 	case inbox.KindNotice:
 		return "i-bell", "Update"
+	case inbox.KindAgentPrompt:
+		return "i-terminal", "Agent prompt"
 	default:
 		return "i-inbox", "Task"
 	}
@@ -592,9 +583,17 @@ func taskKindMeta(kind string) (string, string) {
 func closedStatusLabel(it inbox.Item, resp string) (string, string) {
 	switch it.Status {
 	case inbox.StatusDismissed:
+		if it.Kind == inbox.KindAgentPrompt {
+			return "idle", "Resolved in Maestri"
+		}
 		return "idle", "Read"
 	case inbox.StatusAnswered:
 		switch it.Kind {
+		case inbox.KindAgentPrompt:
+			if resp == inbox.ResponseRejected {
+				return "blocked", "Rejected"
+			}
+			return "done", "Approved"
 		case inbox.KindApprove:
 			low := strings.ToLower(strings.TrimSpace(resp))
 			if strings.HasPrefix(low, "yes") || strings.HasPrefix(low, "approve") {
@@ -661,6 +660,8 @@ func toFloorView(fl floors.Floor, byID map[string]workspaces.Workspace, now time
 		Status:        fl.Status,
 		StatusLabel:   floorStatusLabel(fl.Status),
 		StatusText:    fl.StatusText,
+		Branch:        fl.Branch,
+		Attention:     fl.Attention,
 		OutcomeHTML:   template.HTML(fl.OutcomeHTML),
 	}
 	if !fl.Ongoing && fl.Progress != nil {
