@@ -56,10 +56,12 @@ func cmdWirePair(args []string, env *Env) error {
 	if len(parsed.Pos) > 0 {
 		return usagef("Usage: maestria wire pair [--host host:port] [--key <security key>]")
 	}
-	in := bufio.NewReader(env.Stdin)
+	return runWirePair(bufio.NewReader(env.Stdin), parsed.String("host"), parsed.String("key"), parsed.HasString("host"), parsed.HasString("key"), env)
+}
 
-	host := parsed.String("host")
-	if !parsed.HasString("host") {
+func runWirePair(in *bufio.Reader, host, keyStr string, hasHost, hasKey bool, env *Env) error {
+	var err error
+	if !hasHost {
 		host, err = env.readLine(in, fmt.Sprintf("Maestri Wire host [%s]: ", wire.DefaultHost))
 		if err != nil {
 			return err
@@ -69,8 +71,7 @@ func cmdWirePair(args []string, env *Env) error {
 	if err != nil {
 		return usagef("%v", err)
 	}
-	keyStr := parsed.String("key")
-	if !parsed.HasString("key") {
+	if !hasKey {
 		keyStr, err = env.readLine(in, "Security key (Settings → Wire → Manual, or the QR code's key): ")
 		if err != nil {
 			return err

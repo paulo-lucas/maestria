@@ -129,6 +129,8 @@ func run(args []string, env *Env) error {
 	case "version", "--version":
 		fmt.Fprintf(env.Stdout, "maestria %s\n", env.Version)
 		return nil
+	case "init":
+		return cmdInit(rest, env)
 	case "serve":
 		return cmdServe(rest, env)
 	case "service":
