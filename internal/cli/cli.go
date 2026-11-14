@@ -127,8 +127,7 @@ func run(args []string, env *Env) error {
 		fmt.Fprint(env.Stdout, help)
 		return nil
 	case "version", "--version":
-		fmt.Fprintf(env.Stdout, "maestria %s\n", env.Version)
-		return nil
+		return cmdVersion(rest, env)
 	case "init":
 		return cmdInit(rest, env)
 	case "serve":
@@ -172,6 +171,36 @@ func run(args []string, env *Env) error {
 		return cmdImportV1(rest, env)
 	}
 	return usagef("Unknown command: %s\n\n%s", strings.Join(args, " "), help)
+}
+
+func cmdVersion(args []string, env *Env) error {
+	parsed, err := parseFlexArgs(args, flagSpec{Bools: map[string]bool{"json": true}})
+	if err != nil {
+		return usagef("%v", err)
+	}
+	if len(parsed.Pos) > 0 {
+		return usagef("Usage: maestria version [--json]")
+	}
+	if parsed.Bool("json") {
+		return writeJSONLine(env, map[string]string{
+			"version": env.Version,
+			"commit":  env.Commit,
+			"date":    env.Date,
+		})
+	}
+	var meta []string
+	if env.Commit != "" {
+		meta = append(meta, "commit "+env.Commit)
+	}
+	if env.Date != "" {
+		meta = append(meta, "built "+env.Date)
+	}
+	if len(meta) == 0 {
+		fmt.Fprintf(env.Stdout, "maestria %s\n", env.Version)
+		return nil
+	}
+	fmt.Fprintf(env.Stdout, "maestria %s (%s)\n", env.Version, strings.Join(meta, ", "))
+	return nil
 }
 
 func configDir(env *Env) string { return config.DefaultDir(env.Config) }

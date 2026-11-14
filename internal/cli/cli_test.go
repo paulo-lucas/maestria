@@ -63,6 +63,16 @@ func TestVersionHelpAndUsageErrors(t *testing.T) {
 	if code := f.run(f.env(""), "version"); code != 0 || f.out.String() != "maestria test\n" {
 		t.Fatalf("version: %d %q", code, f.out.String())
 	}
+	vEnv := f.env("")
+	vEnv.Version = "0.2.0"
+	vEnv.Commit = "abc1234"
+	vEnv.Date = "2026-11-14T12:00:00Z"
+	if code := f.run(vEnv, "version"); code != 0 || f.out.String() != "maestria 0.2.0 (commit abc1234, built 2026-11-14T12:00:00Z)\n" {
+		t.Fatalf("version meta: %d %q", code, f.out.String())
+	}
+	if code := f.run(vEnv, "version", "--json"); code != 0 || !strings.Contains(f.out.String(), `"commit": "abc1234"`) {
+		t.Fatalf("version json: %d %q", code, f.out.String())
+	}
 	if code := f.run(f.env("")); code != 0 || !strings.Contains(f.out.String(), "maestria serve") {
 		t.Fatalf("help: %d", code)
 	}
