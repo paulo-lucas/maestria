@@ -145,3 +145,37 @@ func TestUpgradeFromSchemaVersion1(t *testing.T) {
 		t.Fatalf("audit row after upgrade: %q %v", ev, err)
 	}
 }
+
+func TestConnectorTablesAndConstraints(t *testing.T) {
+	db, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	if _, err := db.Exec(
+		"INSERT INTO inbox (workspace_id, kind, body, created_at, postponed_until) VALUES ('ws1', 'approve', 'Deploy?', 1000, 2000)",
+	); err != nil {
+		t.Fatalf("insert inbox: %v", err)
+	}
+	if _, err := db.Exec(
+		"INSERT INTO inbox (workspace_id, kind, body, created_at) VALUES ('ws1', 'bogus', 'Bad', 1000)",
+	); err == nil {
+		t.Fatal("invalid inbox kind must fail CHECK constraint")
+	}
+	if _, err := db.Exec(
+		"INSERT INTO chat_messages (workspace_id, sender, body, created_at) VALUES ('ws1', 'human', 'hi', 1000)",
+	); err != nil {
+		t.Fatalf("insert chat_messages: %v", err)
+	}
+	if _, err := db.Exec(
+		"INSERT INTO events (workspace_id, kind, payload, created_at) VALUES ('ws1', 'chat', '{}', 1000)",
+	); err != nil {
+		t.Fatalf("insert events: %v", err)
+	}
+	if _, err := db.Exec(
+		"INSERT INTO wait_cursors (workspace_id, name, last_event_id, updated_at) VALUES ('ws1', 'default', 1, 1000)",
+	); err != nil {
+		t.Fatalf("insert wait_cursors: %v", err)
+	}
+}

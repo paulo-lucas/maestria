@@ -65,6 +65,50 @@ var migrations = []string{
 	`
 	ALTER TABLE pending_logins ADD COLUMN password_ok INTEGER NOT NULL DEFAULT 0;
 	`,
+	// 3: connector core tables — human tasks (inbox with postpone), workspace chat, per-workspace events, and wait cursors.
+	`
+	CREATE TABLE IF NOT EXISTS inbox (
+		id              INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id    TEXT NOT NULL,
+		kind            TEXT NOT NULL CHECK (kind IN ('notice','approve','input','choice')),
+		body            TEXT NOT NULL,
+		options_json    TEXT,
+		response        TEXT,
+		author          TEXT,
+		status          TEXT NOT NULL CHECK (status IN ('open','answered','dismissed')) DEFAULT 'open',
+		created_at      INTEGER NOT NULL,
+		answered_at     INTEGER,
+		acknowledged    INTEGER NOT NULL DEFAULT 0,
+		postponed_until INTEGER
+	);
+	CREATE INDEX IF NOT EXISTS idx_inbox_ws_status ON inbox (workspace_id, status, id);
+
+	CREATE TABLE IF NOT EXISTS chat_messages (
+		id           INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id TEXT NOT NULL,
+		sender       TEXT NOT NULL CHECK (sender IN ('human','maestro','system')),
+		body         TEXT NOT NULL,
+		created_at   INTEGER NOT NULL
+	);
+	CREATE INDEX IF NOT EXISTS idx_chat_ws_id ON chat_messages (workspace_id, id);
+
+	CREATE TABLE IF NOT EXISTS events (
+		id           INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id TEXT NOT NULL,
+		kind         TEXT NOT NULL,
+		payload      TEXT NOT NULL,
+		created_at   INTEGER NOT NULL
+	);
+	CREATE INDEX IF NOT EXISTS idx_events_ws_id ON events (workspace_id, id);
+
+	CREATE TABLE IF NOT EXISTS wait_cursors (
+		workspace_id  TEXT NOT NULL,
+		name          TEXT NOT NULL,
+		last_event_id INTEGER NOT NULL,
+		updated_at    INTEGER NOT NULL,
+		PRIMARY KEY (workspace_id, name)
+	);
+	`,
 }
 
 // Open opens (creating if needed) the v2 database in configDir and migrates it.
