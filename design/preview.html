@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Preview · Maestria design</title>
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="base.css">
+  <link rel="stylesheet" href="components.css">
+  <link rel="stylesheet" href="shell.css">
+  <link rel="stylesheet" href="sheet.css">
+  <script src="assets/mock.js"></script>
+</head>
+<body>
+<div class="sheet">
+  <header class="sheet-head">
+    <div class="sheet-head__title"><h1>Preview</h1><p>One screen at phone, tablet and desktop widths. Scroll sideways for the desktop frame.</p></div>
+    <div class="btn-row"><a class="btn btn--ghost" href="index.html">All screens</a></div>
+  </header>
+  <div class="preview-bar">
+    <div class="field">
+      <label class="field__label" for="preview-page">Screen</label>
+      <select class="select" id="preview-page">
+        <option value="screens/overview.html">1. Overview</option>
+      </select>
+    </div>
+    <div class="field">
+      <label class="field__label" for="preview-theme">Theme</label>
+      <select class="select" id="preview-theme">
+        <option value="">System</option>
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
+      </select>
+    </div>
+  </div>
+  <div class="preview-frames">
+    <figure class="preview-frame preview-frame--360"><figcaption class="spec-label">360 · phone</figcaption><iframe title="Phone preview"></iframe></figure>
+    <figure class="preview-frame preview-frame--768"><figcaption class="spec-label">768 · tablet</figcaption><iframe title="Tablet preview"></iframe></figure>
+    <figure class="preview-frame preview-frame--1280"><figcaption class="spec-label">1280 · desktop</figcaption><iframe title="Desktop preview"></iframe></figure>
+  </div>
+</div>
+</body>
+</html>
