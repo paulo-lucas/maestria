@@ -328,6 +328,17 @@
   pointer-events: none;
 }
 .chat-dock__hint { color: var(--text-3); font-size: var(--fs-xs); text-align: center; }
+.chat-dock__jump { /* "jump to latest": floats above the dock while the reader is scrolled up */
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + var(--space-3));
+  z-index: 1;
+  gap: var(--space-1);
+  background: var(--surface);
+  box-shadow: var(--shadow-2, 0 2px 8px rgb(0 0 0 / 0.18));
+}
+.chat-dock__jump[hidden] { display: none; }
+.chat-dock__jump[data-new] { border-color: var(--focus); color: var(--text); }
 .main:has(.chat-page) { padding-bottom: calc(var(--bottomnav-h) + env(safe-area-inset-bottom)); }
 
 /* ---------- Docs page ---------- */

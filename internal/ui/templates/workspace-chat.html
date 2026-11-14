@@ -62,6 +62,7 @@
       </div>
 
       <div class="chat-dock">
+        <button class="btn btn--sm chat-dock__jump" type="button" data-chat-jump hidden aria-label="Jump to the latest message">{{icon "i-chevron-down"}}<span data-chat-jump-label>Latest</span></button>
         {{if .WireChat}}
         {{if .WireChat.NotRunning}}
         <div class="banner" data-status="warn">

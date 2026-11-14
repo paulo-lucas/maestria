@@ -207,9 +207,7 @@
       const openDisclosures = captureOpenDisclosures();
 
       const curChat = document.getElementById('chat-log');
-      const wasAtBottom = curChat
-        ? (window.innerHeight + window.scrollY >= document.body.scrollHeight - 80)
-        : false;
+      const prevKeys = chatKeys(curChat);
       const prevScrollY = window.scrollY;
 
       const swap = (sel) => {
@@ -229,11 +227,19 @@
       applyAgentsFilter(newMain);
       syncDocsNavPicker(newMain);
 
-      if (curChat && wasAtBottom) {
-        window.scrollTo(0, document.body.scrollHeight);
-      } else if (!curChat) {
+      const newChat = document.getElementById('chat-log');
+      if (newChat && (!curChat || chatPinned)) {
+        // Opening the chat, or following it: stay on the newest message.
+        if (!curChat) chatUnseen = 0;
+        scrollChatToLatest();
+      } else {
+        if (newChat) {
+          // Reading older messages: keep the place and count what arrived below.
+          chatUnseen += countNewKeys(prevKeys, chatKeys(newChat));
+        }
         window.scrollTo(0, prevScrollY);
       }
+      syncChatJump();
     } catch {
       // Transient error; next SSE event will retry.
     } finally {
@@ -243,6 +249,67 @@
       }
     }
   }
+
+  // ---- Chat scroll: follow the newest message until the reader scrolls up ----
+  // Pinned (default): the view stays on the newest message as new ones arrive.
+  // Scrolling up unpins it; a "Latest" button appears and counts what arrived below.
+  // Reaching the bottom again (button or manual scroll) pins it again.
+  let chatPinned = true;
+  let chatUnseen = 0;
+  const CHAT_BOTTOM_SLACK = 48;
+
+  function chatAtBottom() {
+    return window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - CHAT_BOTTOM_SLACK;
+  }
+
+  function chatKeys(log) {
+    if (!log) return [];
+    return Array.from(log.querySelectorAll('[data-msg-key], [data-msg-id]'), (el) => el.dataset.msgKey || el.dataset.msgId);
+  }
+
+  function countNewKeys(before, after) {
+    const seen = new Set(before);
+    return after.filter((k) => !seen.has(k)).length;
+  }
+
+  function scrollChatToLatest() {
+    chatPinned = true;
+    chatUnseen = 0;
+    window.scrollTo(0, document.documentElement.scrollHeight);
+  }
+
+  function syncChatJump() {
+    const btn = document.querySelector('[data-chat-jump]');
+    if (!btn) return;
+    const show = !chatPinned && document.getElementById('chat-log') != null;
+    btn.hidden = !show;
+    const label = btn.querySelector('[data-chat-jump-label]');
+    if (chatUnseen > 0) {
+      btn.dataset.new = '';
+      if (label) label.textContent = chatUnseen === 1 ? '1 new message' : `${chatUnseen} new messages`;
+    } else {
+      delete btn.dataset.new;
+      if (label) label.textContent = 'Latest';
+    }
+  }
+
+  window.addEventListener('scroll', () => {
+    if (!document.getElementById('chat-log')) return;
+    const atBottom = chatAtBottom();
+    if (atBottom !== chatPinned || (atBottom && chatUnseen)) {
+      chatPinned = atBottom;
+      if (atBottom) chatUnseen = 0;
+      syncChatJump();
+    }
+  }, { passive: true });
+
+  document.addEventListener('click', (e) => {
+    if (e.target.closest && e.target.closest('[data-chat-jump]')) {
+      e.preventDefault();
+      scrollChatToLatest();
+      syncChatJump();
+    }
+  });
 
   function scheduleRefresh() {
     clearTimeout(refreshTimer);
@@ -618,7 +685,8 @@
         ta.rows = 1;
         clearDraft(ta);
         await refreshNow(true);
-        window.scrollTo(0, document.body.scrollHeight);
+        scrollChatToLatest();
+        syncChatJump();
       } catch (err) {
         // The text stays in the box: when delivery is unconfirmed the person decides whether to resend.
         showError(chatErr, err.message);
@@ -648,6 +716,11 @@
   applyOverviewFilter(document);
   applyAgentsFilter(document);
   syncDocsNavPicker(document);
+  if (document.getElementById('chat-log')) {
+    // Open the chat on the newest message (again after layout settles, for images/fonts).
+    scrollChatToLatest();
+    requestAnimationFrame(() => { if (chatPinned) scrollChatToLatest(); syncChatJump(); });
+  }
 
   window.MaestriaPanel = { refresh: scheduleRefresh, refreshNow, applyFilters: (root) => { applyOverviewFilter(root); applyAgentsFilter(root); restoreDrafts(root); } };
 
