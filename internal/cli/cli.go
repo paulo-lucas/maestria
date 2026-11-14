@@ -21,6 +21,14 @@ const help = `maestria: control panel for Maestri workspaces
 
 Usage:
   maestria serve                     Start the panel (127.0.0.1 only)
+  maestria post <kind> <body>        Post a human task or notice (notice|approve|input|choice)
+  maestria inbox                     List inbox tasks
+  maestria answers [--ack]           Read (and optionally acknowledge) human responses
+  maestria say <message>             Send a Maestro chat message
+  maestria wait                      Block until a workspace event arrives
+  maestria status                    Show workspace counts, standby, and usage status
+  maestria workspace list|add|remove Manage registered workspaces
+  maestria import-v1 [--from path]   Import V1 SQLite inbox, chat, and events (read-only)
   maestria auth setup [--force]      Set the password, enrol an authenticator app, print recovery codes
   maestria auth reset-sessions       Sign out every browser session
   maestria tunnel on|off|status      Turn the kill switch off (locally) or on, or show its state
@@ -122,6 +130,22 @@ func run(args []string, env *Env) error {
 		return usagef("Unknown auth command %q\n\n%s", rest[0], help)
 	case "tunnel":
 		return cmdTunnel(rest, env)
+	case "workspace", "workspaces":
+		return cmdWorkspace(rest, env)
+	case "post":
+		return cmdPost(rest, env)
+	case "inbox":
+		return cmdInbox(rest, env)
+	case "answers":
+		return cmdAnswers(rest, env)
+	case "say":
+		return cmdSay(rest, env)
+	case "wait":
+		return cmdWait(rest, env)
+	case "status":
+		return cmdStatus(rest, env)
+	case "import-v1":
+		return cmdImportV1(rest, env)
 	}
 	return usagef("Unknown command: %s\n\n%s", strings.Join(args, " "), help)
 }
