@@ -1,0 +1,55 @@
+<!--page {"title": "Link a machine", "scope": "all", "nav": "connectors", "noWorkspaces": true, "group": "Connector", "order": 90, "icon": "i-plug", "label": "9a. Link a machine", "desc": "One-time code shown here and entered in the CLI (or the other way around), then confirmed on the machine."}-->
+    <div class="page page--narrow">
+
+      <header class="page-head">
+        <div class="page-head__title">
+          <h1>Link a machine</h1>
+          <p class="page-head__sub">The connector runs next to Maestri on your machine. It opens an outbound connection to Maestria: no open port, no tunnel.</p>
+        </div>
+      </header>
+
+      <ol class="card checklist">
+        <li class="is-done">
+          <span class="checklist__title">Install the connector</span>
+          <span class="checklist__text">One binary for macOS and Windows. Skip this if <code>maestria</code> is already installed.</span>
+          <div class="btn-row">
+            <a class="btn btn--sm" href="#"><svg class="icon" aria-hidden="true"><use href="#i-laptop"/></svg>macOS</a>
+            <a class="btn btn--sm" href="#"><svg class="icon" aria-hidden="true"><use href="#i-laptop"/></svg>Windows</a>
+            <a class="btn btn--ghost btn--sm" href="#">Build from source</a>
+          </div>
+        </li>
+        <li aria-current="step">
+          <span class="checklist__title">Run this on the machine</span>
+          <span class="checklist__text">The code works once and expires in <span class="num">9:41</span>.</span>
+          <div class="code-display" aria-label="Link code">K7QF-29MX</div>
+          <div class="code-inline"><code>maestria connect --code K7QF-29MX</code><button class="btn btn--ghost btn--icon btn--sm" type="button" data-copy aria-label="Copy command" title="Copy command"><svg class="icon" aria-hidden="true"><use href="#i-copy"/></svg></button></div>
+        </li>
+        <li>
+          <span class="checklist__title">Confirm on the machine</span>
+          <span class="checklist__text">The connector shows the account it is joining (you@example.com). Type <kbd>y</kbd> to link it. Give the machine a name, like "Workstation".</span>
+          <p class="status status--quiet"><span class="spinner"></span>Waiting for the connector…</p>
+        </li>
+      </ol>
+
+      <details class="disclosure">
+        <summary><svg class="icon" aria-hidden="true"><use href="#i-chevron-right"/></svg>Got a code from the CLI instead?</summary>
+        <div class="card card--pad">
+          <form class="field" action="#">
+            <label class="field__label" for="cli-code">Code shown by <code>maestria connect</code></label>
+            <div class="inline-form">
+              <input class="input mono" id="cli-code" type="text" autocomplete="off" placeholder="XXXX-XXXX">
+              <button class="btn btn--primary" type="submit">Link</button>
+            </div>
+            <p class="field__hint">You'll still confirm on the machine.</p>
+          </form>
+        </div>
+      </details>
+
+      <div class="banner" data-status="info">
+        <svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg>
+        <div class="banner__body">
+          <p class="banner__title">Your machine stays in charge</p>
+          <p class="banner__text">The connector only runs a short allowlist of actions (prompt the Maestro, answer a Y/n, pause and resume), keeps its own audit log, and has a kill switch that only works locally. Chats, docs and agent previews are sent here encrypted and stored encrypted at rest.</p>
+        </div>
+      </div>
+    </div>

@@ -1,0 +1,29 @@
+<!--page {"title": "Approve this browser", "layout": "auth", "group": "Devices & security", "order": 100, "icon": "i-device", "label": "10a. Device pairing", "desc": "Waiting screen: approve this browser on your machine, compare the code."}-->
+  <section class="card auth-card" aria-labelledby="t">
+    <div class="auth-card__head">
+      <h1 id="t">Approve this browser on your machine</h1>
+      <p>Your machines only accept commands from devices they approved. This happens once per device.</p>
+    </div>
+    <div class="field">
+      <span class="field__label">Check that your machine shows the same code</span>
+      <div class="code-display" aria-label="Pairing code">47 · 12 · 86</div>
+    </div>
+    <dl class="kv">
+      <dt>This device</dt><dd>Safari on iPhone</dd>
+      <dt>Approve with</dt><dd>the connector notification, or <code>maestria devices approve</code></dd>
+    </dl>
+    <ul class="card list">
+      <li class="device">
+        <span class="device__icon"><svg class="icon" aria-hidden="true"><use href="#i-laptop"/></svg></span>
+        <span class="device__name">Workstation</span>
+        <span class="device__meta">Waiting for approval…</span>
+        <span class="spinner"></span>
+      </li>
+      <li class="device">
+        <span class="device__icon"><svg class="icon" aria-hidden="true"><use href="#i-laptop"/></svg></span>
+        <span class="device__name">Laptop <span class="status" data-status="offline">Offline</span></span>
+        <span class="device__meta">You can approve it later, when it is back.</span>
+      </li>
+    </ul>
+    <p class="auth-card__alt">The code expires in <span class="num">4:52</span>. <a href="auth-login.html">Cancel</a></p>
+  </section>

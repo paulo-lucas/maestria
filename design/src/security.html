@@ -1,0 +1,117 @@
+<!--page {"title": "Devices & security", "scope": "all", "nav": "security", "group": "Devices & security", "order": 101, "icon": "i-shield", "label": "10b. Devices & security", "desc": "Paired devices with revoke, session policy (enforced by the connector), kill switch, audit log."}-->
+    <div class="page page--narrow">
+
+      <header class="page-head">
+        <div class="page-head__title">
+          <h1>Devices &amp; security</h1>
+          <p class="page-head__sub">Your machines are the authority: they decide which devices may send commands and for how long.</p>
+        </div>
+      </header>
+
+      <!-- Devices -->
+      <section class="section" aria-labelledby="dev-title">
+        <div class="section__head"><h2 class="section__title" id="dev-title">Paired devices</h2><span class="count">3</span></div>
+        <ul class="card list">
+          <li class="device">
+            <span class="device__icon"><svg class="icon" aria-hidden="true"><use href="#i-laptop"/></svg></span>
+            <span class="device__name">Chrome on macOS <span class="status status--badge" data-status="info">This device</span></span>
+            <span class="device__meta">Workstation, Laptop · active now · session ends in 6 days</span>
+            <button class="btn btn--sm" type="button">Sign out</button>
+          </li>
+          <li class="device">
+            <span class="device__icon"><svg class="icon" aria-hidden="true"><use href="#i-device"/></svg></span>
+            <span class="device__name">Safari on iPhone</span>
+            <span class="device__meta">Workstation · active 2h ago · session ends in 3 days</span>
+            <button class="btn btn--sm" type="button">Revoke</button>
+          </li>
+          <li class="device">
+            <span class="device__icon"><svg class="icon" aria-hidden="true"><use href="#i-device"/></svg></span>
+            <span class="device__name">Firefox on Android <span class="status" data-status="offline">Session expired</span></span>
+            <span class="device__meta">Workstation · last active Nov 3</span>
+            <button class="btn btn--sm" type="button">Revoke</button>
+          </li>
+        </ul>
+      </section>
+
+      <!-- Session policy -->
+      <section class="section" aria-labelledby="pol-title">
+        <div class="section__head">
+          <h2 class="section__title" id="pol-title">Session policy</h2>
+          <span class="label"><svg class="icon" aria-hidden="true"><use href="#i-lock"/></svg>Enforced by the connector</span>
+        </div>
+        <div class="card">
+          <div class="setting">
+            <dl class="kv">
+              <dt>Session length</dt><dd>7 days</dd>
+              <dt>Idle sign-out</dt><dd>after 12 hours</dd>
+              <dt>Local confirmation</dt><dd>for landing floors and resuming after standby</dd>
+              <dt>Allowed commands</dt><dd>prompt the Maestro, answer Y/n, pause and resume</dd>
+              <dt>Rate limit</dt><dd>30 commands per minute</dd>
+            </dl>
+          </div>
+          <div class="setting">
+            <p class="setting__desc">These are set on each machine, not here, so a compromised website can't loosen them. To change them, run this on the machine:</p>
+            <div class="code-inline"><code>maestria policy edit</code><button class="btn btn--ghost btn--icon btn--sm" type="button" data-copy aria-label="Copy command" title="Copy command"><svg class="icon" aria-hidden="true"><use href="#i-copy"/></svg></button></div>
+            <p class="field__hint">Showing Workstation. Laptop is offline; its last reported policy is the same.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Kill switch -->
+      <section class="section" aria-labelledby="kill-title">
+        <div class="section__head"><h2 class="section__title" id="kill-title">Kill switch</h2><span class="status" data-status="ok">Off</span></div>
+        <div class="banner" data-status="danger">
+          <svg class="icon" aria-hidden="true"><use href="#i-power"/></svg>
+          <div class="banner__body">
+            <p class="banner__title">Stop all remote control now</p>
+            <p class="banner__text">Every connector stops accepting commands from this site right away. Agents keep running on your machines. Only you, on each machine, can turn it off again.</p>
+          </div>
+          <div class="banner__actions"><button class="btn btn--danger btn--sm" type="button" data-open-dialog="kill-dialog">Turn on</button></div>
+        </div>
+      </section>
+
+      <dialog class="dialog" id="kill-dialog" aria-labelledby="kill-d-title">
+        <form method="dialog">
+          <div class="dialog__body" data-status="danger">
+            <span class="dialog__icon"><svg class="icon icon--lg" aria-hidden="true"><use href="#i-power"/></svg></span>
+            <h2 class="dialog__title" id="kill-d-title">Turn on the kill switch?</h2>
+            <p class="dialog__text">Workstation and Laptop will reject every command from Maestria. Laptop is offline and gets it as soon as it reconnects. To turn it off, run <code>maestria kill-switch off</code> on each machine.</p>
+            <label class="check"><input type="checkbox" id="kill-confirm"> I understand this can't be undone from the web</label>
+          </div>
+          <div class="dialog__foot">
+            <button class="btn" type="button" data-close-dialog>Cancel</button>
+            <button class="btn btn--danger" type="button" data-requires="kill-confirm" data-close-dialog><svg class="icon" aria-hidden="true"><use href="#i-power"/></svg>Turn on kill switch</button>
+          </div>
+        </form>
+      </dialog>
+
+      <!-- Audit log -->
+      <section class="section" aria-labelledby="audit-title">
+        <div class="section__head">
+          <h2 class="section__title" id="audit-title">Audit log</h2>
+          <div class="panel__aside"><button class="btn btn--ghost btn--sm" type="button">Export</button></div>
+        </div>
+        <div class="chip-row" data-filter="audit-rows" role="group" aria-label="Filter events">
+          <button class="chip" type="button" aria-pressed="true" data-value="all">All</button>
+          <button class="chip" type="button" aria-pressed="false" data-value="action">Actions</button>
+          <button class="chip" type="button" aria-pressed="false" data-value="auth">Sign-ins</button>
+          <button class="chip" type="button" aria-pressed="false" data-value="device">Devices</button>
+          <button class="chip" type="button" aria-pressed="false" data-value="blocked">Blocked</button>
+        </div>
+        <div class="card table-wrap">
+          <table class="table table--stack">
+            <thead><tr><th>When</th><th>Event</th><th>Device</th><th>Machine</th></tr></thead>
+            <tbody id="audit-rows">
+              <tr data-key="action"><td class="num">14:03</td><td>Approved “Land billing-webhooks” <span class="ws" data-ws="blue">Atlas</span></td><td data-label="Device">iPhone</td><td data-label="Machine">Workstation</td></tr>
+              <tr data-key="action"><td class="num">14:01</td><td>Sent a chat message <span class="ws" data-ws="blue">Atlas</span></td><td data-label="Device">iPhone</td><td data-label="Machine">Workstation</td></tr>
+              <tr data-key="blocked"><td class="num">13:58</td><td><span class="status" data-status="danger">Blocked</span> Command not on the allowlist (floor delete)</td><td data-label="Device">Chrome on macOS</td><td data-label="Machine">Workstation</td></tr>
+              <tr data-key="action"><td class="num">13:41</td><td>Changed standby threshold to 90% (Gemini, 5-hour)</td><td data-label="Device">Chrome on macOS</td><td data-label="Machine">Workstation</td></tr>
+              <tr data-key="auth"><td class="num">09:12</td><td>Signed in with 2FA</td><td data-label="Device">iPhone</td><td data-label="Machine">–</td></tr>
+              <tr data-key="device"><td class="num">Nov 12</td><td>Paired a device: Safari on iPhone</td><td data-label="Device">iPhone</td><td data-label="Machine">Workstation</td></tr>
+              <tr data-key="auth"><td class="num">Nov 12</td><td><span class="status" data-status="warn">Failed</span> Sign-in, wrong 2FA code</td><td data-label="Device">Unknown browser</td><td data-label="Machine">–</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="field__hint">Each machine also keeps its own local audit log, which this site can't change.</p>
+      </section>
+    </div>
