@@ -12,7 +12,7 @@ import (
 
 func cmdWorkspace(args []string, env *Env) error {
 	if len(args) == 0 {
-		return usagef("Usage: maestria workspace <list|add|remove> [options]")
+		return cmdWorkspaceList(nil, env)
 	}
 	sub, rest := args[0], args[1:]
 	switch sub {
@@ -23,6 +23,9 @@ func cmdWorkspace(args []string, env *Env) error {
 	case "remove", "rm":
 		return cmdWorkspaceRemove(rest, env)
 	default:
+		if strings.HasPrefix(sub, "-") {
+			return cmdWorkspaceList(args, env)
+		}
 		return usagef("Unknown workspace subcommand: %s\n\nUsage: maestria workspace <list|add|remove> [options]", sub)
 	}
 }
@@ -62,14 +65,20 @@ func cmdWorkspaceAdd(args []string, env *Env) error {
 		Bools: map[string]bool{"json": true},
 		Strings: map[string]bool{
 			"id": true, "name": true, "path": true,
-			"agent": true, "provider": true, "color": true,
+			"agent": true, "maestro": true, "provider": true, "color": true, "roadmap": true,
 		},
 	})
 	if err != nil {
 		return usagef("%v", err)
 	}
+	name := parsed.String("name")
 	path := parsed.String("path")
-	if path == "" && len(parsed.Pos) > 0 {
+	switch {
+	case len(parsed.Pos) >= 2 && name == "" && path == "":
+		// V1 positional contract: maestria workspace add <name> <path>
+		name = parsed.Pos[0]
+		path = parsed.Pos[1]
+	case len(parsed.Pos) >= 1 && path == "":
 		path = parsed.Pos[0]
 	}
 	if path == "" {
@@ -79,12 +88,17 @@ func cmdWorkspaceAdd(args []string, env *Env) error {
 			return err
 		}
 	}
+	agent := parsed.String("agent")
+	if agent == "" {
+		agent = parsed.String("maestro")
+	}
 	ws, err := workspaces.Add(configDir(env), workspaces.AddInput{
 		ID:              parsed.String("id"),
-		Name:            parsed.String("name"),
+		Name:            name,
 		Path:            path,
-		MaestroAgent:    parsed.String("agent"),
+		MaestroAgent:    agent,
 		MaestroProvider: parsed.String("provider"),
+		RoadmapPath:     parsed.String("roadmap"),
 		Color:           parsed.String("color"),
 	})
 	if err != nil {

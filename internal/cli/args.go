@@ -10,6 +10,7 @@ type flagSpec struct {
 	Bools   map[string]bool
 	Strings map[string]bool
 	Multi   map[string]bool
+	Shorts  map[string]string
 }
 
 type parsedArgs struct {
@@ -36,17 +37,32 @@ func parseFlexArgs(args []string, spec flagSpec) (*parsedArgs, error) {
 			out.Pos = append(out.Pos, args[i+1:]...)
 			break
 		}
-		if !strings.HasPrefix(arg, "--") || arg == "--" {
-			out.Pos = append(out.Pos, arg)
-			continue
-		}
-		name := arg[2:]
+		var name string
 		hasEq := false
 		eqVal := ""
-		if idx := strings.IndexByte(name, '='); idx >= 0 {
-			eqVal = name[idx+1:]
-			name = name[:idx]
-			hasEq = true
+		switch {
+		case strings.HasPrefix(arg, "--"):
+			name = arg[2:]
+			if idx := strings.IndexByte(name, '='); idx >= 0 {
+				eqVal = name[idx+1:]
+				name = name[:idx]
+				hasEq = true
+			}
+		case len(arg) >= 2 && arg[0] == '-' && arg != "-":
+			short := arg[1:]
+			if idx := strings.IndexByte(short, '='); idx >= 0 {
+				eqVal = short[idx+1:]
+				short = short[:idx]
+				hasEq = true
+			}
+			mapped, ok := spec.Shorts[short]
+			if !ok {
+				return nil, fmt.Errorf("unknown flag: -%s", short)
+			}
+			name = mapped
+		default:
+			out.Pos = append(out.Pos, arg)
+			continue
 		}
 
 		switch {

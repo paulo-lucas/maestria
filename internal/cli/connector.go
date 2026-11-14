@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/signal"
 	"strconv"
@@ -25,17 +26,29 @@ import (
 func cmdPost(args []string, env *Env) error {
 	parsed, err := parseFlexArgs(args, flagSpec{
 		Bools:   map[string]bool{"json": true},
-		Strings: map[string]bool{"workspace": true, "author": true},
+		Strings: map[string]bool{"workspace": true, "kind": true, "author": true, "by": true},
 		Multi:   map[string]bool{"option": true},
+		Shorts:  map[string]string{"w": "workspace", "k": "kind", "o": "option"},
 	})
 	if err != nil {
 		return usagef("%v", err)
 	}
-	if len(parsed.Pos) < 2 {
-		return usagef("Usage: maestria post <notice|approve|input|choice> <body> [--option ...] [--author <name>] [--workspace <ws>] [--json]")
+	kind := parsed.String("kind")
+	pos := parsed.Pos
+	if kind == "" && len(pos) >= 2 {
+		switch pos[0] {
+		case inbox.KindNotice, inbox.KindApprove, inbox.KindInput, inbox.KindChoice:
+			kind = pos[0]
+			pos = pos[1:]
+		}
 	}
-	kind := parsed.Pos[0]
-	body := strings.Join(parsed.Pos[1:], " ")
+	if kind == "" {
+		kind = inbox.KindNotice
+	}
+	if len(pos) == 0 {
+		return usagef("Usage: maestria post [--kind notice|approve|input|choice] [--option ...] [--by <agent>] [--workspace|-w <ws>] [--json] <markdown>")
+	}
+	body := strings.Join(pos, " ")
 	if body == "-" {
 		raw, err := io.ReadAll(env.Stdin)
 		if err != nil {
@@ -48,6 +61,13 @@ func cmdPost(args []string, env *Env) error {
 	if err != nil {
 		return err
 	}
+	author := parsed.String("by")
+	if author == "" {
+		author = parsed.String("author")
+	}
+	if author == "" {
+		author = ws.MaestroAgent
+	}
 	db, err := store.Open(configDir(env))
 	if err != nil {
 		return err
@@ -58,7 +78,7 @@ func cmdPost(args []string, env *Env) error {
 		Kind:    kind,
 		Body:    body,
 		Options: parsed.MultiVal("option"),
-		Author:  parsed.String("author"),
+		Author:  author,
 	}, env.now().UnixMilli())
 	if err != nil {
 		return err
@@ -73,7 +93,8 @@ func cmdPost(args []string, env *Env) error {
 func cmdInbox(args []string, env *Env) error {
 	parsed, err := parseFlexArgs(args, flagSpec{
 		Bools:   map[string]bool{"json": true},
-		Strings: map[string]bool{"workspace": true, "status": true},
+		Strings: map[string]bool{"workspace": true, "status": true, "kind": true},
+		Shorts:  map[string]string{"w": "workspace", "s": "status", "k": "kind"},
 	})
 	if err != nil {
 		return usagef("%v", err)
@@ -81,6 +102,8 @@ func cmdInbox(args []string, env *Env) error {
 	status := parsed.String("status")
 	if status == "" {
 		status = inbox.StatusOpen
+	} else if status == "responded" {
+		status = inbox.StatusAnswered
 	}
 	ws, _, _, err := resolveWorkspaceCLI(env, parsed.String("workspace"))
 	if err != nil {
@@ -95,6 +118,7 @@ func cmdInbox(args []string, env *Env) error {
 	items, err := inbox.List(db, inbox.ListOptions{
 		WorkspaceID: ws.ID,
 		Status:      status,
+		Kind:        parsed.String("kind"),
 		NowMs:       env.now().UnixMilli(),
 	})
 	if err != nil {
@@ -126,8 +150,9 @@ func cmdInbox(args []string, env *Env) error {
 
 func cmdAnswers(args []string, env *Env) error {
 	parsed, err := parseFlexArgs(args, flagSpec{
-		Bools:   map[string]bool{"json": true, "ack": true},
+		Bools:   map[string]bool{"json": true, "ack": true, "all": true},
 		Strings: map[string]bool{"workspace": true},
+		Shorts:  map[string]string{"w": "workspace"},
 	})
 	if err != nil {
 		return usagef("%v", err)
@@ -142,7 +167,17 @@ func cmdAnswers(args []string, env *Env) error {
 	}
 	defer db.Close()
 
-	items, err := inbox.Answers(db, ws.ID, parsed.Bool("ack"), env.now().UnixMilli())
+	nowMs := env.now().UnixMilli()
+	var items []inbox.Item
+	if parsed.Bool("all") {
+		items, err = inbox.List(db, inbox.ListOptions{
+			WorkspaceID: ws.ID,
+			Status:      "history",
+			NowMs:       nowMs,
+		})
+	} else {
+		items, err = inbox.Answers(db, ws.ID, parsed.Bool("ack"), nowMs)
+	}
 	if err != nil {
 		return err
 	}
@@ -160,6 +195,8 @@ func cmdAnswers(args []string, env *Env) error {
 		resp := ""
 		if it.Response != nil {
 			resp = *it.Response
+		} else if it.Status == inbox.StatusDismissed {
+			resp = "dismissed"
 		}
 		fmt.Fprintf(env.Stdout, "#%d (%s): %s\n", it.ID, it.Kind, resp)
 	}
@@ -169,13 +206,14 @@ func cmdAnswers(args []string, env *Env) error {
 func cmdSay(args []string, env *Env) error {
 	parsed, err := parseFlexArgs(args, flagSpec{
 		Bools:   map[string]bool{"json": true},
-		Strings: map[string]bool{"workspace": true},
+		Strings: map[string]bool{"workspace": true, "by": true},
+		Shorts:  map[string]string{"w": "workspace"},
 	})
 	if err != nil {
 		return usagef("%v", err)
 	}
 	if len(parsed.Pos) == 0 {
-		return usagef("Usage: maestria say <message> [--workspace <ws>] [--json]")
+		return usagef("Usage: maestria say [--workspace|-w <ws>] [--by <agent>] [--json] <message>")
 	}
 	msgText := strings.Join(parsed.Pos, " ")
 	if msgText == "-" {
@@ -211,6 +249,7 @@ func cmdWait(args []string, env *Env) error {
 	parsed, err := parseFlexArgs(args, flagSpec{
 		Bools:   map[string]bool{"json": true, "from-now": true},
 		Strings: map[string]bool{"workspace": true, "cursor": true, "since": true, "timeout": true},
+		Shorts:  map[string]string{"w": "workspace"},
 	})
 	if err != nil {
 		return usagef("%v", err)
@@ -288,6 +327,7 @@ func cmdStatus(args []string, env *Env) error {
 	parsed, err := parseFlexArgs(args, flagSpec{
 		Bools:   map[string]bool{"json": true},
 		Strings: map[string]bool{"workspace": true},
+		Shorts:  map[string]string{"w": "workspace"},
 	})
 	if err != nil {
 		return usagef("%v", err)
@@ -314,6 +354,7 @@ func cmdStatus(args []string, env *Env) error {
 		return err
 	}
 	usageSnap := usage.ReadSnapshot(db, cfg, now)
+	srvReach := checkPanelReachable(cfg.Port)
 
 	var resolved *workspaces.Workspace
 	if wsArg := parsed.String("workspace"); wsArg != "" {
@@ -331,6 +372,7 @@ func cmdStatus(args []string, env *Env) error {
 			"standby": sb,
 			"usage":   usageSnap,
 			"counts":  counts,
+			"server":  srvReach,
 		}
 		if resolved != nil {
 			out["workspace"] = resolved
@@ -363,7 +405,28 @@ func cmdStatus(args []string, env *Env) error {
 	} else {
 		fmt.Fprintf(env.Stdout, "Usage:     %d provider accounts tracked\n", len(usageSnap.Accounts))
 	}
+	if srvReach.Reachable {
+		fmt.Fprintf(env.Stdout, "Server:    running (%s)\n", srvReach.URL)
+	} else {
+		fmt.Fprintf(env.Stdout, "Server:    down (%s not reachable — start with: maestria serve)\n", srvReach.URL)
+	}
 	return nil
+}
+
+type serverReachability struct {
+	Reachable bool   `json:"reachable"`
+	URL       string `json:"url"`
+}
+
+func checkPanelReachable(port int) serverReachability {
+	addr := net.JoinHostPort(config.Host, strconv.Itoa(port))
+	url := "http://" + addr
+	conn, err := net.DialTimeout("tcp", addr, 300*time.Millisecond)
+	if err != nil {
+		return serverReachability{Reachable: false, URL: url}
+	}
+	_ = conn.Close()
+	return serverReachability{Reachable: true, URL: url}
 }
 
 func cmdImportV1(args []string, env *Env) error {

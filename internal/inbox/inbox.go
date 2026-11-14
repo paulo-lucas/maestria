@@ -69,6 +69,7 @@ type ListOptions struct {
 	Status      string // "", "open", "answered", "dismissed", "history", "all"
 	Kind        string
 	Postponed   string // "", "exclude", "only"
+	NewestFirst bool
 	Limit       int
 	NowMs       int64
 }
@@ -206,6 +207,9 @@ func List(db *sql.DB, opts ListOptions) ([]Item, error) {
 	}
 
 	order := " ORDER BY id ASC"
+	if opts.NewestFirst {
+		order = " ORDER BY id DESC"
+	}
 	if opts.Status == "history" || opts.Status == "answered" || opts.Status == "dismissed" {
 		order = " ORDER BY COALESCE(answered_at, created_at) DESC, id DESC"
 	}
@@ -285,6 +289,11 @@ func Answers(db *sql.DB, workspaceID string, ack bool, nowMs int64) ([]Item, err
 
 // Respond answers an open approve, input, or choice item and emits an inbox_response event.
 func Respond(db *sql.DB, workspaceID string, id int64, rawResponse string, nowMs int64) (Item, events.Event, error) {
+	return RespondWithComment(db, workspaceID, id, rawResponse, "", nowMs)
+}
+
+// RespondWithComment answers an open item and optionally attaches a comment on approve items.
+func RespondWithComment(db *sql.DB, workspaceID string, id int64, rawResponse, comment string, nowMs int64) (Item, events.Event, error) {
 	if nowMs <= 0 {
 		nowMs = time.Now().UnixMilli()
 	}
@@ -306,11 +315,24 @@ func Respond(db *sql.DB, workspaceID string, id int64, rawResponse string, nowMs
 	if err != nil {
 		return Item{}, events.Event{}, err
 	}
+	cleanComment := strings.TrimSpace(comment)
+	if cleanComment != "" {
+		if it.Kind != KindApprove {
+			return Item{}, events.Event{}, fmt.Errorf("%w: comment is only supported for approve items", ErrInvalidInput)
+		}
+		if utf8.RuneCountInString(cleanComment) > MaxResponseChars {
+			return Item{}, events.Event{}, fmt.Errorf("%w: comment must be <= %d characters", ErrInvalidInput, MaxResponseChars)
+		}
+	}
+	storedResp := resp
+	if cleanComment != "" {
+		storedResp = resp + " — " + cleanComment
+	}
 
 	res, err := tx.Exec(`
 		UPDATE inbox SET status = 'answered', response = ?, answered_at = ?, postponed_until = NULL
 		WHERE id = ? AND status = 'open'
-	`, resp, nowMs, id)
+	`, storedResp, nowMs, id)
 	if err != nil {
 		return Item{}, events.Event{}, err
 	}
@@ -321,8 +343,14 @@ func Respond(db *sql.DB, workspaceID string, id int64, rawResponse string, nowMs
 	payload := map[string]any{
 		"id":       it.ID,
 		"kind":     it.Kind,
-		"response": resp,
+		"response": storedResp,
 		"body":     it.Body,
+	}
+	if it.Kind == KindApprove {
+		payload["decision"] = resp
+		if cleanComment != "" {
+			payload["comment"] = cleanComment
+		}
 	}
 	if it.Author != nil {
 		payload["author"] = *it.Author

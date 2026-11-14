@@ -136,13 +136,32 @@ func TestCLIContractAndJSON(t *testing.T) {
 		t.Fatalf("expected timedOut: true, got %s", waitTO)
 	}
 
-	// status --json works cleanly.
+	// status --json works cleanly and reports server reachability.
 	statusOut := runCLI(t, env, out, errBuf, "status", "--workspace", "sample-app", "--json")
-	if !strings.Contains(statusOut, `"needsYou": 0`) || !strings.Contains(statusOut, `"updates": 1`) {
+	if !strings.Contains(statusOut, `"needsYou": 0`) || !strings.Contains(statusOut, `"updates": 1`) || !strings.Contains(statusOut, `"server"`) {
 		t.Fatalf("status=%s", statusOut)
 	}
 
+	// V1 flag contract parity: --kind/-k, -o, --by, -w, -s responded, answers --all, workspace add <name> <path>.
+	v1WS := filepath.Join(filepath.Dir(wsDir), "v1-app")
+	if err := os.MkdirAll(v1WS, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runCLI(t, env, out, errBuf, "workspace", "add", "V1 App", v1WS, "--maestro", "Orin", "--json")
+	v1Post := runCLI(t, env, out, errBuf, "post", "--kind", "choice", "-o", "A", "-o", "B", "--by", "Orin", "-w", "v1-app", "--json", "Pick", "branch")
+	var v1Item inbox.Item
+	if err := json.Unmarshal([]byte(v1Post), &v1Item); err != nil || v1Item.Kind != "choice" || v1Item.Author == nil || *v1Item.Author != "Orin" {
+		t.Fatalf("v1 post=%q err=%v", v1Post, err)
+	}
+	v1Inbox := runCLI(t, env, out, errBuf, "inbox", "-w", "v1-app", "-s", "open", "-k", "choice", "--json")
+	if !strings.Contains(v1Inbox, "Pick branch") {
+		t.Fatalf("v1 inbox=%s", v1Inbox)
+	}
+	runCLI(t, env, out, errBuf, "say", "-w", "v1-app", "--by", "Orin", "--json", "Checking in")
+	runCLI(t, env, out, errBuf, "answers", "-w", "sample-app", "--all", "--json")
+
 	// workspace remove
+	runCLI(t, env, out, errBuf, "workspace", "remove", "v1-app", "--json")
 	runCLI(t, env, out, errBuf, "workspace", "remove", "sample-app", "--json")
 }
 

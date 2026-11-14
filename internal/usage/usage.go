@@ -65,14 +65,24 @@ type SetupIssue struct {
 	Path    string `json:"path,omitempty"`
 }
 
+// HiddenProvider describes a provider hidden from the overview due to errors without recent data.
+type HiddenProvider struct {
+	Key           string `json:"key"`
+	Provider      string `json:"provider"`
+	ProviderLabel string `json:"providerLabel"`
+	State         string `json:"state"`
+	Error         string `json:"error,omitempty"`
+}
+
 // Snapshot holds the read-only usage view produced from .status.json.
 type Snapshot struct {
-	Available   bool           `json:"available"`
-	Issue       *SetupIssue    `json:"issue,omitempty"`
-	UpdatedAt   int64          `json:"updatedAt,omitempty"`
-	StatusPath  string         `json:"statusPath"`
-	Accounts    []AccountGroup `json:"accounts"`
-	HiddenCount int            `json:"hiddenCount"`
+	Available   bool             `json:"available"`
+	Issue       *SetupIssue      `json:"issue,omitempty"`
+	UpdatedAt   int64            `json:"updatedAt,omitempty"`
+	StatusPath  string           `json:"statusPath"`
+	Accounts    []AccountGroup   `json:"accounts"`
+	Hidden      []HiddenProvider `json:"hidden"`
+	HiddenCount int              `json:"hiddenCount"`
 }
 
 type cachedProvider struct {
@@ -90,6 +100,7 @@ func ReadSnapshot(db *sql.DB, cfg *config.Config, now time.Time) Snapshot {
 	snap := Snapshot{
 		StatusPath: statusPath,
 		Accounts:   []AccountGroup{},
+		Hidden:     []HiddenProvider{},
 	}
 
 	inspect := config.InspectMaestriDir(cfg.MaestriDir)
@@ -210,6 +221,13 @@ func ReadSnapshot(db *sql.DB, cfg *config.Config, now time.Time) Snapshot {
 				}
 			} else {
 				snap.HiddenCount++
+				snap.Hidden = append(snap.Hidden, HiddenProvider{
+					Key:           parsed.cacheKey,
+					Provider:      parsed.provider,
+					ProviderLabel: parsed.providerLabel,
+					State:         parsed.state,
+					Error:         parsed.errMsg,
+				})
 			}
 			continue
 		}
@@ -311,6 +329,8 @@ func ResolveWindowRule(sb config.Standby, provider, accountKey, windowID string)
 
 type parsedEntry struct {
 	cacheKey      string
+	provider      string
+	providerLabel string
 	isError       bool
 	state         string
 	errMsg        string
@@ -410,6 +430,8 @@ func parseProviderEntry(rawKey string, rawVal json.RawMessage, fileUpdatedAt int
 
 	return parsedEntry{
 		cacheKey:      rawKey,
+		provider:      provider,
+		providerLabel: providerLabel,
 		isError:       isErr,
 		state:         defaultStr(state, "error"),
 		errMsg:        errMsg,
