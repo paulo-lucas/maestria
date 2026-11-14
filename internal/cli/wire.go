@@ -59,24 +59,19 @@ func cmdWirePair(args []string, env *Env) error {
 	return runWirePair(bufio.NewReader(env.Stdin), parsed.String("host"), parsed.String("key"), parsed.HasString("host"), parsed.HasString("key"), env)
 }
 
-const wirePairGuide = `
-Pairing with Maestri Wire. In the Maestri app, open Settings → Wire and turn Wire on. Then:
-  1. Host: press Enter to keep the default (this machine).
-  2. Security key: open the "Manual" tab and copy the "Security key", a long code of
-     letter/number pairs separated by colons (like 3F:A2:09:…). Paste it here. It lets
-     Maestria check it is really talking to your Maestri.
-  3. Pairing code: open the "Pairing" tab and type the 6-digit code shown there (or use
-     the password you set in the Manual tab). A code works once, so you will be asked
-     for a second, fresh code: Maestria pairs twice, once read-only and once for actions.
+const wirePairIntro = `
+Pairing with Maestri Wire. First, in the Maestri app: Settings → Wire, turn Wire on.
+You will answer three questions in order: where Wire runs, its security key, and a pairing code.
 `
 
 func runWirePair(in *bufio.Reader, host, keyStr string, hasHost, hasKey bool, env *Env) error {
 	var err error
 	if !hasHost || !hasKey {
-		fmt.Fprint(env.Stdout, wirePairGuide)
+		fmt.Fprint(env.Stdout, wirePairIntro)
 	}
 	if !hasHost {
-		host, err = env.readLine(in, fmt.Sprintf("Maestri Wire host [%s]: ", wire.DefaultHost))
+		fmt.Fprintln(env.Stdout, "\n1/3 Where does Maestri run? Press Enter if it is this machine.")
+		host, err = env.readLine(in, fmt.Sprintf("    Host [%s]: ", wire.DefaultHost))
 		if err != nil {
 			return err
 		}
@@ -85,17 +80,17 @@ func runWirePair(in *bufio.Reader, host, keyStr string, hasHost, hasKey bool, en
 	if err != nil {
 		return usagef("%v", err)
 	}
-	if !hasKey {
-		keyStr, err = env.readLine(in, "Security key (Manual tab, e.g. 3F:A2:09:…): ")
-		if err != nil {
-			return err
+	var pin wire.Pin
+	if hasKey {
+		if pin, err = wire.ParsePin(keyStr); err != nil {
+			return usagef("%v", err)
 		}
+	} else if pin, err = askWirePin(in, host, env); err != nil {
+		return err
 	}
-	pin, err := wire.ParsePin(keyStr)
-	if err != nil {
-		return usagef("%v", err)
-	}
-	secret, err := env.readSecret(in, "Pairing code (6 digits, Pairing tab) or Wire password: ")
+	fmt.Fprintln(env.Stdout, "\n3/3 Pairing code: in Maestri, open the \"Pairing\" tab and type the 6-digit code shown there.")
+	fmt.Fprintln(env.Stdout, "    (Or the Wire password, if you set one in the \"Manual\" tab.)")
+	secret, err := env.readSecret(in, "    Pairing code or password: ")
 	if err != nil {
 		return err
 	}
@@ -108,8 +103,9 @@ func runWirePair(in *bufio.Reader, host, keyStr string, hasHost, hasKey bool, en
 	defer cancel()
 	fmt.Fprintln(env.Stdout, "Pairing the owner device and the read-only device…")
 	creds, err := wire.Provision(ctx, host, pin, "Maestria", secret, func() (string, error) {
-		fmt.Fprintln(env.Stdout, "A pairing code works once. Open Settings → Wire → Pairing for a new code.")
-		next, err := env.readSecret(in, "Second pairing code: ")
+		fmt.Fprintln(env.Stdout, "First device paired. Maestria pairs a second device (one reads, one acts), and a code works once:")
+		fmt.Fprintln(env.Stdout, "wait for the Pairing tab to show a NEW code and type it.")
+		next, err := env.readSecret(in, "    New pairing code: ")
 		return strings.TrimSpace(next), err
 	})
 	if err != nil {
@@ -124,6 +120,57 @@ func runWirePair(in *bufio.Reader, host, keyStr string, hasHost, hasKey bool, en
 	fmt.Fprintln(env.Stdout, "  Writes: an owner device, used only for prompts, Y/n answers and interrupts")
 	fmt.Fprintf(env.Stdout, "Saved to %s (readable only by you). The panel picks it up by itself.\n", path)
 	return nil
+}
+
+// askWirePin gets the host's security key. On this machine it reads the key Wire presents and
+// lets the user accept it with Enter (trust on first use; the key is pinned from then on).
+// Elsewhere it must be typed from the Manual tab. A 6-digit answer gets a hint, not an error.
+func askWirePin(in *bufio.Reader, host string, env *Env) (wire.Pin, error) {
+	fmt.Fprintln(env.Stdout, "\n2/3 Security key: it proves Maestria is talking to your Maestri.")
+	var found *wire.Pin
+	if wire.IsLoopbackHost(host) {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		p, err := wire.FetchPin(ctx, host)
+		cancel()
+		if err != nil {
+			fmt.Fprintf(env.Stdout, "    Could not reach Wire at %s (%v). Is Wire turned on?\n", host, err)
+		} else {
+			found = &p
+			fmt.Fprintf(env.Stdout, "    Wire on this machine presents this key:\n      %s\n", wire.FormatPin(p))
+			fmt.Fprintln(env.Stdout, "    It should match the \"Security key\" in Maestri's \"Manual\" tab. Press Enter to trust it.")
+		}
+	}
+	if found == nil {
+		fmt.Fprintln(env.Stdout, "    In Maestri, open the \"Manual\" tab and copy the \"Security key\" (pairs like 3F:A2:09:…).")
+	}
+	for {
+		prompt := "    Security key: "
+		if found != nil {
+			prompt = "    Security key [Enter = trust the key above]: "
+		}
+		raw, err := env.readLine(in, prompt)
+		if err != nil {
+			return wire.Pin{}, err
+		}
+		raw = strings.TrimSpace(raw)
+		if raw == "" && found != nil {
+			return *found, nil
+		}
+		if wire.IsPairingCode(raw) {
+			fmt.Fprintln(env.Stdout, "    That looks like the 6-digit pairing code: it comes in the next step. Here we need the long security key.")
+			continue
+		}
+		p, err := wire.ParsePin(raw)
+		if err != nil {
+			fmt.Fprintf(env.Stdout, "    %v\n", err)
+			continue
+		}
+		if found != nil && p != *found {
+			fmt.Fprintln(env.Stdout, "    That key does not match the one Wire presents on this machine. Check the Manual tab and try again.")
+			continue
+		}
+		return p, nil
+	}
 }
 
 type wireStatusOut struct {

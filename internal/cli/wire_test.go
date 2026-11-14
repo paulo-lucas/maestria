@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -149,6 +150,42 @@ func TestWirePairWithCodesAsksForASecondCode(t *testing.T) {
 	}
 }
 
+func TestWirePairOnThisMachineTrustsThePresentedKeyWithEnter(t *testing.T) {
+	fake, _ := wiretest.New()
+	t.Cleanup(fake.Close)
+	fake.SetPassword("right")
+	// Host, then Enter at the key prompt (trust on first use, loopback only).
+	env, cfgDir, out, errBuf := pairEnv(t, fake.Host+"\n\n", "right")
+	if code := Run([]string{"wire", "pair"}, *env); code != 0 {
+		t.Fatalf("pair failed: %s\n%s", errBuf.String(), out.String())
+	}
+	if !strings.Contains(out.String(), wire.FormatPin(mustPin(t, fake.PinHex()))) {
+		t.Fatalf("the presented key was not shown for comparison:\n%s", out.String())
+	}
+	creds, err := wire.LoadCredentials(filepath.Join(cfgDir, wire.FileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := mustPin(t, fake.PinHex()).Hex(); creds.Pin != want {
+		t.Fatalf("pinned %q, want %q", creds.Pin, want)
+	}
+}
+
+func mustPin(t *testing.T, s string) wire.Pin {
+	t.Helper()
+	p, err := wire.ParsePin(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func TestFetchPinRefusesNonLoopback(t *testing.T) {
+	if _, err := wire.FetchPin(context.Background(), "example.com:7434"); err == nil {
+		t.Fatal("FetchPin must refuse a non-loopback host")
+	}
+}
+
 func TestWirePairErrorsAreExplainedAndLeaveNothingBehind(t *testing.T) {
 	fake, _ := wiretest.New()
 	t.Cleanup(fake.Close)
@@ -157,8 +194,10 @@ func TestWirePairErrorsAreExplainedAndLeaveNothingBehind(t *testing.T) {
 		name, stdin, secret, want string
 	}{
 		{"wrong password", fake.Host + "\n" + fake.PinHex() + "\n", "wrong", "Wrong pairing code or password."},
-		{"wrong key", fake.Host + "\n" + strings.Repeat("ab", 32) + "\n", "right", "security key does not match"},
+		// On this machine a wrong or malformed key is explained and asked again (here stdin ends).
+		{"wrong key", fake.Host + "\n" + strings.Repeat("ab", 32) + "\n", "right", "does not match the one Wire presents"},
 		{"bad key text", fake.Host + "\nnot-a-key\n", "right", "security key must be"},
+		{"pairing code typed as key", fake.Host + "\n123456\n", "right", "looks like the 6-digit pairing code"},
 	}
 	for _, c := range cases {
 		env, cfgDir, out, errBuf := pairEnv(t, c.stdin, c.secret)
@@ -166,8 +205,8 @@ func TestWirePairErrorsAreExplainedAndLeaveNothingBehind(t *testing.T) {
 		if code := Run([]string{"wire", "pair"}, *env); code == 0 {
 			t.Fatalf("%s: succeeded", c.name)
 		}
-		if !strings.Contains(errBuf.String(), c.want) {
-			t.Errorf("%s: stderr = %q, want %q", c.name, errBuf.String(), c.want)
+		if !strings.Contains(errBuf.String()+out.String(), c.want) {
+			t.Errorf("%s: output = %q / %q, want %q", c.name, out.String(), errBuf.String(), c.want)
 		}
 		if _, err := os.Stat(filepath.Join(cfgDir, wire.FileName)); !os.IsNotExist(err) {
 			t.Errorf("%s: wire.json written", c.name)

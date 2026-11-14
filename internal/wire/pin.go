@@ -1,12 +1,14 @@
 package wire
 
 import (
+	"context"
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"net"
 	"strings"
 )
 
@@ -34,6 +36,55 @@ func ParsePin(s string) (Pin, error) {
 		}
 	}
 	return p, errors.New("the security key must be the 64-digit hex key from the Manual tab, or the base64 key from the QR code")
+}
+
+// FormatPin renders a pin the way Maestri's Manual tab shows it: upper-case hex pairs joined by
+// colons.
+func FormatPin(p Pin) string {
+	h := strings.ToUpper(p.Hex())
+	parts := make([]string, 0, len(h)/2)
+	for i := 0; i < len(h); i += 2 {
+		parts = append(parts, h[i:i+2])
+	}
+	return strings.Join(parts, ":")
+}
+
+// IsLoopbackHost reports whether host (name or address, with or without port) is this machine.
+func IsLoopbackHost(host string) bool {
+	h := host
+	if hh, _, err := net.SplitHostPort(host); err == nil {
+		h = hh
+	}
+	h = strings.Trim(strings.ToLower(h), "[]")
+	if h == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(h)
+	return ip != nil && ip.IsLoopback()
+}
+
+// FetchPin connects to a Wire host on this machine and returns the pin of the certificate it
+// presents, so pairing on the same machine can trust it on first use. It only completes a TLS
+// handshake and sends no request. It refuses any host that is not a loopback address.
+func FetchPin(ctx context.Context, host string) (Pin, error) {
+	if !IsLoopbackHost(host) {
+		return Pin{}, errors.New("trust on first use only applies to Wire on this machine")
+	}
+	d := tls.Dialer{Config: &tls.Config{
+		MinVersion:         tls.VersionTLS12,
+		ServerName:         "localhost",
+		InsecureSkipVerify: true, //nolint:gosec // reading the certificate to pin it; nothing is sent
+	}}
+	conn, err := d.DialContext(ctx, "tcp", host)
+	if err != nil {
+		return Pin{}, err
+	}
+	defer conn.Close()
+	certs := conn.(*tls.Conn).ConnectionState().PeerCertificates
+	if len(certs) == 0 {
+		return Pin{}, errors.New("Wire presented no certificate")
+	}
+	return SPKIHash(certs[0]), nil
 }
 
 // SPKIHash returns the pin of a certificate.
