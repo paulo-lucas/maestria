@@ -152,3 +152,46 @@ func TestColorToneAndInitials(t *testing.T) {
 		t.Fatalf("Initials -> %q", got)
 	}
 }
+
+func TestDiscoverPayloadWorkingDirectoryAndRoadmap(t *testing.T) {
+	home := t.TempDir()
+	maestriDir := filepath.Join(home, ".maestri")
+	wsAlpha := filepath.Join(home, "proj-alpha")
+	wsBeta := filepath.Join(home, "proj-beta")
+	for _, d := range []string{
+		filepath.Join(wsAlpha, "docs"),
+		wsBeta,
+		filepath.Join(maestriDir, "workspaces", "W1"),
+		filepath.Join(maestriDir, "workspaces", "W2"),
+	} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(wsAlpha, "docs", "roadmap.md"), []byte("# Alpha\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(maestriDir, "manifest.json"), []byte(`{"workspaces":[{"id":"W1","name":"Alpha","path":"workspaces/W1/workspace.json"}]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(maestriDir, "workspaces", "W1", "workspace.json"), []byte(`{"schemaVersion":2,"payload":{"name":"Alpha","workingDirectory":"`+filepath.ToSlash(wsAlpha)+`","color":"#2563EB"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(maestriDir, "workspaces", "W2", "workspace.json"), []byte(`{"schemaVersion":2,"payload":{"name":"Beta","workingDirectory":"`+filepath.ToSlash(wsBeta)+`"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	found, err := Discover(maestriDir, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(found) != 2 {
+		t.Fatalf("expected 2 workspaces, got %d: %+v", len(found), found)
+	}
+	if found[0].Name != "Alpha" || found[0].RoadmapPath != "docs/roadmap.md" || found[0].Color != "#2563eb" {
+		t.Fatalf("unexpected alpha: %+v", found[0])
+	}
+	if found[1].Name != "Beta" || found[1].RoadmapPath != "" {
+		t.Fatalf("unexpected beta: %+v", found[1])
+	}
+}

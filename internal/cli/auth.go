@@ -20,16 +20,19 @@ func cmdAuthSetup(args []string, env *Env) error {
 	if fs.NArg() > 0 {
 		return usagef("Usage: maestria auth setup [--force]")
 	}
+	return runAuthSetup(bufio.NewReader(env.Stdin), *force, env)
+}
+
+func runAuthSetup(in *bufio.Reader, force bool, env *Env) error {
 	dir := configDir(env)
 	existing, err := auth.LoadSecrets(dir)
 	if err != nil {
 		return err
 	}
-	if existing != nil && !*force {
+	if existing != nil && !force {
 		return fmt.Errorf("credentials already exist. Re-run with --force to replace them (this signs out every session)")
 	}
 	out := env.Stdout
-	in := bufio.NewReader(env.Stdin)
 
 	var password string
 	for {

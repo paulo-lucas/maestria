@@ -16,15 +16,18 @@ import (
 	"golang.org/x/term"
 
 	"github.com/maestria-dev/maestria/internal/config"
+	"github.com/maestria-dev/maestria/internal/service"
 )
 
 const help = `maestria: control panel for Maestri workspaces
 
 Usage:
+  maestria init                      Run the interactive setup wizard
   maestria serve                     Start the panel (127.0.0.1 only)
   maestria connect [--link CODE]     Link this machine to a hosted Maestria and stay connected
   maestria connect status|unlink     Show the link, or revoke it
   maestria devices pending|approve|reject|list|revoke   Approve browsers on this machine (hosted mode)
+  maestria service <subcommand>      Manage background service (install|uninstall|start|stop|restart|status|logs)
   maestria post <kind> <body>        Post a human task or notice (notice|approve|input|choice)
   maestria inbox                     List inbox tasks
   maestria answers [--ack]           Read (and optionally acknowledge) human responses
@@ -54,8 +57,17 @@ type Env struct {
 	// ReadSecret reads a line without echo. nil uses the terminal.
 	ReadSecret func(prompt string) (string, error)
 	// Ctx ends long-running commands (connect) when cancelled. nil uses SIGINT and SIGTERM.
-	Ctx     context.Context
+	Ctx context.Context
+	// IsTTY reports whether Stdin is an interactive terminal. nil checks Stdin.(*os.File).
+	IsTTY func() bool
+	// ServiceRunner, ServiceBinaryPath, and ServiceReachability allow tests to stub service operations.
+	ServiceRunner       service.CommandRunner
+	ServiceBinaryPath   string
+	ServiceReachability func(host string, port int) service.Reachability
+	// Version, Commit, and Date are injected at build time via -ldflags.
 	Version string
+	Commit  string
+	Date    string
 }
 
 // DefaultEnv returns the real process environment.
@@ -121,14 +133,17 @@ func run(args []string, env *Env) error {
 		fmt.Fprint(env.Stdout, help)
 		return nil
 	case "version", "--version":
-		fmt.Fprintf(env.Stdout, "maestria %s\n", env.Version)
-		return nil
+		return cmdVersion(rest, env)
+	case "init":
+		return cmdInit(rest, env)
 	case "serve":
 		return cmdServe(rest, env)
 	case "connect":
 		return cmdConnect(rest, env)
 	case "devices", "device":
 		return cmdDevices(rest, env)
+	case "service":
+		return cmdService(rest, env)
 	case "auth":
 		if len(rest) == 0 {
 			return usagef("Usage: maestria auth setup [--force] | reset-sessions")
@@ -166,6 +181,36 @@ func run(args []string, env *Env) error {
 		return cmdImportV1(rest, env)
 	}
 	return usagef("Unknown command: %s\n\n%s", strings.Join(args, " "), help)
+}
+
+func cmdVersion(args []string, env *Env) error {
+	parsed, err := parseFlexArgs(args, flagSpec{Bools: map[string]bool{"json": true}})
+	if err != nil {
+		return usagef("%v", err)
+	}
+	if len(parsed.Pos) > 0 {
+		return usagef("Usage: maestria version [--json]")
+	}
+	if parsed.Bool("json") {
+		return writeJSONLine(env, map[string]string{
+			"version": env.Version,
+			"commit":  env.Commit,
+			"date":    env.Date,
+		})
+	}
+	var meta []string
+	if env.Commit != "" {
+		meta = append(meta, "commit "+env.Commit)
+	}
+	if env.Date != "" {
+		meta = append(meta, "built "+env.Date)
+	}
+	if len(meta) == 0 {
+		fmt.Fprintf(env.Stdout, "maestria %s\n", env.Version)
+		return nil
+	}
+	fmt.Fprintf(env.Stdout, "maestria %s (%s)\n", env.Version, strings.Join(meta, ", "))
+	return nil
 }
 
 func configDir(env *Env) string { return config.DefaultDir(env.Config) }

@@ -576,17 +576,55 @@ func SaveRaw(configDir string, data []byte, env Env) error {
 	return privfile.WriteAtomic(FilePath(configDir), data)
 }
 
-// SaveStandby updates the "standby" section of config.json while preserving other keys.
-func SaveStandby(configDir string, s Standby, env Env) error {
+func loadTopMap(configDir string) (obj, bool, error) {
 	top := obj{}
 	existing, err := os.ReadFile(FilePath(configDir))
-	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return errorf("config: cannot read %s: %v", FilePath(configDir), err)
+	if errors.Is(err, fs.ErrNotExist) {
+		return top, false, nil
+	}
+	if err != nil {
+		return nil, false, errorf("config: cannot read %s: %v", FilePath(configDir), err)
 	}
 	if len(bytes.TrimSpace(existing)) > 0 {
 		if err := json.Unmarshal(existing, &top); err != nil {
-			return errorf("config: existing config.json is not valid JSON: %v", err)
+			return nil, true, errorf("config: existing config.json is not valid JSON: %v", err)
 		}
+	}
+	return top, true, nil
+}
+
+// RawKeys returns the top-level keys present in config.json and whether the file exists.
+func RawKeys(configDir string) (map[string]json.RawMessage, bool, error) {
+	return loadTopMap(configDir)
+}
+
+// SaveMaestriDir updates or removes "maestriDir" in config.json while preserving other keys.
+func SaveMaestriDir(configDir, maestriDir string, custom bool, env Env) error {
+	top, _, err := loadTopMap(configDir)
+	if err != nil {
+		return err
+	}
+	if custom {
+		raw, err := json.Marshal(maestriDir)
+		if err != nil {
+			return err
+		}
+		top["maestriDir"] = raw
+	} else {
+		delete(top, "maestriDir")
+	}
+	out, err := json.MarshalIndent(top, "", "  ")
+	if err != nil {
+		return err
+	}
+	return SaveRaw(configDir, append(out, '\n'), env)
+}
+
+// SaveStandby updates the "standby" section of config.json while preserving other keys.
+func SaveStandby(configDir string, s Standby, env Env) error {
+	top, _, err := loadTopMap(configDir)
+	if err != nil {
+		return err
 	}
 	if s.Thresholds == nil {
 		s.Thresholds = map[string]map[string]int{}
