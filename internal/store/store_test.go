@@ -104,3 +104,44 @@ func TestKV(t *testing.T) {
 		t.Fatal("delete")
 	}
 }
+
+// A database created by the first migration alone upgrades in place and keeps its rows.
+func TestUpgradeFromSchemaVersion1(t *testing.T) {
+	path := filepath.Join(t.TempDir(), FileName)
+	db, err := OpenPath(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Rewind to what a build with only migration 1 would have left behind.
+	if _, err := db.Exec("ALTER TABLE pending_logins DROP COLUMN password_ok"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("PRAGMA user_version = 1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("INSERT INTO pending_logins (id, created_at, expires_at, ip) VALUES ('p', 1, 2, '1.2.3.4')"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("INSERT INTO audit (ts, event) VALUES (1, 'kept')"); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+
+	db, err = OpenPath(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var version, ok int
+	_ = db.QueryRow("PRAGMA user_version").Scan(&version)
+	if version != SchemaVersion() || SchemaVersion() < 2 {
+		t.Fatalf("version %d", version)
+	}
+	if err := db.QueryRow("SELECT password_ok FROM pending_logins WHERE id = 'p'").Scan(&ok); err != nil || ok != 0 {
+		t.Fatalf("existing pending login after upgrade: %d %v", ok, err)
+	}
+	var ev string
+	if err := db.QueryRow("SELECT event FROM audit").Scan(&ev); err != nil || ev != "kept" {
+		t.Fatalf("audit row after upgrade: %q %v", ev, err)
+	}
+}

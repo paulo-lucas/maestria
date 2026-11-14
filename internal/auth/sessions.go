@@ -150,41 +150,68 @@ func (s *SessionStore) Count() (int, error) {
 	return n, err
 }
 
-// CreatePending records a login whose password was verified and returns its cookie token.
-func (s *SessionStore) CreatePending(ip string) (string, error) {
+// CreatePending records the first login step and returns its cookie token. The record keeps, on
+// the server only, whether the password was right and which IP did the first step. There is at
+// most one pending login per IP, which also bounds the table against floods.
+func (s *SessionStore) CreatePending(ip string, passwordOK bool) (string, error) {
 	token := RandomToken()
 	t := s.now()
-	_, err := s.db.Exec("INSERT INTO pending_logins (id, created_at, expires_at, ip) VALUES (?, ?, ?, ?)",
-		HashToken(token), t.UnixMilli(), t.Add(PendingTTL).UnixMilli(), clip(ip, 64))
-	return token, err
+	ip = clip(ip, 64)
+	ok := 0
+	if passwordOK {
+		ok = 1
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return "", err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec("DELETE FROM pending_logins WHERE ip = ? OR expires_at <= ?", ip, t.UnixMilli()); err != nil {
+		return "", err
+	}
+	if _, err := tx.Exec("INSERT INTO pending_logins (id, created_at, expires_at, ip, password_ok) VALUES (?, ?, ?, ?, ?)",
+		HashToken(token), t.UnixMilli(), t.Add(PendingTTL).UnixMilli(), ip, ok); err != nil {
+		return "", err
+	}
+	return token, tx.Commit()
 }
 
-// PendingValid reports whether a pending-login token is live.
-func (s *SessionStore) PendingValid(token string) (bool, error) {
+// Pending is a live first-step login.
+type Pending struct {
+	PasswordOK bool
+}
+
+// PendingFor returns the live pending login for a cookie token, only when ip is the IP that did
+// the first step (a stolen pending cookie is useless from another address). Nil means none.
+func (s *SessionStore) PendingFor(token, ip string) (*Pending, error) {
 	if token == "" || len(token) > 128 {
-		return false, nil
+		return nil, nil
 	}
 	var expires int64
-	err := s.db.QueryRow("SELECT expires_at FROM pending_logins WHERE id = ?", HashToken(token)).Scan(&expires)
+	var rowIP string
+	var ok int
+	err := s.db.QueryRow("SELECT expires_at, ip, password_ok FROM pending_logins WHERE id = ?", HashToken(token)).Scan(&expires, &rowIP, &ok)
 	if err == sql.ErrNoRows {
-		return false, nil
+		return nil, nil
 	}
 	if err != nil {
-		return false, err
+		return nil, err
 	}
-	return s.now().UnixMilli() < expires, nil
+	if s.now().UnixMilli() >= expires || rowIP != clip(ip, 64) {
+		return nil, nil
+	}
+	return &Pending{PasswordOK: ok == 1}, nil
 }
 
-// ConsumePending deletes a pending login, reporting whether it was live. Single use.
+// ConsumePending deletes a pending login, reporting whether this call removed it. Single use.
 func (s *SessionStore) ConsumePending(token string) (bool, error) {
-	ok, err := s.PendingValid(token)
-	if err != nil || token == "" {
-		return false, err
+	if token == "" || len(token) > 128 {
+		return false, nil
 	}
 	res, err := s.db.Exec("DELETE FROM pending_logins WHERE id = ?", HashToken(token))
 	if err != nil {
 		return false, err
 	}
 	n, _ := res.RowsAffected()
-	return ok && n == 1, nil
+	return n == 1, nil
 }

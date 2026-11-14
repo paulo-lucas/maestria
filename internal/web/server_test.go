@@ -180,6 +180,28 @@ func (c *client) postForm(path string, form url.Values, hdr map[string]string) r
 	return c.do(http.MethodPost, path, strings.NewReader(form.Encode()), h)
 }
 
+// attempt does one whole login: step 1 with the password, then step 2 with a TOTP code (or a
+// recovery code). It returns the step 1 and step 2 responses.
+func (c *client) attempt(password, factor string, recovery bool) (step1, step2 resp) {
+	c.h.t.Helper()
+	page := c.get("/login")
+	step1 = c.postForm("/login", url.Values{"_csrf": {csrfFrom(c.h.t, page)}, "password": {password}}, nil)
+	if step1.Code != http.StatusSeeOther || step1.Header().Get("Location") != "/login/2fa" {
+		return step1, resp{}
+	}
+	page = c.get("/login/2fa")
+	field, path := "code", "/login/2fa"
+	if recovery {
+		field, path = "recovery", "/login/recovery"
+	}
+	step2 = c.postForm(path, url.Values{"_csrf": {csrfFrom(c.h.t, page)}, field: {factor}}, nil)
+	return step1, step2
+}
+
+func isGenericFailure(r resp) bool {
+	return r.Code == http.StatusSeeOther && r.Header().Get("Location") == "/login?error=invalid"
+}
+
 var csrfRE = regexp.MustCompile(`name="_csrf" value="([^"]+)"`)
 
 func csrfFrom(t *testing.T, r resp) string {
@@ -387,87 +409,168 @@ func TestSecureCookieUsesHostPrefix(t *testing.T) {
 	}
 }
 
-func TestWrongPasswordAndWrongCodeAreRejected(t *testing.T) {
+func TestWrongPasswordAndWrongCodeFailIdentically(t *testing.T) {
 	h := newHarness(t)
+	good := h.code(0)
+
+	step1Right, _ := h.client().attempt(testPassword, "000000", false)
+	step1Wrong, step2WrongPW := h.client().attempt("not the password", good, false)
+	_, step2WrongCode := h.client().attempt(testPassword, "000000", false)
+	_, step2Both := h.client().attempt("not the password", "000000", false)
+
+	// Step 1 is no oracle: right and wrong passwords get the very same answer.
+	if step1Right.Code != step1Wrong.Code || step1Right.Header().Get("Location") != step1Wrong.Header().Get("Location") {
+		t.Fatalf("step 1 differs: %d %q vs %d %q", step1Right.Code, step1Right.Header().Get("Location"), step1Wrong.Code, step1Wrong.Header().Get("Location"))
+	}
+	cookieNames := func(r resp) string {
+		var n []string
+		for _, c := range r.Result().Cookies() {
+			n = append(n, c.Name)
+		}
+		return strings.Join(n, ",")
+	}
+	if cookieNames(step1Right) != cookieNames(step1Wrong) {
+		t.Fatalf("step 1 sets different cookies: %q vs %q", cookieNames(step1Right), cookieNames(step1Wrong))
+	}
+	// Step 2 fails the same way whichever factor was wrong, and goes back to step 1.
+	for name, r := range map[string]resp{"wrong password, right code": step2WrongPW, "right password, wrong code": step2WrongCode, "both wrong": step2Both} {
+		if !isGenericFailure(r) {
+			t.Errorf("%s: %d %q, want 303 /login?error=invalid", name, r.Code, r.Header().Get("Location"))
+		}
+	}
+	if cookieNames(step2WrongPW) != cookieNames(step2WrongCode) || cookieNames(step2WrongCode) != cookieNames(step2Both) {
+		t.Fatal("failure responses set different cookies")
+	}
 	c := h.client()
-	page := c.get("/login")
-	r := c.postForm("/login", url.Values{"_csrf": {csrfFrom(t, page)}, "password": {"not the password"}}, nil)
-	if r.Code != http.StatusUnauthorized || !strings.Contains(r.body, "Invalid credentials.") {
-		t.Fatalf("wrong password: %d", r.Code)
+	page := c.get("/login?error=invalid")
+	if !strings.Contains(page.body, "Invalid password or code.") || strings.Contains(strings.ToLower(page.body), "wrong password") {
+		t.Fatalf("login page must show the one generic message: %.300s", page.body)
 	}
-	page = c.get("/login")
-	c.postForm("/login", url.Values{"_csrf": {csrfFrom(t, page)}, "password": {testPassword}}, nil)
-	page = c.get("/login/2fa")
-	r = c.postForm("/login/2fa", url.Values{"_csrf": {csrfFrom(t, page)}, "code": {"000000"}}, nil)
-	if r.Code != http.StatusUnauthorized || !strings.Contains(r.body, "That code didn") || !strings.Contains(r.body, "attempts left") {
-		t.Fatalf("wrong code: %d %.300s", r.Code, r.body)
+	// Only whitelisted messages: the query value is never echoed.
+	if page := c.get("/login?error=%3Cscript%3Ealert(1)%3C/script%3E"); strings.Contains(page.body, "alert(1)") || strings.Contains(page.body, "Invalid password") {
+		t.Fatal("unknown error values must not render anything")
 	}
-	if r := c.get("/"); r.Code != http.StatusSeeOther {
+	if r := c.get("/login?error=expired"); !strings.Contains(r.body, "expired") {
+		t.Fatal("expired message")
+	}
+	if r := h.client().get("/"); r.Code != http.StatusSeeOther {
 		t.Fatal("must still be logged out")
 	}
 }
 
-func TestTwoFARequiresPasswordStep(t *testing.T) {
+func TestStepTwoDoesNotLeakThePasswordThroughTheCode(t *testing.T) {
+	h := newHarness(t)
+	// A correct code with a wrong password must not log in, and must not burn the code.
+	c := h.client()
+	code := h.code(0)
+	if _, r := c.attempt("not the password", code, false); !isGenericFailure(r) {
+		t.Fatalf("wrong password with a valid code: %d %s", r.Code, r.Header().Get("Location"))
+	}
+	if c.get("/").Code != http.StatusSeeOther {
+		t.Fatal("must not be logged in")
+	}
+	if _, r := h.client().attempt(testPassword, code, false); r.Code != http.StatusSeeOther || r.Header().Get("Location") != "/" {
+		t.Fatalf("the same code must still work with the right password: %d %s", r.Code, r.Header().Get("Location"))
+	}
+}
+
+func TestFailedAttemptSendsYouBackToStepOne(t *testing.T) {
+	h := newHarness(t)
+	c := h.client()
+	_, r := c.attempt(testPassword, "000000", false)
+	if !isGenericFailure(r) {
+		t.Fatal("generic failure expected")
+	}
+	if r := c.get("/login/2fa"); r.Code != http.StatusSeeOther || r.Header().Get("Location") != "/login" {
+		t.Fatalf("the pending login is over: %d %s", r.Code, r.Header().Get("Location"))
+	}
+	// Posting the right code to the old pending login does nothing: one attempt per password step.
+	page := c.get("/login")
+	r2 := c.postForm("/login/2fa", url.Values{"_csrf": {csrfFrom(t, page)}, "code": {h.code(0)}}, nil)
+	if r2.Code != http.StatusSeeOther || r2.Header().Get("Location") == "/" {
+		t.Fatalf("no second guess against a finished pending login: %d %s", r2.Code, r2.Header().Get("Location"))
+	}
+}
+
+func TestPendingLoginCookieFromAnotherIPIsUseless(t *testing.T) {
+	h := newHarness(t)
+	victim := h.client()
+	page := victim.get("/login")
+	victim.postForm("/login", url.Values{"_csrf": {csrfFrom(t, page)}, "password": {testPassword}}, nil)
+	stolen := victim.cookie("maestria_pending")
+	if stolen == "" {
+		t.Fatal("no pending cookie")
+	}
+	attacker := h.client()
+	attacker.ip = "203.0.113.200:5555"
+	page = attacker.get("/login")
+	jar := attacker.jar
+	jar.SetCookies(&url.URL{Scheme: "http", Host: testHost, Path: "/"}, []*http.Cookie{{Name: "maestria_pending", Value: stolen, Path: "/"}})
+	if r := attacker.get("/login/2fa"); r.Header().Get("Location") != "/login" {
+		t.Fatalf("2FA page from another IP: %d %s", r.Code, r.Header().Get("Location"))
+	}
+	r := attacker.postForm("/login/2fa", url.Values{"_csrf": {csrfFrom(t, page)}, "code": {h.code(0)}}, nil)
+	if r.Code != http.StatusSeeOther || r.Header().Get("Location") == "/" {
+		t.Fatalf("stolen pending cookie logged in from another IP: %d %s", r.Code, r.Header().Get("Location"))
+	}
+	// The owner is not locked out of their own pending login by the attempt.
+	page = victim.get("/login/2fa")
+	if r := victim.postForm("/login/2fa", url.Values{"_csrf": {csrfFrom(t, page)}, "code": {h.code(0)}}, nil); r.Header().Get("Location") != "/" {
+		t.Fatalf("owner: %d %s", r.Code, r.Header().Get("Location"))
+	}
+}
+func TestTwoFARequiresStepOne(t *testing.T) {
 	h := newHarness(t)
 	c := h.client()
 	if r := c.get("/login/2fa"); r.Code != http.StatusSeeOther || r.Header().Get("Location") != "/login" {
-		t.Fatalf("2fa page without password: %d", r.Code)
+		t.Fatalf("2fa page without step 1: %d", r.Code)
 	}
 	page := c.get("/login")
 	r := c.postForm("/login/2fa", url.Values{"_csrf": {csrfFrom(t, page)}, "code": {h.code(0)}}, nil)
-	if r.Code != http.StatusSeeOther || r.Header().Get("Location") != "/login" {
-		t.Fatalf("2fa without password step must bounce to login: %d %s", r.Code, r.Header().Get("Location"))
+	if r.Code != http.StatusSeeOther || r.Header().Get("Location") == "/" {
+		t.Fatalf("2fa without step 1 must bounce: %d %s", r.Code, r.Header().Get("Location"))
 	}
 	if r := c.get("/"); r.Code != http.StatusSeeOther {
 		t.Fatal("a correct code alone must not log in")
 	}
 }
-
 func TestTOTPReplayRefusedOverHTTP(t *testing.T) {
 	h := newHarness(t)
 	first := h.client()
 	first.login()
 	// The same code (same step) for a second login attempt must be refused.
-	c := h.client()
-	page := c.get("/login")
-	c.postForm("/login", url.Values{"_csrf": {csrfFrom(t, page)}, "password": {testPassword}}, nil)
-	page = c.get("/login/2fa")
-	r := c.postForm("/login/2fa", url.Values{"_csrf": {csrfFrom(t, page)}, "code": {h.code(0)}}, nil)
-	if r.Code != http.StatusUnauthorized {
-		t.Fatalf("replayed TOTP code: %d", r.Code)
+	_, r := h.client().attempt(testPassword, h.code(0), false)
+	if !isGenericFailure(r) {
+		t.Fatalf("replayed TOTP code: %d %s", r.Code, r.Header().Get("Location"))
 	}
 }
-
 func TestRecoveryCodeLoginIsSingleUse(t *testing.T) {
 	h := newHarness(t)
 	codes, _ := auth.GenerateRecoveryCodes(2)
 	if err := auth.ReplaceRecoveryCodes(h.db, codes, h.clock.now()); err != nil {
 		t.Fatal(err)
 	}
-	attempt := func(code string) resp {
-		c := h.client()
-		page := c.get("/login")
-		c.postForm("/login", url.Values{"_csrf": {csrfFrom(t, page)}, "password": {testPassword}}, nil)
-		page = c.get("/login/2fa")
-		return c.postForm("/login/recovery", url.Values{"_csrf": {csrfFrom(t, page)}, "recovery": {code}}, nil)
-	}
-	if r := attempt("aaaa-bbbb"); r.Code != http.StatusUnauthorized || !strings.Contains(r.body, "That recovery code didn") {
+	if _, r := h.client().attempt(testPassword, "aaaa-bbbb", true); !isGenericFailure(r) {
 		t.Fatalf("bad recovery code: %d", r.Code)
 	}
-	if r := attempt(codes[0]); r.Code != http.StatusSeeOther || r.Header().Get("Location") != "/" {
-		t.Fatalf("good recovery code: %d", r.Code)
+	if _, r := h.client().attempt(testPassword, codes[0], true); r.Code != http.StatusSeeOther || r.Header().Get("Location") != "/" {
+		t.Fatalf("good recovery code: %d %s", r.Code, r.Header().Get("Location"))
 	}
-	if r := attempt(codes[0]); r.Code != http.StatusUnauthorized {
+	if _, r := h.client().attempt(testPassword, codes[0], true); !isGenericFailure(r) {
 		t.Fatalf("reused recovery code: %d", r.Code)
 	}
+	// A wrong password with a valid code fails the same way and keeps the code.
+	if _, r := h.client().attempt("not the password", codes[1], true); !isGenericFailure(r) {
+		t.Fatalf("wrong password with a valid recovery code: %d", r.Code)
+	}
+	if n, _ := auth.RemainingRecoveryCodes(h.db); n != 1 {
+		t.Fatalf("a failed attempt must not use up a recovery code: %d left", n)
+	}
 }
-
 func TestLoginAuditNeverContainsSecrets(t *testing.T) {
 	h := newHarness(t)
-	c := h.client()
-	page := c.get("/login")
-	c.postForm("/login", url.Values{"_csrf": {csrfFrom(t, page)}, "password": {"hunter2hunter2"}}, nil)
-	c.login()
+	h.client().attempt("hunter2hunter2", "123456", false)
+	h.client().login()
 	entries, _ := h.srv.Audit.Recent(100)
 	var all strings.Builder
 	events := map[string]bool{}
@@ -475,7 +578,7 @@ func TestLoginAuditNeverContainsSecrets(t *testing.T) {
 		all.WriteString(e.Event + " " + e.Detail + " " + e.IP + "\n")
 		events[e.Event] = true
 	}
-	for _, e := range []string{"login_fail", "login_password_ok", "login_ok"} {
+	for _, e := range []string{"login_fail", "login_ok"} {
 		if !events[e] {
 			t.Errorf("missing audit event %s", e)
 		}
@@ -485,51 +588,68 @@ func TestLoginAuditNeverContainsSecrets(t *testing.T) {
 			t.Fatalf("audit log leaks %q", secret)
 		}
 	}
+	if strings.Contains(all.String(), "password") {
+		t.Fatalf("the audit log must not say which factor failed: %s", all.String())
+	}
 }
 
 // ---- rate limit ----
 
 func TestLockoutBlocksEvenCorrectCredentialsThenRecovers(t *testing.T) {
-	h := newHarness(t)
+	h := newHarness(t) // 5 failed attempts per IP
 	c := h.client()
 	for i := 0; i < 5; i++ {
-		page := c.get("/login")
-		r := c.postForm("/login", url.Values{"_csrf": {csrfFrom(t, page)}, "password": {"wrong password!"}}, nil)
-		want := http.StatusUnauthorized
-		if i == 4 {
-			want = http.StatusTooManyRequests // the fifth failure triggers the lockout
+		_, r := c.attempt("wrong password!", "000000", false)
+		if i < 4 && !isGenericFailure(r) {
+			t.Fatalf("attempt %d: %d %s", i, r.Code, r.Header().Get("Location"))
 		}
-		if r.Code != want {
-			t.Fatalf("attempt %d: %d, want %d", i, r.Code, want)
+		if i == 4 && (r.Code != http.StatusTooManyRequests || r.Header().Get("Retry-After") == "") {
+			t.Fatalf("the fifth failed attempt locks out: %d", r.Code)
 		}
 	}
+	// Even with correct credentials, step 1 is refused while locked out.
 	page := c.get("/login")
 	r := c.postForm("/login", url.Values{"_csrf": {csrfFrom(t, page)}, "password": {testPassword}}, nil)
-	if r.Code != http.StatusTooManyRequests || r.Header().Get("Retry-After") == "" || !strings.Contains(r.body, "Too many failed attempts") {
-		t.Fatalf("locked out: %d retry=%q", r.Code, r.Header().Get("Retry-After"))
+	if r.Code != http.StatusTooManyRequests || !strings.Contains(r.body, "Too many failed attempts") {
+		t.Fatalf("locked out: %d", r.Code)
 	}
 	other := h.client()
 	other.ip = "203.0.113.9:1234"
-	page = other.get("/login")
-	r = other.postForm("/login", url.Values{"_csrf": {csrfFrom(t, page)}, "password": {testPassword}}, nil)
-	if r.Code != http.StatusSeeOther {
+	if _, r := other.attempt(testPassword, h.code(0), false); r.Header().Get("Location") != "/" {
 		t.Fatalf("another IP is unaffected by the per-IP lockout: %d", r.Code)
 	}
 	h.clock.advance(16 * time.Minute)
-	page = c.get("/login")
-	r = c.postForm("/login", url.Values{"_csrf": {csrfFrom(t, page)}, "password": {testPassword}}, nil)
-	if r.Code != http.StatusSeeOther {
-		t.Fatalf("recovers after the lockout: %d", r.Code)
+	if _, r := c.attempt(testPassword, h.code(auth.TOTPStep), false); r.Header().Get("Location") != "/" {
+		t.Fatalf("recovers after the lockout: %d %s", r.Code, r.Header().Get("Location"))
 	}
 }
 
+// A wrong password AND a wrong code is one failed attempt, not two.
+func TestOneFailedAttemptCountsOnce(t *testing.T) {
+	h := newHarness(t)
+	c := h.client()
+	for i := 0; i < 4; i++ {
+		if _, r := c.attempt("wrong password!", "000000", false); !isGenericFailure(r) {
+			t.Fatalf("attempt %d: %d", i, r.Code)
+		}
+	}
+	// With two failures per attempt the limiter (5) would already have locked after attempt 3.
+	if _, r := c.attempt(testPassword, h.code(0), false); r.Header().Get("Location") != "/" {
+		t.Fatalf("four failed attempts must not lock out a five-attempt limiter: %d %s", r.Code, r.Header().Get("Location"))
+	}
+}
 func TestTrustedCfConnectingIPKeysTheLimiter(t *testing.T) {
+	failFrom := func(h *harness, c *client, cfIP string, n int) {
+		for i := 0; i < n; i++ {
+			page := c.get("/login")
+			c.postForm("/login", url.Values{"_csrf": {csrfFrom(t, page)}, "password": {"wrong password!"}}, map[string]string{"Cf-Connecting-Ip": cfIP})
+			page = c.do(http.MethodGet, "/login/2fa", nil, map[string]string{"Cf-Connecting-Ip": cfIP})
+			c.postForm("/login/2fa", url.Values{"_csrf": {csrfFrom(t, page)}, "code": {"000000"}}, map[string]string{"Cf-Connecting-Ip": cfIP})
+		}
+	}
 	h := newHarness(t, opts{mutate: func(c *config.Config) { c.TrustCfConnectingIP = true }})
 	c := h.client()
-	for i := 0; i < 5; i++ {
-		page := c.get("/login")
-		c.postForm("/login", url.Values{"_csrf": {csrfFrom(t, page)}, "password": {"wrong password!"}}, map[string]string{"Cf-Connecting-Ip": "192.0.2.50"})
-	}
+	failFrom(h, c, "192.0.2.50", 5)
 	page := c.get("/login")
 	r := c.postForm("/login", url.Values{"_csrf": {csrfFrom(t, page)}, "password": {testPassword}}, map[string]string{"Cf-Connecting-Ip": "192.0.2.50"})
 	if r.Code != http.StatusTooManyRequests {
@@ -540,12 +660,11 @@ func TestTrustedCfConnectingIPKeysTheLimiter(t *testing.T) {
 	if r.Code != http.StatusSeeOther {
 		t.Fatalf("a different client IP is unaffected: %d", r.Code)
 	}
-	// Untrusted by default: the header is ignored.
+	// Untrusted by default: the header is ignored, so rotating it does not dodge the limiter.
 	h2 := newHarness(t)
 	c2 := h2.client()
 	for i := 0; i < 5; i++ {
-		page := c2.get("/login")
-		c2.postForm("/login", url.Values{"_csrf": {csrfFrom(t, page)}, "password": {"wrong password!"}}, map[string]string{"Cf-Connecting-Ip": "192." + string(rune('0'+i)) + ".2.1"})
+		failFrom(h2, c2, "192."+string(rune('0'+i))+".2.1", 1)
 	}
 	page = c2.get("/login")
 	if r := c2.postForm("/login", url.Values{"_csrf": {csrfFrom(t, page)}, "password": {testPassword}}, map[string]string{"Cf-Connecting-Ip": "9.9.9.9"}); r.Code != http.StatusTooManyRequests {
@@ -863,7 +982,7 @@ func TestKillSwitchAndEveryAuthenticatedWriteAreAudited(t *testing.T) {
 			kill = e.Detail
 		}
 	}
-	for _, ev := range []string{"login_password_ok", "login_ok", "logout_all", "kill_switch", "write"} {
+	for _, ev := range []string{"login_ok", "logout_all", "kill_switch", "write"} {
 		if counts[ev] == 0 {
 			t.Errorf("missing audit event %q (have %v)", ev, counts)
 		}

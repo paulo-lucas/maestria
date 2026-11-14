@@ -256,7 +256,7 @@ func TestSessionDestroyOneAndAll(t *testing.T) {
 	s := sessions(db, newClock())
 	a, _, _ := s.Create("ip", "ua")
 	b, _, _ := s.Create("ip", "ua")
-	p, _ := s.CreatePending("ip")
+	p, _ := s.CreatePending("ip", true)
 	_ = s.Destroy(a)
 	if got, _ := s.Validate(a); got != nil {
 		t.Fatal("destroyed session")
@@ -267,26 +267,44 @@ func TestSessionDestroyOneAndAll(t *testing.T) {
 	if n, _ := s.DestroyAll(); n != 1 {
 		t.Fatalf("destroy all: %d", n)
 	}
-	if ok, _ := s.PendingValid(p); ok {
+	if got, _ := s.PendingFor(p, "ip"); got != nil {
 		t.Fatal("destroy all must also drop pending logins")
 	}
 }
 
-func TestPendingLoginExpiresAndIsSingleUse(t *testing.T) {
+func TestPendingLoginIsBoundToIPExpiresAndIsSingleUse(t *testing.T) {
 	db := openDB(t)
 	c := newClock()
 	s := sessions(db, c)
-	p, _ := s.CreatePending("ip")
+	p, _ := s.CreatePending("1.1.1.1", true)
+	if got, _ := s.PendingFor(p, "2.2.2.2"); got != nil {
+		t.Fatal("a pending login must be unusable from another IP")
+	}
+	if got, _ := s.PendingFor(p, "1.1.1.1"); got == nil || !got.PasswordOK {
+		t.Fatal("pending login keeps the verdict server-side")
+	}
 	if ok, _ := s.ConsumePending(p); !ok {
 		t.Fatal("consume")
 	}
 	if ok, _ := s.ConsumePending(p); ok {
 		t.Fatal("single use")
 	}
-	p2, _ := s.CreatePending("ip")
+	p2, _ := s.CreatePending("1.1.1.1", false)
+	if got, _ := s.PendingFor(p2, "1.1.1.1"); got == nil || got.PasswordOK {
+		t.Fatal("a wrong-password verdict is remembered")
+	}
 	c.advance(PendingTTL)
-	if ok, _ := s.PendingValid(p2); ok {
+	if got, _ := s.PendingFor(p2, "1.1.1.1"); got != nil {
 		t.Fatal("pending login must expire")
+	}
+	// One pending login per IP: a flood from one address cannot grow the table.
+	for i := 0; i < 20; i++ {
+		_, _ = s.CreatePending("9.9.9.9", false)
+	}
+	var n int
+	_ = db.QueryRow("SELECT COUNT(*) FROM pending_logins WHERE ip = '9.9.9.9'").Scan(&n)
+	if n != 1 {
+		t.Fatalf("pending logins for one IP: %d", n)
 	}
 }
 
@@ -370,42 +388,196 @@ func newAuthenticator(t *testing.T, c *clock) (*Authenticator, *Secrets) {
 	}, sec
 }
 
+// attempt runs a whole login: step 1 with password, step 2 with a TOTP code.
+func attempt(t *testing.T, a *Authenticator, ip, password, code string) Result {
+	t.Helper()
+	r, err := a.Password(ip, password)
+	if err != nil || r.Outcome != OK {
+		t.Fatalf("step 1 must always move on: %+v %v", r, err)
+	}
+	r2, err := a.TOTP(ip, "ua", r.Token, code)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r2
+}
+
+func TestStepOneNeverRevealsThePassword(t *testing.T) {
+	c := newClock()
+	a, _ := newAuthenticator(t, c)
+	good, err1 := a.Password("ip", "correct horse battery")
+	bad, err2 := a.Password("ip", "definitely not it!")
+	if err1 != nil || err2 != nil {
+		t.Fatal(err1, err2)
+	}
+	if good.Outcome != OK || bad.Outcome != OK || good.RetryAfter != bad.RetryAfter || (good.Token == "") != (bad.Token == "") {
+		t.Fatalf("step 1 results differ: good=%+v bad=%+v", good, bad)
+	}
+	// Step 1 alone never counts as a failure, however many times it is wrong.
+	for i := 0; i < 20; i++ {
+		_, _ = a.Password("ip", "wrong password!")
+	}
+	if !a.Limiter.Check("ip").Allowed {
+		t.Fatal("step 1 must not count failures")
+	}
+}
+
+func TestStepOneAlwaysRunsArgon2(t *testing.T) {
+	c := newClock()
+	a, _ := newAuthenticator(t, c)
+	for name, pw := range map[string]string{
+		"right": "correct horse battery", "wrong": "wrong password here", "empty": "", "huge": strings.Repeat("x", 5000),
+	} {
+		before := VerifyCalls()
+		if r, _ := a.Password("ip-"+name, pw); r.Outcome != OK {
+			t.Fatalf("%s: %+v", name, r)
+		}
+		if got := VerifyCalls() - before; got != 1 {
+			t.Errorf("%s password: %d argon2 verifications, want exactly 1", name, got)
+		}
+	}
+	// No configured hash: the dummy hash is verified, so timing does not reveal the missing credentials.
+	a.Secrets.PasswordHash = ""
+	before := VerifyCalls()
+	_, _ = a.Password("ip", "anything at all")
+	if VerifyCalls()-before != 1 {
+		t.Error("the dummy hash must be verified when no hash is configured")
+	}
+}
+
+func TestSecondStepDoesTheSameWorkWhateverThePasswordWas(t *testing.T) {
+	c := newClock()
+	a, sec := newAuthenticator(t, c)
+	codes, _ := GenerateRecoveryCodes(3)
+	_ = ReplaceRecoveryCodes(a.DB, codes, c.now())
+	cost := func(password string) int64 {
+		r, _ := a.Password("ip", password)
+		before := VerifyCalls()
+		res, _ := a.Recovery("ip", "ua", r.Token, "zzzz-zzzz")
+		if res.Outcome != Invalid {
+			t.Fatalf("%+v", res)
+		}
+		return VerifyCalls() - before
+	}
+	right, wrong := cost("correct horse battery"), cost("wrong password here")
+	if right != wrong || right != 3 {
+		t.Fatalf("recovery step verified %d codes after a right password and %d after a wrong one (want 3 each)", right, wrong)
+	}
+	_ = sec
+}
+
+func TestWrongPasswordWrongCodeAndBothFailTheSameWay(t *testing.T) {
+	c := newClock()
+	a, sec := newAuthenticator(t, c)
+	good, _ := TOTP(sec.TOTPSecret, c.now())
+
+	cases := map[string]Result{
+		"wrong password, right code": attempt(t, a, "ip1", "wrong password here", good),
+		"right password, wrong code": attempt(t, a, "ip2", "correct horse battery", "000000"),
+		"both wrong":                 attempt(t, a, "ip3", "wrong password here", "000000"),
+	}
+	for name, r := range cases {
+		if r.Outcome != Invalid || r.Session != nil || r.Token != "" {
+			t.Errorf("%s: %+v", name, r)
+		}
+	}
+	if n, _ := a.Sessions.Count(); n != 0 {
+		t.Fatal("no session may exist after failures")
+	}
+}
+
+func TestWrongPasswordDoesNotBurnAValidCode(t *testing.T) {
+	c := newClock()
+	a, sec := newAuthenticator(t, c)
+	codes, _ := GenerateRecoveryCodes(1)
+	_ = ReplaceRecoveryCodes(a.DB, codes, c.now())
+	good, _ := TOTP(sec.TOTPSecret, c.now())
+
+	if r := attempt(t, a, "ip", "wrong password here", good); r.Outcome != Invalid {
+		t.Fatal("wrong password with a valid code must fail")
+	}
+	r, _ := a.Password("ip", "wrong password here")
+	if res, _ := a.Recovery("ip", "ua", r.Token, codes[0]); res.Outcome != Invalid {
+		t.Fatal("wrong password with a valid recovery code must fail")
+	}
+	if n, _ := RemainingRecoveryCodes(a.DB); n != 1 {
+		t.Fatal("a recovery code must not be used up by a login that failed on the password")
+	}
+	// The owner's next, correct attempt still works with the very same TOTP code and recovery code.
+	if r := attempt(t, a, "ip", "correct horse battery", good); r.Outcome != OK || r.Session == nil {
+		t.Fatalf("the TOTP code must still be usable after a failed attempt: %+v", r)
+	}
+	r, _ = a.Password("ip", "correct horse battery")
+	if res, _ := a.Recovery("ip", "ua", r.Token, codes[0]); res.Outcome != OK {
+		t.Fatal("recovery code must still work")
+	}
+}
+
+func TestAFailedAttemptEndsThePendingLogin(t *testing.T) {
+	c := newClock()
+	a, sec := newAuthenticator(t, c)
+	r, _ := a.Password("ip", "wrong password here")
+	if res, _ := a.TOTP("ip", "ua", r.Token, "000000"); res.Outcome != Invalid {
+		t.Fatal("first try")
+	}
+	good, _ := TOTP(sec.TOTPSecret, c.now())
+	if res, _ := a.TOTP("ip", "ua", r.Token, good); res.Outcome != Expired {
+		t.Fatalf("a failed attempt sends the user back to step 1, no guessing codes against one pending login: %+v", res)
+	}
+}
+
+func TestOneFailureCountsPerAttempt(t *testing.T) {
+	c := newClock()
+	a, _ := newAuthenticator(t, c) // limiter: 3 failures per IP
+	for i := 0; i < 2; i++ {
+		if r := attempt(t, a, "ip", "wrong password here", "000000"); r.Outcome != Invalid {
+			t.Fatalf("attempt %d: %+v", i, r)
+		}
+	}
+	if a.Limiter.Remaining("ip") != 1 {
+		t.Fatalf("two failed attempts (wrong password AND wrong code each) must count as 2, remaining %d", a.Limiter.Remaining("ip"))
+	}
+	if r := attempt(t, a, "ip", "wrong password here", "000000"); r.Outcome != Locked || r.RetryAfter <= 0 {
+		t.Fatalf("third failed attempt locks: %+v", r)
+	}
+	if r, _ := a.Password("ip", "correct horse battery"); r.Outcome != Locked {
+		t.Fatal("locked out, even for correct credentials")
+	}
+}
+
+func TestPendingLoginFromAnotherIPIsRefused(t *testing.T) {
+	c := newClock()
+	a, sec := newAuthenticator(t, c)
+	r, _ := a.Password("1.1.1.1", "correct horse battery")
+	good, _ := TOTP(sec.TOTPSecret, c.now())
+	if res, _ := a.TOTP("2.2.2.2", "ua", r.Token, good); res.Outcome != Expired || res.Session != nil {
+		t.Fatalf("a stolen pending cookie must be useless from another IP: %+v", res)
+	}
+	if res, _ := a.TOTP("1.1.1.1", "ua", r.Token, good); res.Outcome != OK {
+		t.Fatalf("the real owner can still finish: %+v", res)
+	}
+}
+
 func TestLoginTwoStepsAndTOTPReplay(t *testing.T) {
 	c := newClock()
 	a, sec := newAuthenticator(t, c)
-
-	if r, _ := a.Password("ip", "wrong password!"); r.Outcome != Invalid {
-		t.Fatal("wrong password")
-	}
-	r, err := a.Password("ip", "correct horse battery")
-	if err != nil || r.Outcome != OK || r.Token == "" {
-		t.Fatal("password step")
-	}
-	pending := r.Token
-	if r, _ := a.TOTP("ip", "ua", pending, "000000"); r.Outcome != Invalid {
-		t.Fatal("wrong code")
-	}
 	code, _ := TOTP(sec.TOTPSecret, c.now())
-	r, err = a.TOTP("ip", "ua", pending, code)
-	if err != nil || r.Outcome != OK || r.Session == nil {
-		t.Fatalf("totp step: %+v %v", r, err)
+	r := attempt(t, a, "ip", "correct horse battery", code)
+	if r.Outcome != OK || r.Session == nil {
+		t.Fatalf("login: %+v", r)
 	}
-	if r, _ := a.TOTP("ip", "ua", pending, code); r.Outcome != Expired {
-		t.Fatal("a pending login is single use")
-	}
-	// Same code on a new pending login: replay refused.
-	r, _ = a.Password("ip", "correct horse battery")
-	if r2, _ := a.TOTP("ip", "ua", r.Token, code); r2.Outcome != Invalid {
+	// The same code on a new login is a replay.
+	if r := attempt(t, a, "ip", "correct horse battery", code); r.Outcome != Invalid {
 		t.Fatal("TOTP replay must be refused")
 	}
-	// An older (previous-step) code is refused too once a newer step was used.
+	// An older step is refused once a newer one was used.
 	prev, _ := TOTP(sec.TOTPSecret, c.now().Add(-TOTPStep))
-	if r2, _ := a.TOTP("ip", "ua", r.Token, prev); r2.Outcome != Invalid {
+	if r := attempt(t, a, "ip", "correct horse battery", prev); r.Outcome != Invalid {
 		t.Fatal("older step must be refused after a newer one was used")
 	}
 	c.advance(TOTPStep)
 	next, _ := TOTP(sec.TOTPSecret, c.now())
-	if r2, _ := a.TOTP("ip2", "ua", r.Token, next); r2.Outcome != OK {
+	if r := attempt(t, a, "ip2", "correct horse battery", next); r.Outcome != OK {
 		t.Fatal("next step works")
 	}
 }
@@ -415,49 +587,27 @@ func TestLoginWithRecoveryCode(t *testing.T) {
 	a, _ := newAuthenticator(t, c)
 	codes, _ := GenerateRecoveryCodes(2)
 	_ = ReplaceRecoveryCodes(a.DB, codes, c.now())
-
-	r, _ := a.Password("ip", "correct horse battery")
-	if r2, _ := a.Recovery("ip", "ua", r.Token, "aaaa-bbbb"); r2.Outcome != Invalid {
+	recover := func(ip, code string) Outcome {
+		r, _ := a.Password(ip, "correct horse battery")
+		res, _ := a.Recovery(ip, "ua", r.Token, code)
+		return res.Outcome
+	}
+	if recover("ip", "aaaa-bbbb") != Invalid {
 		t.Fatal("unknown recovery code")
 	}
-	if r2, _ := a.Recovery("ip", "ua", r.Token, codes[0]); r2.Outcome != OK || r2.Session == nil {
+	if recover("ip", codes[0]) != OK {
 		t.Fatal("recovery login")
 	}
-	r, _ = a.Password("ip", "correct horse battery")
-	if r2, _ := a.Recovery("ip", "ua", r.Token, codes[0]); r2.Outcome != Invalid {
+	if recover("ip", codes[0]) != Invalid {
 		t.Fatal("recovery code reuse")
 	}
-	if r2, _ := a.Recovery("ip", "ua", "not-a-pending-token", codes[1]); r2.Outcome != Expired {
+	if res, _ := a.Recovery("ip", "ua", "not-a-pending-token", codes[1]); res.Outcome != Expired {
 		t.Fatal("recovery needs a pending login")
 	}
 	var events string
 	_ = a.DB.QueryRow("SELECT group_concat(event, ',') FROM audit").Scan(&events)
-	if !strings.Contains(events, "recovery_code_used") || !strings.Contains(events, "login_ok") {
+	if !strings.Contains(events, "recovery_code_used") || !strings.Contains(events, "login_ok") || !strings.Contains(events, "login_fail") {
 		t.Fatalf("audit: %s", events)
-	}
-}
-
-func TestLockoutRefusesCorrectCredentials(t *testing.T) {
-	c := newClock()
-	a, sec := newAuthenticator(t, c)
-	for i := 0; i < 3; i++ {
-		_, _ = a.Password("ip", "wrong password!")
-	}
-	if r, _ := a.Password("ip", "correct horse battery"); r.Outcome != Locked || r.RetryAfter <= 0 {
-		t.Fatalf("locked: %+v", r)
-	}
-	c.advance(10 * time.Minute)
-	r, _ := a.Password("ip", "correct horse battery")
-	if r.Outcome != OK {
-		t.Fatal("recovers after lockout")
-	}
-	// Second-factor failures count toward the same lockout.
-	for i := 0; i < 3; i++ {
-		_, _ = a.TOTP("ip", "ua", r.Token, "000000")
-	}
-	code, _ := TOTP(sec.TOTPSecret, c.now())
-	if r2, _ := a.TOTP("ip", "ua", r.Token, code); r2.Outcome != Locked {
-		t.Fatal("TOTP failures must lock out too")
 	}
 }
 

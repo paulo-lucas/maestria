@@ -46,8 +46,15 @@ func (s *Server) getLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d := &ui.Data{Title: "Log in", CSRF: s.loginCSRF(w, r)}
+	// Only these fixed messages can be shown: the query value selects one, it is never echoed.
+	switch r.URL.Query().Get("error") {
+	case "invalid":
+		d.Error = "Invalid password or code."
+	case "expired":
+		d.Error = "Your sign-in expired. Please start again."
+	}
 	if s.Tunnel.Killed() {
-		d.Banner, d.Locked = s.killedBanner(), true
+		d.Banner, d.Locked, d.Error = s.killedBanner(), true, ""
 	}
 	s.render(w, ui.PageLogin, d)
 }
@@ -64,6 +71,8 @@ func lockedMessage(retry time.Duration) string {
 	return fmt.Sprintf("Too many failed attempts. Try again in %d %s.", m, unit)
 }
 
+// postLogin is step 1. Whatever the password was, a live answer moves on to the second-factor
+// page: the verdict stays on the server, so this response is no oracle for the password.
 func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 	ip := ipOf(r)
 	d := &ui.Data{Title: "Log in"}
@@ -79,20 +88,19 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	switch res.Outcome {
-	case auth.OK:
-		s.setCookie(w, s.pendingCookie, res.Token, auth.PendingTTL)
-		http.Redirect(w, r, "/login/2fa", http.StatusSeeOther)
-	case auth.Locked:
-		w.Header().Set("Retry-After", strconv.Itoa(int(res.RetryAfter.Seconds())))
-		d.CSRF, d.Error = s.freshLoginCSRF(w), lockedMessage(res.RetryAfter)
-		w.WriteHeader(http.StatusTooManyRequests)
-		s.render(w, ui.PageLogin, d)
-	default:
-		d.CSRF, d.Error = s.freshLoginCSRF(w), "Invalid credentials."
-		w.WriteHeader(http.StatusUnauthorized)
-		s.render(w, ui.PageLogin, d)
+	if res.Outcome == auth.Locked {
+		s.renderLocked(w, res, d)
+		return
 	}
+	s.setCookie(w, s.pendingCookie, res.Token, auth.PendingTTL)
+	http.Redirect(w, r, "/login/2fa", http.StatusSeeOther)
+}
+
+func (s *Server) renderLocked(w http.ResponseWriter, res auth.Result, d *ui.Data) {
+	w.Header().Set("Retry-After", strconv.Itoa(int(res.RetryAfter.Seconds())))
+	d.Title, d.CSRF, d.Error = "Log in", s.freshLoginCSRF(w), lockedMessage(res.RetryAfter)
+	w.WriteHeader(http.StatusTooManyRequests)
+	s.render(w, ui.PageLogin, d)
 }
 
 func (s *Server) pendingToken(r *http.Request) string {
@@ -107,7 +115,7 @@ func (s *Server) getTwoFA(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
-	if ok, _ := s.Sessions.PendingValid(s.pendingToken(r)); !ok || s.Tunnel.Killed() {
+	if p, _ := s.Sessions.PendingFor(s.pendingToken(r), ipOf(r)); p == nil || s.Tunnel.Killed() {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
@@ -142,46 +150,22 @@ func (s *Server) secondFactor(w http.ResponseWriter, r *http.Request, recovery b
 		s.serverError(w, r, err)
 		return
 	}
-	d := &ui.Data{Title: "Two-factor check", RecoveryOpen: recovery}
-	setErr := func(msg string) {
-		if recovery {
-			d.RecoveryErr = msg
-		} else {
-			d.Error = msg
-		}
-	}
 	switch res.Outcome {
 	case auth.OK:
 		s.clearCookie(w, s.pendingCookie)
 		s.clearCookie(w, s.csrfCookie)
 		s.setCookie(w, s.sessionCookie, res.Token, 0)
 		http.Redirect(w, r, "/", http.StatusSeeOther)
-	case auth.Expired:
-		s.clearCookie(w, s.pendingCookie)
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 	case auth.Locked:
 		s.clearCookie(w, s.pendingCookie)
-		w.Header().Set("Retry-After", strconv.Itoa(int(res.RetryAfter.Seconds())))
-		d.Title, d.CSRF = "Log in", s.freshLoginCSRF(w)
-		d.Error, d.RecoveryOpen = lockedMessage(res.RetryAfter), false
-		w.WriteHeader(http.StatusTooManyRequests)
-		s.render(w, ui.PageLogin, d)
+		s.renderLocked(w, res, &ui.Data{})
+	case auth.Expired:
+		s.clearCookie(w, s.pendingCookie)
+		http.Redirect(w, r, "/login?error=expired", http.StatusSeeOther)
 	default:
-		d.CSRF = s.freshLoginCSRF(w)
-		what := "code"
-		if recovery {
-			what = "recovery code"
-		}
-		msg := fmt.Sprintf("That %s didn't work.", what)
-		if !recovery {
-			msg += " Check the time on your phone and try again."
-		}
-		if res.Remaining > 0 {
-			msg += fmt.Sprintf(" %d attempt%s left.", res.Remaining, map[bool]string{true: "", false: "s"}[res.Remaining == 1])
-		}
-		setErr(msg)
-		w.WriteHeader(http.StatusUnauthorized)
-		s.render(w, ui.PageTwoFA, d)
+		// One generic failure for a wrong password and a wrong code alike: back to step 1.
+		s.clearCookie(w, s.pendingCookie)
+		http.Redirect(w, r, "/login?error=invalid", http.StatusSeeOther)
 	}
 }
 
@@ -247,7 +231,6 @@ var eventLabels = map[string]struct{ status, label string }{
 
 func describeEvent(event, detail string) string {
 	names := map[string]string{
-		"login_password_ok":    "Password accepted",
 		"login_ok":             "Signed in",
 		"login_fail":           "Sign-in attempt",
 		"login_lockout":        "Too many failed sign-ins",

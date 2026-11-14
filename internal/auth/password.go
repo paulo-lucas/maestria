@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strconv"
 	"sync"
+	"sync/atomic"
 
 	"golang.org/x/crypto/argon2"
 )
@@ -79,12 +80,19 @@ func parsePHC(hash string) (*parsedHash, bool) {
 	return &parsedHash{p: Argon2Params{MemoryKiB: uint32(mem), Iterations: uint32(t), Parallelism: uint8(par), KeyLen: uint32(len(key))}, salt: salt, key: key}, true
 }
 
+var verifyCalls atomic.Int64
+
+// VerifyCalls reports how many argon2 verifications ran in this process. Tests use it to prove
+// that the login does the same work whatever the password was.
+func VerifyCalls() int64 { return verifyCalls.Load() }
+
 // VerifyPassword checks password against a PHC hash in constant time. Malformed hashes never match.
 func VerifyPassword(password, hash string) bool {
 	ph, ok := parsePHC(hash)
 	if !ok {
 		return false
 	}
+	verifyCalls.Add(1)
 	got := argon2.IDKey([]byte(password), ph.salt, ph.p.Iterations, ph.p.MemoryKiB, ph.p.Parallelism, ph.p.KeyLen)
 	return subtle.ConstantTimeCompare(got, ph.key) == 1
 }

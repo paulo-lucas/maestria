@@ -11,21 +11,19 @@
       <input type="hidden" name="_csrf" value="{{.CSRF}}">
       <div class="field">
         <label class="field__label sr-only" for="code">Authentication code</label>
-        <input class="input input--code" id="code" name="code" type="text" inputmode="numeric" pattern="[0-9]{6}" autocomplete="one-time-code" maxlength="6" required{{if not .RecoveryOpen}} autofocus{{end}}{{if .Error}} aria-invalid="true" aria-describedby="code-err"{{end}}>
-        {{if .Error}}<p class="field__error" id="code-err">{{.Error}}</p>{{end}}
+        <input class="input input--code" id="code" name="code" type="text" inputmode="numeric" pattern="[0-9]{6}" autocomplete="one-time-code" maxlength="6" required autofocus>
       </div>
       <button class="btn btn--primary btn--block" type="submit">Verify</button>
     </form>
-    <details class="disclosure"{{if .RecoveryOpen}} open{{end}}>
+    <details class="disclosure">
       <summary>{{icon "i-chevron-right"}}Use a recovery code instead</summary>
       <form method="post" action="/login/recovery">
         <input type="hidden" name="_csrf" value="{{.CSRF}}">
         <div class="inline-form">
           <label class="sr-only" for="rc">Recovery code</label>
-          <input class="input mono" id="rc" name="recovery" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="xxxx-xxxx" maxlength="32" required{{if .RecoveryOpen}} autofocus{{end}}{{if .RecoveryErr}} aria-invalid="true" aria-describedby="rc-err"{{end}}>
+          <input class="input mono" id="rc" name="recovery" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="xxxx-xxxx" maxlength="32" required>
           <button class="btn" type="submit">Use code</button>
         </div>
-        {{if .RecoveryErr}}<p class="field__error" id="rc-err">{{.RecoveryErr}}</p>{{end}}
       </form>
     </details>
     {{end}}

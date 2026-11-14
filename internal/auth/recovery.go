@@ -81,16 +81,17 @@ func RemainingRecoveryCodes(db *sql.DB) (int, error) {
 	return n, err
 }
 
-// ConsumeRecoveryCode marks a matching unused code as used and reports whether one matched.
-// All unused codes are checked so timing does not depend on which one matched.
-func ConsumeRecoveryCode(db *sql.DB, code string, now time.Time) (bool, error) {
+// MatchRecoveryCode returns the id of the unused code that matches, or 0. It changes nothing.
+// All unused codes are always checked so timing does not depend on which one matched.
+func MatchRecoveryCode(db *sql.DB, code string) (int64, error) {
 	norm := NormalizeRecoveryCode(code)
 	if len(norm) != 8 || len(code) > 32 {
-		return false, nil
+		// Still do the same work as a real attempt, so length is not a timing signal.
+		norm = "00000000"
 	}
 	rows, err := db.Query("SELECT id, hash FROM recovery_codes WHERE used_at IS NULL")
 	if err != nil {
-		return false, err
+		return 0, err
 	}
 	type row struct {
 		id   int64
@@ -101,28 +102,43 @@ func ConsumeRecoveryCode(db *sql.DB, code string, now time.Time) (bool, error) {
 		var r row
 		if err := rows.Scan(&r.id, &r.hash); err != nil {
 			rows.Close()
-			return false, err
+			return 0, err
 		}
 		candidates = append(candidates, r)
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
-		return false, err
+		return 0, err
 	}
-	var match int64 = -1
+	valid := len(NormalizeRecoveryCode(code)) == 8 && len(code) <= 32
+	var match int64
 	for _, r := range candidates {
-		if VerifyPassword(norm, r.hash) {
+		if VerifyPassword(norm, r.hash) && valid {
 			match = r.id
 		}
 	}
-	if match < 0 {
+	return match, nil
+}
+
+// UseRecoveryCode marks a code as used. The update is conditional, so two concurrent uses of the
+// same code cannot both succeed.
+func UseRecoveryCode(db *sql.DB, id int64, now time.Time) (bool, error) {
+	if id == 0 {
 		return false, nil
 	}
-	// Conditional update: two concurrent uses of the same code cannot both succeed.
-	res, err := db.Exec("UPDATE recovery_codes SET used_at = ? WHERE id = ? AND used_at IS NULL", now.UnixMilli(), match)
+	res, err := db.Exec("UPDATE recovery_codes SET used_at = ? WHERE id = ? AND used_at IS NULL", now.UnixMilli(), id)
 	if err != nil {
 		return false, err
 	}
 	n, err := res.RowsAffected()
 	return n == 1, err
+}
+
+// ConsumeRecoveryCode matches and uses a code in one call, reporting whether one was used.
+func ConsumeRecoveryCode(db *sql.DB, code string, now time.Time) (bool, error) {
+	id, err := MatchRecoveryCode(db, code)
+	if err != nil {
+		return false, err
+	}
+	return UseRecoveryCode(db, id, now)
 }

@@ -60,6 +60,11 @@ var migrations = []string{
 	CREATE TRIGGER audit_no_update BEFORE UPDATE ON audit BEGIN SELECT RAISE(ABORT, 'audit log is append-only'); END;
 	CREATE TRIGGER audit_no_delete BEFORE DELETE ON audit BEGIN SELECT RAISE(ABORT, 'audit log is append-only'); END;
 	`,
+	// 2: a pending login remembers, server-side, whether the password was right. The browser never
+	// learns it: step 2 fails the same way for a wrong password and a wrong code.
+	`
+	ALTER TABLE pending_logins ADD COLUMN password_ok INTEGER NOT NULL DEFAULT 0;
+	`,
 }
 
 // Open opens (creating if needed) the v2 database in configDir and migrates it.

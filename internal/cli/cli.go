@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/term"
+
 	"github.com/maestria-dev/maestria/internal/config"
 )
 
@@ -136,18 +138,19 @@ func (e *Env) readLine(r *bufio.Reader, prompt string) (string, error) {
 	return strings.TrimRight(line, "\r\n"), nil
 }
 
-// readSecret reads a line without echo (when stdin is a terminal).
+// readSecret reads a line without echo. On a terminal it uses term.ReadPassword; when stdin is a
+// pipe or a file (scripts, tests) nothing is echoed anyway, so it reads a plain line.
 func (e *Env) readSecret(r *bufio.Reader, prompt string) (string, error) {
 	if e.ReadSecret != nil {
 		return e.ReadSecret(prompt)
 	}
 	fmt.Fprint(e.Stdout, prompt)
-	restore, hidden := setEcho(false)
-	line, err := r.ReadString('\n')
-	restore()
-	if hidden {
+	if f, ok := e.Stdin.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
+		b, err := term.ReadPassword(int(f.Fd()))
 		fmt.Fprintln(e.Stdout)
+		return string(b), err
 	}
+	line, err := r.ReadString('\n')
 	if err != nil && (err != io.EOF || line == "") {
 		return "", err
 	}

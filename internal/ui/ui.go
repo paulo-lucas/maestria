@@ -173,10 +173,8 @@ type Data struct {
 	Banner *Banner
 
 	// Auth pages.
-	Error        string // error under the main field
-	RecoveryOpen bool   // 2FA page: open the recovery disclosure
-	RecoveryErr  string
-	Locked       bool // hide the form (kill switch or lockout)
+	Error  string // error under the main field
+	Locked bool   // hide the form (kill switch)
 
 	// App pages.
 	Listen            string
