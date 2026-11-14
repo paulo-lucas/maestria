@@ -574,7 +574,12 @@ a.agent-line:hover { background: var(--surface-2); }
 .banner__body { flex: 1; min-width: 0; }
 .banner__title { font-weight: var(--fw-semibold); }
 .banner__text { color: var(--text-2); }
+.banner { flex-wrap: wrap; }
+.banner__body { flex: 1 1 220px; }
 .banner__actions { display: flex; gap: var(--space-2); align-self: center; }
+@media (max-width: 639px) {
+  .banner:not(.banner--global) .banner__actions { flex-basis: 100%; padding-left: calc(18px + var(--space-3)); }
+}
 .banner--global {
   border-width: 0 0 1px;
   border-radius: 0;
@@ -629,7 +634,7 @@ a.agent-line:hover { background: var(--surface-2); }
   text-align: center;
   min-height: 52px;
 }
-.input-suffix { display: flex; align-items: center; gap: var(--space-2); }
+.input-suffix { display: flex; align-items: center; gap: var(--space-2); white-space: nowrap; }
 .input-suffix .input { width: 88px; text-align: right; }
 
 .check { display: flex; align-items: flex-start; gap: var(--space-2); font-size: var(--fs-sm); cursor: pointer; }
@@ -675,7 +680,7 @@ a.agent-line:hover { background: var(--surface-2); }
 }
 .segmented label { position: relative; }
 .segmented input { position: absolute; opacity: 0; pointer-events: none; }
-.segmented span {
+.segmented label > span {
   display: inline-flex;
   align-items: center;
   gap: 6px;

@@ -13,11 +13,17 @@
  */
 import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const sprite = readFileSync(join(root, 'assets/icons.svg'), 'utf8').trim();
 const ICONS = `<!--icons:start (copy of assets/icons.svg)-->\n${sprite}\n<!--icons:end-->`;
+
+// Content hash per asset, appended as ?v= so browsers never show stale CSS/JS after a rebuild.
+const ASSETS = ['tokens.css', 'base.css', 'components.css', 'shell.css', 'sheet.css', 'assets/mock.js'];
+const VER = Object.fromEntries(ASSETS.map((a) => [a, createHash('sha1').update(readFileSync(join(root, a))).digest('hex').slice(0, 8)]));
+const bust = (html) => html.replace(/((?:href|src)="(?:\.\.\/)?)((?:tokens|base|components|shell|sheet)\.css|assets\/mock\.js)(?:\?v=[0-9a-f]+)?"/g, (_, pre, a) => `${pre}${a}?v=${VER[a]}"`);
 
 const icon = (id, cls = '') => `<svg class="icon${cls ? ' ' + cls : ''}" aria-hidden="true"><use href="#${id}"/></svg>`;
 const BRAND_MARK = '<svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true"><rect class="brand__bg" width="24" height="24" rx="6"/><path class="brand__bars" d="M7 14.5v2.5M10.3 11v6M13.7 7.5V17M17 10v7"/></svg>';
@@ -212,7 +218,7 @@ for (const file of readdirSync(srcDir).filter((f) => f.endsWith('.html')).sort()
   const meta = { layout: 'app', scope: 'all', ...JSON.parse(match[1]) };
   const body = raw.slice(match[0].length);
   const html = meta.layout === 'auth' ? renderAuth(meta, body) : renderApp(meta, body);
-  writeFileSync(join(root, 'screens', file), html);
+  writeFileSync(join(root, 'screens', file), bust(html));
   pages.push({ file, ...meta });
 }
 pages.sort((a, b) => a.order - b.order);
@@ -221,7 +227,7 @@ pages.sort((a, b) => a.order - b.order);
 for (const file of ['components.html']) {
   const p = join(root, file);
   const s = readFileSync(p, 'utf8');
-  writeFileSync(p, s.replace(/<!--icons:start[\s\S]*?<!--icons:end-->/, () => ICONS));
+  writeFileSync(p, bust(s.replace(/<!--icons:start[\s\S]*?<!--icons:end-->/, () => ICONS)));
 }
 
 // ---- Index ----
@@ -266,7 +272,7 @@ ${g.pages.map((p) => `      <a class="card index-card" href="screens/${p.file}">
 </body>
 </html>
 `;
-writeFileSync(join(root, 'index.html'), index);
+writeFileSync(join(root, 'index.html'), bust(index));
 
 // ---- Preview screen list ----
 const previewPath = join(root, 'preview.html');
@@ -274,6 +280,6 @@ const preview = readFileSync(previewPath, 'utf8').replace(
   /(<select class="select" id="preview-page">)[\s\S]*?(<\/select>)/,
   (_, a, b) => `${a}\n${pages.map((p) => `        <option value="screens/${p.file}">${p.label}</option>`).join('\n')}\n      ${b}`,
 );
-writeFileSync(previewPath, preview);
+writeFileSync(previewPath, bust(preview));
 
 console.log(`built ${pages.length} screens`);
