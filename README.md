@@ -235,20 +235,6 @@ go run ./tools/release \
 
 ---
 
-## Legacy (V1)
-
-An unreleased Node.js/TypeScript prototype still lives under `src/`, `public/`, and `test/` and will be removed. It is not distributed and there is no migration path from it.
-
-V1 development commands:
-
-```sh
-pnpm build
-pnpm typecheck
-pnpm test
-```
-
----
-
 ## License
 
 [MIT](LICENSE)
