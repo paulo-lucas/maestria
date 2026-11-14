@@ -17,7 +17,7 @@ func assertChatNeedsWire(t *testing.T, page resp, wants ...string) {
 	if page.Code != http.StatusOK {
 		t.Fatalf("chat page: %d", page.Code)
 	}
-	for _, want := range append([]string{`class="banner"`, "disabled", "Chat is off until Maestri Wire is connected"}, wants...) {
+	for _, want := range append([]string{`class="banner"`, "disabled", "Chat is off"}, wants...) {
 		if !strings.Contains(page.body, want) {
 			t.Errorf("chat page missing %q", want)
 		}

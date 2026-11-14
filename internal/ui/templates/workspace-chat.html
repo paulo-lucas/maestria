@@ -94,10 +94,10 @@
         {{if .Wire}}
         <form class="composer" data-ws-id="{{.CurrentWS.ID}}" aria-disabled="true">
           <label class="sr-only" for="msg">Message the Maestro</label>
-          <textarea id="msg" rows="1" placeholder="Chat is off until Maestri Wire is connected" disabled></textarea>
+          <textarea id="msg" rows="1" placeholder="Chat is off" disabled></textarea>
           <button class="btn btn--primary btn--icon" type="submit" aria-label="Send" disabled>{{icon "i-send"}}</button>
         </form>
-        <p class="chat-dock__hint">Agents can still post with <code>maestria say</code> and listen with <code>maestria wait</code>.</p>
+        <p class="chat-dock__hint">Chat needs Maestri Wire. Agents can still post with <code>maestria say</code> and listen with <code>maestria wait</code>.</p>
         {{else}}
         {{if .WireChat.NotRunning}}
         <div class="banner" data-status="warn">
