@@ -1,0 +1,87 @@
+<!--page {"title": "Atlas · Docs", "scope": "atlas", "nav": "docs", "group": "Workspace", "order": 60, "icon": "i-docs", "label": "6. Docs", "desc": "Read-only mirror of the project's docs/ folder: file tree and rendered Markdown."}-->
+    <div class="page">
+
+      <header class="page-head">
+        <div class="page-head__title">
+          <span class="ws-eyebrow" data-ws="blue"><span class="swatch swatch--lg"></span>Atlas <span class="subtle">· Workstation</span></span>
+          <h1>Docs</h1>
+        </div>
+      </header>
+
+      <div class="banner" data-status="info">
+        <svg class="icon" aria-hidden="true"><use href="#i-info"/></svg>
+        <div class="banner__body">
+          <p class="banner__title">Managed by the Maestro</p>
+          <p class="banner__text">A read-only copy of the project's <code>docs/</code> folder. To change something, ask the Maestro in <a href="workspace-chat.html">Chat</a>.</p>
+        </div>
+      </div>
+
+      <div class="docs-layout">
+        <details class="card docs-nav" open>
+          <summary><svg class="icon" aria-hidden="true"><use href="#i-folder"/></svg>docs/<svg class="icon" aria-hidden="true"><use href="#i-chevron-down"/></svg></summary>
+          <ul class="tree">
+            <li><a href="#" aria-current="page"><svg class="icon" aria-hidden="true"><use href="#i-file"/></svg>README.md</a></li>
+            <li><a href="#"><svg class="icon" aria-hidden="true"><use href="#i-file"/></svg>architecture.md</a></li>
+            <li><a href="#"><svg class="icon" aria-hidden="true"><use href="#i-file"/></svg>glossary.md</a></li>
+            <li>
+              <details open>
+                <summary><svg class="icon" aria-hidden="true"><use href="#i-folder"/></svg>decisions</summary>
+                <ul>
+                  <li><a href="#"><svg class="icon" aria-hidden="true"><use href="#i-file"/></svg>ulids.md</a></li>
+                  <li><a href="#"><svg class="icon" aria-hidden="true"><use href="#i-file"/></svg>webhook-retries.md</a></li>
+                  <li><a href="#"><svg class="icon" aria-hidden="true"><use href="#i-file"/></svg>no-graphql.md</a></li>
+                </ul>
+              </details>
+            </li>
+            <li>
+              <details>
+                <summary><svg class="icon" aria-hidden="true"><use href="#i-folder"/></svg>runbooks</summary>
+                <ul>
+                  <li><a href="#"><svg class="icon" aria-hidden="true"><use href="#i-file"/></svg>deploy.md</a></li>
+                  <li><a href="#"><svg class="icon" aria-hidden="true"><use href="#i-file"/></svg>incident.md</a></li>
+                </ul>
+              </details>
+            </li>
+            <li>
+              <details>
+                <summary><svg class="icon" aria-hidden="true"><use href="#i-folder"/></svg>api</summary>
+                <ul>
+                  <li><a href="#"><svg class="icon" aria-hidden="true"><use href="#i-file"/></svg>webhooks.md</a></li>
+                  <li><a href="#"><svg class="icon" aria-hidden="true"><use href="#i-file"/></svg>errors.md</a></li>
+                </ul>
+              </details>
+            </li>
+          </ul>
+        </details>
+
+        <article class="card docs-body">
+          <div class="docs-meta"><span class="mono">docs/README.md</span><span>Updated by the Maestro · Nov 12</span><span>Synced 2 min ago</span></div>
+          <div class="prose">
+            <h1>Atlas</h1>
+            <p>Atlas is the billing service: plans, subscriptions, invoices and the webhooks from the payment provider. Every other service asks Atlas whether a customer may use a feature.</p>
+            <h2>What lives here</h2>
+            <ul>
+              <li><code>src/billing</code>: plans, subscriptions, proration</li>
+              <li><code>src/invoices</code>: numbering, PDF rendering, email</li>
+              <li><code>src/webhooks</code>: signature checks, retries, dead letters</li>
+            </ul>
+            <h2>Run locally</h2>
+<pre><code>pnpm install
+cp .env.example .env
+pnpm dev   # http://localhost:3000</code></pre>
+            <h2>Key decisions</h2>
+            <table>
+              <thead><tr><th>Topic</th><th>Decision</th><th>Why</th></tr></thead>
+              <tbody>
+                <tr><td>IDs</td><td>ULIDs everywhere</td><td>Sortable, no coordination</td></tr>
+                <tr><td>Webhook retries</td><td>Backoff up to 24 h, then dead letter</td><td>Provider retries for 3 days</td></tr>
+                <tr><td>API style</td><td>REST only</td><td>Every client already speaks it</td></tr>
+              </tbody>
+            </table>
+            <blockquote>Webhooks are verified before anything else runs. Never log a raw payload.</blockquote>
+            <h3>See also</h3>
+            <p><a href="#">architecture.md</a> for the data model and <a href="#">runbooks/deploy.md</a> for releases.</p>
+          </div>
+        </article>
+      </div>
+    </div>

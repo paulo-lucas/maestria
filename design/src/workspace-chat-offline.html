@@ -1,0 +1,42 @@
+<!--page {"title": "Atlas · Chat (disconnected)", "scope": "atlas", "nav": "chat", "conn": "offline", "group": "Workspace", "order": 41, "icon": "i-offline", "label": "4b. Chat, disconnected", "desc": "Chat when the connector is offline: history stays readable, sending is disabled."}-->
+    <div class="page page--narrow chat-page">
+
+      <header class="page-head">
+        <div class="page-head__title">
+          <span class="ws-eyebrow" data-ws="blue"><span class="swatch swatch--lg"></span>Atlas <span class="subtle">· Workstation</span></span>
+          <h1>Chat</h1>
+        </div>
+        <div class="page-head__actions"><span class="status" data-status="offline">Maestro unreachable</span></div>
+      </header>
+
+      <div class="chat">
+        <div class="msg msg--system"><span>Today</span></div>
+        <div class="msg msg--you">
+          <div class="msg__body">How is billing-webhooks going? Can we land it today?</div>
+          <time datetime="2026-11-13T13:50">13:50</time>
+        </div>
+        <div class="msg msg--maestro">
+          <div class="msg__head"><span class="avatar avatar--sm avatar--maestro">M</span>Maestro<time datetime="2026-11-13T13:52">13:52</time></div>
+          <div class="msg__body prose">
+            <p>Yes. It is in <strong>review</strong> and all 214 tests pass. Two things are left, both in <a href="workspace-tasks.html">Human tasks</a>.</p>
+          </div>
+        </div>
+        <div class="msg msg--system"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-offline"/></svg><span>Connector went offline at 14:02</span></div>
+      </div>
+
+      <div class="chat-dock">
+        <div class="banner" data-status="warn">
+          <svg class="icon" aria-hidden="true"><use href="#i-offline"/></svg>
+          <div class="banner__body">
+            <p class="banner__title">Can't reach the Maestro</p>
+            <p class="banner__text">The Workstation connector is offline. Messages can be sent again once it reconnects.</p>
+          </div>
+          <div class="banner__actions"><a class="btn btn--sm" href="connector.html">Details</a></div>
+        </div>
+        <form class="composer" action="#" aria-disabled="true">
+          <label class="sr-only" for="msg">Message the Maestro</label>
+          <textarea id="msg" rows="1" placeholder="Connector offline" disabled></textarea>
+          <button class="btn btn--primary btn--icon" type="submit" aria-label="Send" disabled><svg class="icon" aria-hidden="true"><use href="#i-send"/></svg></button>
+        </form>
+      </div>
+    </div>

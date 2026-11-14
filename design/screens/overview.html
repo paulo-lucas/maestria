@@ -64,32 +64,21 @@
 <a class="skip-link" href="#main">Skip to content</a>
 
 <div class="app">
-
-  <!-- Desktop sidebar -->
   <aside class="sidebar" aria-label="Main">
-    <a class="brand" href="overview.html">
-      <svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true"><rect class="brand__bg" width="24" height="24" rx="6"/><path class="brand__bars" d="M7 14.5v2.5M10.3 11v6M13.7 7.5V17M17 10v7"/></svg>
-      Maestria
-    </a>
+    <a class="brand" href="overview.html"><svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true"><rect class="brand__bg" width="24" height="24" rx="6"/><path class="brand__bars" d="M7 14.5v2.5M10.3 11v6M13.7 7.5V17M17 10v7"/></svg> Maestria</a>
     <nav class="nav">
-      <a class="nav__item" href="overview.html" aria-current="page">
-        <svg class="icon" aria-hidden="true"><use href="#i-overview"/></svg> Overview
-        <span class="count" data-status="needs" title="Needs you">5</span>
-      </a>
-
+      <a class="nav__item" href="overview.html" aria-current="page"><svg class="icon" aria-hidden="true"><use href="#i-overview"/></svg> Overview <span class="count" data-status="needs" title="Needs you">5</span></a>
       <div class="nav__group">Workspaces</div>
       <a class="nav__item" href="workspace-activity.html" data-ws="blue"><span class="swatch"></span> Atlas <span class="count">2</span></a>
       <a class="nav__item" href="workspace-activity.html" data-ws="violet"><span class="swatch"></span> Nimbus <span class="count">1</span></a>
       <a class="nav__item" href="workspace-activity.html" data-ws="teal"><span class="swatch"></span> Harbor <span class="count">1</span></a>
       <a class="nav__item" href="workspace-activity.html" data-ws="amber"><span class="swatch"></span> Juniper <span class="count">1</span></a>
       <a class="nav__item is-offline" href="workspace-activity.html" data-ws="rose"><span class="swatch"></span> Quarry <span class="nav__trail">Offline</span></a>
-
       <div class="nav__group">System</div>
       <a class="nav__item" href="usage.html"><svg class="icon" aria-hidden="true"><use href="#i-gauge"/></svg> Usage &amp; standby</a>
       <a class="nav__item" href="connector.html"><svg class="icon" aria-hidden="true"><use href="#i-plug"/></svg> Connectors</a>
       <a class="nav__item" href="security.html"><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg> Devices &amp; security</a>
     </nav>
-
     <div class="sidebar__foot">
       <a class="conn-card" href="connector.html">
         <span class="dot" data-status="ok"></span>
@@ -106,7 +95,7 @@
       <div class="account-row">
         <span class="avatar avatar--sm" data-tone="slate">Y</span>
         <span class="account-row__name truncate">Your account</span>
-        <button class="btn btn--ghost btn--icon btn--sm theme-toggle" type="button" data-theme-toggle aria-label="Theme: system" title="Theme: system">
+        <button class="btn btn--ghost btn--icon theme-toggle btn--sm" type="button" data-theme-toggle aria-label="Theme: system" title="Theme: system">
           <svg class="icon i-auto" aria-hidden="true"><use href="#i-auto"/></svg>
           <svg class="icon i-light" aria-hidden="true"><use href="#i-sun"/></svg>
           <svg class="icon i-dark" aria-hidden="true"><use href="#i-moon"/></svg>
@@ -115,15 +104,11 @@
     </div>
   </aside>
 
-  <!-- Mobile / tablet top bar -->
   <header class="topbar">
-    <a class="brand" href="overview.html" aria-label="Maestria overview">
-      <svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true"><rect class="brand__bg" width="24" height="24" rx="6"/><path class="brand__bars" d="M7 14.5v2.5M10.3 11v6M13.7 7.5V17M17 10v7"/></svg>
-    </a>
+    <a class="brand" href="overview.html" aria-label="Maestria overview"><svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true"><rect class="brand__bg" width="24" height="24" rx="6"/><path class="brand__bars" d="M7 14.5v2.5M10.3 11v6M13.7 7.5V17M17 10v7"/></svg></a>
     <details class="menu scope">
       <summary aria-label="Switch workspace">
-        <svg class="icon scope__all-icon" aria-hidden="true"><use href="#i-overview"/></svg>
-        <span class="truncate">All workspaces</span>
+        <svg class="icon scope__all-icon" aria-hidden="true"><use href="#i-overview"/></svg><span class="truncate">All workspaces</span>
         <svg class="icon" aria-hidden="true"><use href="#i-chevron-down"/></svg>
       </summary>
       <div class="menu__panel">
@@ -141,10 +126,10 @@
         <svg class="icon" aria-hidden="true"><use href="#i-plug"/></svg>
       </a>
       <button class="btn btn--ghost btn--icon theme-toggle" type="button" data-theme-toggle aria-label="Theme: system" title="Theme: system">
-        <svg class="icon i-auto" aria-hidden="true"><use href="#i-auto"/></svg>
-        <svg class="icon i-light" aria-hidden="true"><use href="#i-sun"/></svg>
-        <svg class="icon i-dark" aria-hidden="true"><use href="#i-moon"/></svg>
-      </button>
+          <svg class="icon i-auto" aria-hidden="true"><use href="#i-auto"/></svg>
+          <svg class="icon i-light" aria-hidden="true"><use href="#i-sun"/></svg>
+          <svg class="icon i-dark" aria-hidden="true"><use href="#i-moon"/></svg>
+        </button>
     </div>
   </header>
 
@@ -440,7 +425,6 @@
     </div>
   </main>
 
-  <!-- Mobile / tablet bottom nav (global scope) -->
   <nav class="bottomnav" aria-label="Sections">
     <a class="bottomnav__item" href="overview.html" aria-current="page"><svg class="icon" aria-hidden="true"><use href="#i-overview"/></svg>Overview<span class="count" data-status="needs">5</span></a>
     <a class="bottomnav__item" href="usage.html"><svg class="icon" aria-hidden="true"><use href="#i-gauge"/></svg>Usage</a>

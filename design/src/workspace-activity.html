@@ -1,0 +1,156 @@
+<!--page {"title": "Atlas · Activity", "scope": "atlas", "nav": "activity", "group": "Workspace", "order": 20, "icon": "i-activity", "label": "2. Activity", "desc": "Agents grouped by floor: state, brief, Y/n approvals and the terminal preview."}-->
+    <div class="page">
+
+      <header class="page-head">
+        <div class="page-head__title">
+          <span class="ws-eyebrow" data-ws="blue"><span class="swatch swatch--lg"></span>Atlas <span class="subtle">· Workstation</span></span>
+          <h1>Activity</h1>
+          <p class="summary-row"><span class="status" data-status="working">3 working</span><span class="status" data-status="needs">1 waiting on you</span><span class="status" data-status="idle">1 idle</span></p>
+        </div>
+      </header>
+
+      <div class="chip-row" data-filter="agents" role="group" aria-label="Filter agents">
+        <button class="chip" type="button" aria-pressed="true" data-value="all">All <span class="count">5</span></button>
+        <button class="chip" type="button" aria-pressed="false" data-value="needs"><span class="dot" data-status="needs"></span>Needs you <span class="count">1</span></button>
+        <button class="chip" type="button" aria-pressed="false" data-value="working"><span class="dot" data-status="working"></span>Working <span class="count">3</span></button>
+        <button class="chip" type="button" aria-pressed="false" data-value="idle"><span class="dot" data-status="idle"></span>Idle <span class="count">1</span></button>
+      </div>
+
+      <div class="section" id="agents">
+
+        <!-- Floor: billing-webhooks -->
+        <section class="card panel" aria-labelledby="f-billing">
+          <header class="panel__head" data-status="review">
+            <div class="floor-head">
+              <svg class="icon" aria-hidden="true"><use href="#i-branch"/></svg>
+              <h2 class="floor-line__name" id="f-billing">billing-webhooks</h2>
+              <span class="status" data-status="review">Review</span>
+              <progress class="progress floor-head__progress" max="1" value="0.85">Almost done</progress>
+            </div>
+            <div class="panel__aside"><a href="workspace-floors.html">Floor</a></div>
+          </header>
+          <ul class="list">
+            <li data-key="needs">
+              <article class="agent">
+                <span class="avatar" data-tone="sky">O</span>
+                <div class="agent__head">
+                  <span class="agent__name">Orin</span>
+                  <span class="subtle">Gemini · 34m</span>
+                  <span class="status status--badge" data-status="needs">Waiting on Y/n</span>
+                </div>
+                <p class="agent__brief">Adding schema validation to incoming webhook payloads</p>
+                <div class="agent__prompt" data-status="needs">
+                  <p>Allow <code>pnpm add zod@3.23.8</code>? <span class="mono">(Y/n)</span></p>
+                  <div class="btn-row">
+                    <button class="btn btn--primary btn--sm" type="button" data-resolve="Approved"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>Approve</button>
+                    <button class="btn btn--sm" type="button" data-resolve="Rejected"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>Reject</button>
+                  </div>
+                </div>
+                <details class="disclosure agent__detail" open>
+                  <summary><svg class="icon" aria-hidden="true"><use href="#i-chevron-right"/></svg>Terminal preview</summary>
+<pre class="term"><span class="t-dim">$</span> pnpm test src/billing
+<span class="t-ok">✓</span> webhooks/signature.test.ts (12)
+<span class="t-ok">✓</span> webhooks/retry.test.ts (9)
+<span class="t-warn">!</span> payload shape is unchecked in handler.ts:41
+<span class="t-dim">Adding runtime validation with zod.</span>
+Install zod@3.23.8? (Y/n)</pre>
+                </details>
+              </article>
+            </li>
+            <li data-key="working">
+              <article class="agent">
+                <span class="avatar" data-tone="green">V</span>
+                <div class="agent__head">
+                  <span class="agent__name">Vesper</span>
+                  <span class="subtle">Claude · 1h 12m</span>
+                  <span class="status status--badge" data-status="working">Working</span>
+                </div>
+                <p class="agent__brief">Writing retry tests for webhook signature failures</p>
+                <details class="disclosure agent__detail">
+                  <summary><svg class="icon" aria-hidden="true"><use href="#i-chevron-right"/></svg>Terminal preview</summary>
+<pre class="term"><span class="t-dim">Editing</span> src/billing/webhooks/retry.test.ts
++ it('retries with backoff when the signature check fails', async () => {
++   const queue = makeQueue({ maxAttempts: 8 })
+<span class="t-dim">Running</span> pnpm vitest retry.test.ts
+<span class="t-ok">✓</span> 9 passed</pre>
+                </details>
+              </article>
+            </li>
+          </ul>
+        </section>
+
+        <!-- Floor: main -->
+        <section class="card panel" aria-labelledby="f-main">
+          <header class="panel__head">
+            <div class="floor-head">
+              <svg class="icon" aria-hidden="true"><use href="#i-branch"/></svg>
+              <h2 class="floor-line__name" id="f-main">main</h2>
+              <span class="subtle">Default floor</span>
+            </div>
+          </header>
+          <ul class="list">
+            <li data-key="working">
+              <article class="agent">
+                <span class="avatar avatar--maestro">M</span>
+                <div class="agent__head">
+                  <span class="agent__name">Maestro</span>
+                  <span class="subtle">Claude · coordinating</span>
+                  <span class="status status--badge" data-status="working">Working</span>
+                </div>
+                <p class="agent__brief">Coordinating 3 floors; next: land billing-webhooks after your approval</p>
+                <div class="agent__detail btn-row"><a class="btn btn--sm" href="workspace-chat.html"><svg class="icon" aria-hidden="true"><use href="#i-chat"/></svg>Open chat</a></div>
+              </article>
+            </li>
+            <li data-key="working">
+              <article class="agent">
+                <span class="avatar" data-tone="orange">T</span>
+                <div class="agent__head">
+                  <span class="agent__name">Tamsin</span>
+                  <span class="subtle">Claude · 22m</span>
+                  <span class="status status--badge" data-status="working">Working</span>
+                </div>
+                <p class="agent__brief">Reviewing the rate limiter changes before release</p>
+                <details class="disclosure agent__detail">
+                  <summary><svg class="icon" aria-hidden="true"><use href="#i-chevron-right"/></svg>Terminal preview</summary>
+<pre class="term"><span class="t-dim">Reading</span> src/api/rate-limit.ts
+<span class="t-dim">Reading</span> src/api/rate-limit.test.ts
+Looks good. One nit: the Retry-After header should be in seconds.</pre>
+                </details>
+              </article>
+            </li>
+          </ul>
+        </section>
+
+        <!-- Floor: invoice-pdf -->
+        <section class="card panel" aria-labelledby="f-invoice">
+          <header class="panel__head">
+            <div class="floor-head">
+              <svg class="icon" aria-hidden="true"><use href="#i-branch"/></svg>
+              <h2 class="floor-line__name" id="f-invoice">invoice-pdf</h2>
+              <span class="status" data-status="done">Done</span>
+            </div>
+            <div class="panel__aside"><a href="workspace-floors.html">Floor</a></div>
+          </header>
+          <ul class="list">
+            <li data-key="idle">
+              <article class="agent">
+                <span class="avatar" data-tone="pink">W</span>
+                <div class="agent__head">
+                  <span class="agent__name">Wren</span>
+                  <span class="subtle">Gemini · idle 18m</span>
+                  <span class="status status--badge" data-status="idle">Idle</span>
+                </div>
+                <p class="agent__brief">Finished the PDF templates. Waiting for the next brief.</p>
+                <details class="disclosure agent__detail">
+                  <summary><svg class="icon" aria-hidden="true"><use href="#i-chevron-right"/></svg>Terminal preview</summary>
+<pre class="term"><span class="t-ok">✓</span> 31 passed (invoice-pdf)
+Done. Templates render in 120 ms on average.
+<span class="t-dim">&gt;</span></pre>
+                </details>
+              </article>
+            </li>
+          </ul>
+        </section>
+
+      </div>
+    </div>

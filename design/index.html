@@ -64,34 +64,34 @@
 <!--icons:end-->
 <div class="sheet">
   <header class="sheet-head">
-    <a class="brand" href="index.html">
-      <svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true"><rect class="brand__bg" width="24" height="24" rx="6"/><path class="brand__bars" d="M7 14.5v2.5M10.3 11v6M13.7 7.5V17M17 10v7"/></svg>
-      Maestria v2 design
-    </a>
+    <a class="brand" href="index.html"><svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true"><rect class="brand__bg" width="24" height="24" rx="6"/><path class="brand__bars" d="M7 14.5v2.5M10.3 11v6M13.7 7.5V17M17 10v7"/></svg> Maestria v2 design</a>
     <div class="btn-row">
+      <a class="btn" href="components.html"><svg class="icon" aria-hidden="true"><use href="#i-sparkle"/></svg>Components</a>
       <a class="btn" href="preview.html">Preview at 360 / 768 / 1280</a>
       <button class="btn btn--ghost btn--icon theme-toggle" type="button" data-theme-toggle aria-label="Theme: system" title="Theme: system">
-        <svg class="icon i-auto" aria-hidden="true"><use href="#i-auto"/></svg>
-        <svg class="icon i-light" aria-hidden="true"><use href="#i-sun"/></svg>
-        <svg class="icon i-dark" aria-hidden="true"><use href="#i-moon"/></svg>
-      </button>
+          <svg class="icon i-auto" aria-hidden="true"><use href="#i-auto"/></svg>
+          <svg class="icon i-light" aria-hidden="true"><use href="#i-sun"/></svg>
+          <svg class="icon i-dark" aria-hidden="true"><use href="#i-moon"/></svg>
+        </button>
     </div>
   </header>
-
-  <div class="index-grid">
-    <a class="card index-card" href="components.html"><span class="index-card__title"><svg class="icon" aria-hidden="true"><use href="#i-sparkle"/></svg>Components</span><p>Tokens and every component, light and dark side by side.</p></a>
-    <a class="card index-card" href="screens/overview.html"><span class="index-card__title"><svg class="icon" aria-hidden="true"><use href="#i-overview"/></svg>1. Overview</span><p>All workspaces: cards, Needs you, agents at work, usage, active floors.</p></a>
-    <div class="card index-card is-todo"><span class="index-card__title"><svg class="icon" aria-hidden="true"><use href="#i-activity"/></svg>2. Workspace / Activity</span><p>After direction approval.</p></div>
-    <div class="card index-card is-todo"><span class="index-card__title"><svg class="icon" aria-hidden="true"><use href="#i-inbox"/></svg>3. Workspace / Human tasks</span><p>After direction approval.</p></div>
-    <div class="card index-card is-todo"><span class="index-card__title"><svg class="icon" aria-hidden="true"><use href="#i-chat"/></svg>4. Workspace / Chat</span><p>After direction approval.</p></div>
-    <div class="card index-card is-todo"><span class="index-card__title"><svg class="icon" aria-hidden="true"><use href="#i-floors"/></svg>5. Workspace / Floors</span><p>After direction approval.</p></div>
-    <div class="card index-card is-todo"><span class="index-card__title"><svg class="icon" aria-hidden="true"><use href="#i-docs"/></svg>6. Workspace / Docs</span><p>After direction approval.</p></div>
-    <div class="card index-card is-todo"><span class="index-card__title"><svg class="icon" aria-hidden="true"><use href="#i-gauge"/></svg>7. Usage &amp; standby</span><p>After direction approval.</p></div>
-    <div class="card index-card is-todo"><span class="index-card__title"><svg class="icon" aria-hidden="true"><use href="#i-key"/></svg>8. Auth</span><p>After direction approval.</p></div>
-    <div class="card index-card is-todo"><span class="index-card__title"><svg class="icon" aria-hidden="true"><use href="#i-plug"/></svg>9. Connector</span><p>After direction approval.</p></div>
-    <div class="card index-card is-todo"><span class="index-card__title"><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg>10. Devices &amp; security</span><p>After direction approval.</p></div>
-    <div class="card index-card is-todo"><span class="index-card__title"><svg class="icon" aria-hidden="true"><use href="#i-info"/></svg>11. Empty &amp; error states</span><p>After direction approval.</p></div>
-  </div>
+  <section class="spec">
+    <h2 class="spec__title">All workspaces</h2>
+    <div class="index-grid">
+      <a class="card index-card" href="screens/overview.html"><span class="index-card__title"><svg class="icon" aria-hidden="true"><use href="#i-overview"/></svg>1. Overview</span><p>Workspace cards, Needs you (all workspaces), agents at work, usage, active floors.</p></a>
+    </div>
+  </section>
+  <section class="spec">
+    <h2 class="spec__title">Workspace</h2>
+    <div class="index-grid">
+      <a class="card index-card" href="screens/workspace-activity.html"><span class="index-card__title"><svg class="icon" aria-hidden="true"><use href="#i-activity"/></svg>2. Activity</span><p>Agents grouped by floor: state, brief, Y/n approvals and the terminal preview.</p></a>
+      <a class="card index-card" href="screens/workspace-tasks.html"><span class="index-card__title"><svg class="icon" aria-hidden="true"><use href="#i-inbox"/></svg>3. Human tasks</span><p>Needs you (approve, input, choice, postpone), Updates, collapsed History.</p></a>
+      <a class="card index-card" href="screens/workspace-chat.html"><span class="index-card__title"><svg class="icon" aria-hidden="true"><use href="#i-chat"/></svg>4. Chat</span><p>Chat with the workspace's Maestro: Markdown, timestamps, composer, "Maestro is working…".</p></a>
+      <a class="card index-card" href="screens/workspace-chat-offline.html"><span class="index-card__title"><svg class="icon" aria-hidden="true"><use href="#i-offline"/></svg>4b. Chat, disconnected</span><p>Chat when the connector is offline: history stays readable, sending is disabled.</p></a>
+      <a class="card index-card" href="screens/workspace-floors.html"><span class="index-card__title"><svg class="icon" aria-hidden="true"><use href="#i-floors"/></svg>5. Floors</span><p>Present (live), Future (planned) and Past (landed or cancelled, collapsed). No numbers.</p></a>
+      <a class="card index-card" href="screens/workspace-docs.html"><span class="index-card__title"><svg class="icon" aria-hidden="true"><use href="#i-docs"/></svg>6. Docs</span><p>Read-only mirror of the project's docs/ folder: file tree and rendered Markdown.</p></a>
+    </div>
+  </section>
 </div>
 </body>
 </html>

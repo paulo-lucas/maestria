@@ -1,0 +1,132 @@
+<!--page {"title": "Atlas · Floors", "scope": "atlas", "nav": "floors", "group": "Workspace", "order": 50, "icon": "i-floors", "label": "5. Floors", "desc": "Present (live), Future (planned) and Past (landed or cancelled, collapsed). No numbers."}-->
+    <div class="page">
+
+      <header class="page-head">
+        <div class="page-head__title">
+          <span class="ws-eyebrow" data-ws="blue"><span class="swatch swatch--lg"></span>Atlas <span class="subtle">· Workstation</span></span>
+          <h1>Floors</h1>
+          <p class="page-head__sub">What is being built now, what is next, and what already shipped. Planned by the Maestro.</p>
+        </div>
+      </header>
+
+      <!-- Present -->
+      <section class="section" aria-labelledby="present-title">
+        <div class="section__head">
+          <h2 class="section__title" id="present-title">Present</h2>
+          <span class="count">4</span>
+        </div>
+        <div class="grid-cards">
+          <article class="floor-card" data-status="review">
+            <header class="floor-card__head">
+              <svg class="icon" aria-hidden="true"><use href="#i-branch"/></svg>
+              <h3 class="floor-card__name truncate">billing-webhooks</h3>
+              <span class="status status--badge" data-status="review">Review</span>
+            </header>
+            <p class="floor-card__brief">Reliable delivery for payment provider webhooks: signature checks, retries with backoff, and a dead-letter table.</p>
+            <progress class="progress" max="1" value="0.85">Almost done</progress>
+            <p class="floor-card__state">All tests pass; waiting on your approval to land.</p>
+            <footer class="floor-card__foot"><span class="avatar-stack"><span class="avatar avatar--sm" data-tone="sky">O</span><span class="avatar avatar--sm" data-tone="green">V</span></span>Orin, Vesper</footer>
+          </article>
+
+          <article class="floor-card" data-status="done">
+            <header class="floor-card__head">
+              <svg class="icon" aria-hidden="true"><use href="#i-branch"/></svg>
+              <h3 class="floor-card__name truncate">invoice-pdf</h3>
+              <span class="status status--badge" data-status="done">Done</span>
+            </header>
+            <p class="floor-card__brief">PDF invoices that match the brand, rendered on the server and attached to invoice emails.</p>
+            <progress class="progress" max="1" value="1">Complete</progress>
+            <p class="floor-card__state">Templates done; ready to land once you pick the default paper size.</p>
+            <footer class="floor-card__foot"><span class="avatar avatar--sm" data-tone="pink">W</span>Wren</footer>
+          </article>
+
+          <article class="floor-card" data-status="blocked">
+            <header class="floor-card__head">
+              <svg class="icon" aria-hidden="true"><use href="#i-branch"/></svg>
+              <h3 class="floor-card__name truncate">tax-rates</h3>
+              <span class="status status--badge" data-status="blocked">Blocked</span>
+            </header>
+            <p class="floor-card__brief">Fetch tax rates from the tax provider instead of the hard-coded table.</p>
+            <progress class="progress" max="1" value="0.3">About a third</progress>
+            <p class="floor-card__state">Waiting for a sandbox API key from the tax provider.</p>
+            <footer class="floor-card__foot">No agents right now</footer>
+          </article>
+
+          <article class="floor-card floor-card--ongoing" data-status="working">
+            <header class="floor-card__head">
+              <svg class="icon" aria-hidden="true"><use href="#i-loop"/></svg>
+              <h3 class="floor-card__name truncate">dependency-watch</h3>
+              <span class="status status--quiet">Ongoing</span>
+            </header>
+            <p class="floor-card__brief">Every Monday: check for dependency updates and security advisories, open a floor for anything urgent.</p>
+            <div class="ongoing" role="img" aria-label="Ongoing, no end"></div>
+            <p class="floor-card__state">Last run Monday: 3 minor updates, nothing urgent.</p>
+            <footer class="floor-card__foot">Runs weekly</footer>
+          </article>
+        </div>
+      </section>
+
+      <!-- Future -->
+      <section class="section" aria-labelledby="future-title">
+        <div class="section__head">
+          <h2 class="section__title" id="future-title">Future</h2>
+          <span class="count">3</span>
+          <div class="panel__aside">In planned order</div>
+        </div>
+        <div class="grid-cards">
+          <article class="floor-card floor-card--planned">
+            <header class="floor-card__head">
+              <svg class="icon" aria-hidden="true"><use href="#i-floors"/></svg>
+              <h3 class="floor-card__name truncate">customer-portal</h3>
+              <span class="status status--quiet">Next</span>
+            </header>
+            <p class="floor-card__brief">Self-service page where customers see invoices, change plans and update cards.</p>
+          </article>
+          <article class="floor-card floor-card--planned">
+            <header class="floor-card__head">
+              <svg class="icon" aria-hidden="true"><use href="#i-floors"/></svg>
+              <h3 class="floor-card__name truncate">usage-based-plans</h3>
+              <span class="status status--quiet">Planned</span>
+            </header>
+            <p class="floor-card__brief">Metered billing on top of the usage export: tiers, overage, proration.</p>
+          </article>
+          <article class="floor-card floor-card--planned">
+            <header class="floor-card__head">
+              <svg class="icon" aria-hidden="true"><use href="#i-floors"/></svg>
+              <h3 class="floor-card__name truncate">sso-login</h3>
+              <span class="status status--quiet">Planned</span>
+            </header>
+            <p class="floor-card__brief">Sign in with the company identity provider (OIDC) for the admin console.</p>
+          </article>
+        </div>
+      </section>
+
+      <!-- Past -->
+      <section class="section" aria-labelledby="past-title">
+        <details class="disclosure">
+          <summary><svg class="icon" aria-hidden="true"><use href="#i-chevron-right"/></svg><span id="past-title">Past</span> <span class="count">4</span></summary>
+          <ul class="card list">
+            <li class="floor-past" data-status="done">
+              <span class="floor-past__icon"><svg class="icon" aria-hidden="true"><use href="#i-merge"/></svg></span>
+              <div class="floor-past__top"><span class="floor-line__name">invoice-numbering</span><span class="status" data-status="done">Landed</span><span class="subtle">Nov 12</span></div>
+              <p class="floor-past__outcome">Gapless invoice numbers per legal entity, with a migration for old invoices.</p>
+            </li>
+            <li class="floor-past" data-status="done">
+              <span class="floor-past__icon"><svg class="icon" aria-hidden="true"><use href="#i-merge"/></svg></span>
+              <div class="floor-past__top"><span class="floor-line__name">rate-limiter</span><span class="status" data-status="done">Landed</span><span class="subtle">Nov 10</span></div>
+              <p class="floor-past__outcome">Per-token rate limits on the public API, with Retry-After headers.</p>
+            </li>
+            <li class="floor-past" data-status="offline">
+              <span class="floor-past__icon"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg></span>
+              <div class="floor-past__top"><span class="floor-line__name">graphql-gateway</span><span class="status status--quiet">Cancelled</span><span class="subtle">Nov 4</span></div>
+              <p class="floor-past__outcome">Dropped: REST covers every client we have.</p>
+            </li>
+            <li class="floor-past" data-status="done">
+              <span class="floor-past__icon"><svg class="icon" aria-hidden="true"><use href="#i-merge"/></svg></span>
+              <div class="floor-past__top"><span class="floor-line__name">payments-v2</span><span class="status" data-status="done">Landed</span><span class="subtle">Oct 28</span></div>
+              <p class="floor-past__outcome">Moved to the payment provider's v2 API; old endpoints removed.</p>
+            </li>
+          </ul>
+        </details>
+      </section>
+    </div>

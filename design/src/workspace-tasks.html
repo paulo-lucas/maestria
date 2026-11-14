@@ -1,0 +1,151 @@
+<!--page {"title": "Atlas · Human tasks", "scope": "atlas", "nav": "tasks", "group": "Workspace", "order": 30, "icon": "i-inbox", "label": "3. Human tasks", "desc": "Needs you (approve, input, choice, postpone), Updates, collapsed History."}-->
+    <div class="page page--narrow">
+
+      <header class="page-head">
+        <div class="page-head__title">
+          <span class="ws-eyebrow" data-ws="blue"><span class="swatch swatch--lg"></span>Atlas <span class="subtle">· Workstation</span></span>
+          <h1>Human tasks</h1>
+          <p class="page-head__sub">Decisions the Maestro is waiting on, and what it wants you to know.</p>
+        </div>
+      </header>
+
+      <!-- Needs you -->
+      <section class="section" aria-labelledby="needs-title">
+        <div class="section__head">
+          <h2 class="section__title" id="needs-title">Needs you</h2>
+          <span class="count" data-status="needs">3</span>
+          <div class="panel__aside">Newest first</div>
+        </div>
+        <ul class="card list">
+          <li class="task" data-status="needs">
+            <div class="task__meta">
+              <span class="task__kind"><svg class="icon" aria-hidden="true"><use href="#i-approve"/></svg>Approval</span>
+              <span class="floor-name"><svg class="icon" aria-hidden="true"><use href="#i-branch"/></svg><span class="truncate">billing-webhooks</span></span>
+              <time datetime="2026-11-13T13:54">8m</time>
+            </div>
+            <h3 class="task__title">Land billing-webhooks into main?</h3>
+            <p class="task__body">All 214 tests pass. The diff touches 9 files under <code>src/billing</code> and adds a retry queue for failed webhook deliveries. Vesper reviewed it; no open comments.</p>
+            <label class="sr-only" for="c-1">Comment</label>
+            <textarea class="textarea" id="c-1" rows="2" placeholder="Optional comment for the Maestro…"></textarea>
+            <div class="task__actions">
+              <button class="btn btn--primary btn--sm" type="button" data-resolve="Approved"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>Approve</button>
+              <button class="btn btn--sm" type="button" data-resolve="Rejected"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>Reject</button>
+              <details class="menu menu--end">
+                <summary class="btn btn--ghost btn--sm"><svg class="icon" aria-hidden="true"><use href="#i-clock"/></svg>Later<svg class="icon" aria-hidden="true"><use href="#i-chevron-down"/></svg></summary>
+                <div class="menu__panel">
+                  <button class="menu__item" type="button" data-resolve="Postponed 1 hour">In 1 hour</button>
+                  <button class="menu__item" type="button" data-resolve="Postponed until this evening">This evening, 18:00</button>
+                  <button class="menu__item" type="button" data-resolve="Postponed until tomorrow">Tomorrow, 09:00</button>
+                </div>
+              </details>
+            </div>
+          </li>
+          <li class="task" data-status="needs">
+            <div class="task__meta">
+              <span class="task__kind"><svg class="icon" aria-hidden="true"><use href="#i-choice"/></svg>Choice</span>
+              <span class="floor-name"><svg class="icon" aria-hidden="true"><use href="#i-branch"/></svg><span class="truncate">invoice-pdf</span></span>
+              <time datetime="2026-11-13T13:40">22m</time>
+            </div>
+            <h3 class="task__title">Which paper size should invoices default to?</h3>
+            <p class="task__body">Customers can still change it per account.</p>
+            <div class="choice-list">
+              <button class="btn btn--sm" type="button" data-resolve="Chose A4">A4</button>
+              <button class="btn btn--sm" type="button" data-resolve="Chose US Letter">US Letter</button>
+              <button class="btn btn--sm" type="button" data-resolve="Chose by billing country">By billing country</button>
+              <button class="btn btn--sm" type="button" data-resolve="Chose to ask the customer">Ask on first invoice</button>
+            </div>
+            <div class="task__actions"><button class="btn btn--ghost btn--sm" type="button" data-resolve="Postponed"><svg class="icon" aria-hidden="true"><use href="#i-clock"/></svg>Later</button></div>
+          </li>
+          <li class="task" data-status="needs">
+            <div class="task__meta">
+              <span class="task__kind"><svg class="icon" aria-hidden="true"><use href="#i-question"/></svg>Question</span>
+              <time datetime="2026-11-13T12:10">2h</time>
+            </div>
+            <h3 class="task__title">Which email should receive failed-payment alerts?</h3>
+            <p class="task__body">Used by the billing alert job. It can be a shared inbox.</p>
+            <form class="inline-form" action="#">
+              <label class="sr-only" for="a-1">Answer</label>
+              <input class="input" id="a-1" type="email" placeholder="billing-alerts@example.com">
+              <button class="btn btn--primary" type="button" data-resolve="Answered">Send</button>
+            </form>
+            <div class="task__actions"><button class="btn btn--ghost btn--sm" type="button" data-resolve="Postponed"><svg class="icon" aria-hidden="true"><use href="#i-clock"/></svg>Later</button></div>
+          </li>
+        </ul>
+        <details class="disclosure">
+          <summary><svg class="icon" aria-hidden="true"><use href="#i-chevron-right"/></svg>Postponed <span class="count">1</span></summary>
+          <ul class="card list">
+            <li class="task">
+              <div class="task__meta">
+                <span class="task__kind"><svg class="icon" aria-hidden="true"><use href="#i-approve"/></svg>Approval</span>
+                <span>Back at 18:00</span>
+                <time datetime="2026-11-13T10:02">4h</time>
+              </div>
+              <h3 class="task__title">Rotate the payment provider API key this week?</h3>
+              <div class="task__actions">
+                <button class="btn btn--primary btn--sm" type="button" data-resolve="Approved"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>Approve</button>
+                <button class="btn btn--sm" type="button" data-resolve="Rejected"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>Reject</button>
+              </div>
+            </li>
+          </ul>
+        </details>
+      </section>
+
+      <!-- Updates -->
+      <section class="section" aria-labelledby="updates-title">
+        <div class="section__head">
+          <h2 class="section__title" id="updates-title">Updates</h2>
+          <span class="count">2</span>
+          <div class="panel__aside"><button class="btn btn--ghost btn--sm" type="button">Mark all as read</button></div>
+        </div>
+        <ul class="card list">
+          <li class="task">
+            <div class="task__meta">
+              <span class="task__kind"><svg class="icon" aria-hidden="true"><use href="#i-bell"/></svg>Update</span>
+              <span class="floor-name"><svg class="icon" aria-hidden="true"><use href="#i-branch"/></svg><span class="truncate">invoice-pdf</span></span>
+              <time datetime="2026-11-13T13:20">42m</time>
+            </div>
+            <h3 class="task__title">Invoice PDF templates are done</h3>
+            <p class="task__body">31 tests pass. Rendering takes 120 ms on average. The floor is ready to land once the paper size is decided.</p>
+            <div class="task__actions"><button class="btn btn--sm" type="button" data-resolve="Got it"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>Got it</button></div>
+          </li>
+          <li class="task">
+            <div class="task__meta">
+              <span class="task__kind"><svg class="icon" aria-hidden="true"><use href="#i-bell"/></svg>Update</span>
+              <time datetime="2026-11-13T09:00">5h</time>
+            </div>
+            <h3 class="task__title">Standby lifted, work resumed</h3>
+            <p class="task__body">The Gemini 5-hour window reset at 09:00 and the Maestro woke the paused agents.</p>
+            <div class="task__actions"><button class="btn btn--sm" type="button" data-resolve="Got it"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>Got it</button></div>
+          </li>
+        </ul>
+      </section>
+
+      <!-- History -->
+      <section class="section" aria-labelledby="history-title">
+        <details class="disclosure">
+          <summary><svg class="icon" aria-hidden="true"><use href="#i-chevron-right"/></svg><span id="history-title">History</span> <span class="count">24</span></summary>
+          <ul class="card list">
+            <li class="task">
+              <div class="task__meta"><span class="task__kind"><svg class="icon" aria-hidden="true"><use href="#i-approve"/></svg>Approval</span><time datetime="2026-11-12T18:40">Yesterday</time></div>
+              <h3 class="task__title">Upgrade the test runner to the new major?</h3>
+              <p class="task__response"><span class="status" data-status="done">Approved</span> · “Go, but pin the version.” · Nov 12, 18:40</p>
+            </li>
+            <li class="task">
+              <div class="task__meta"><span class="task__kind"><svg class="icon" aria-hidden="true"><use href="#i-choice"/></svg>Choice</span><time datetime="2026-11-12T11:05">Yesterday</time></div>
+              <h3 class="task__title">How long should failed webhooks be retried?</h3>
+              <p class="task__response"><span class="status status--quiet" data-status="idle">Chose</span> “Up to 24 hours” · Nov 12, 11:05</p>
+            </li>
+            <li class="task">
+              <div class="task__meta"><span class="task__kind"><svg class="icon" aria-hidden="true"><use href="#i-approve"/></svg>Approval</span><time datetime="2026-11-11T16:30">Nov 11</time></div>
+              <h3 class="task__title">Start a floor for GraphQL support?</h3>
+              <p class="task__response"><span class="status" data-status="blocked">Rejected</span> · “REST covers every client we have.” · Nov 11, 16:30</p>
+            </li>
+            <li class="task">
+              <div class="task__meta"><span class="task__kind"><svg class="icon" aria-hidden="true"><use href="#i-bell"/></svg>Update</span><time datetime="2026-11-10T10:00">Nov 10</time></div>
+              <h3 class="task__title">rate-limiter landed into main</h3>
+              <p class="task__response"><span class="status status--quiet" data-status="idle">Read</span> · Nov 10, 10:14</p>
+            </li>
+          </ul>
+        </details>
+      </section>
+    </div>

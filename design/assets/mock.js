@@ -94,6 +94,44 @@
       });
     });
 
+    // Dialogs: [data-open-dialog="id"] opens, [data-close-dialog] closes.
+    document.addEventListener('click', function (ev) {
+      var opener = ev.target.closest('[data-open-dialog]');
+      if (opener) {
+        var dlg = document.getElementById(opener.getAttribute('data-open-dialog'));
+        if (dlg && dlg.showModal) dlg.showModal();
+      }
+      var closer = ev.target.closest('[data-close-dialog]');
+      if (closer) {
+        var d = closer.closest('dialog');
+        if (d) d.close();
+      }
+    });
+
+    // A button with data-requires="checkbox-id" is enabled only while that box is checked.
+    document.querySelectorAll('[data-requires]').forEach(function (btn) {
+      var box = document.getElementById(btn.getAttribute('data-requires'));
+      if (!box) return;
+      var sync = function () { btn.disabled = !box.checked; };
+      box.addEventListener('change', sync);
+      sync();
+    });
+
+    // Copy buttons: show feedback only.
+    document.addEventListener('click', function (ev) {
+      var btn = ev.target.closest('[data-copy]');
+      if (!btn) return;
+      var label = btn.getAttribute('aria-label') || '';
+      btn.setAttribute('aria-label', 'Copied');
+      btn.setAttribute('title', 'Copied');
+      setTimeout(function () { btn.setAttribute('aria-label', label); btn.setAttribute('title', label); }, 1500);
+    });
+
+    // Docs tree starts collapsed on narrow screens.
+    if (window.matchMedia('(max-width: 1023px)').matches) {
+      document.querySelectorAll('.docs-nav[open]').forEach(function (d) { d.removeAttribute('open'); });
+    }
+
     // Mock forms never submit.
     document.addEventListener('submit', function (ev) { ev.preventDefault(); });
 

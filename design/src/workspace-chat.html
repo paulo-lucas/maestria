@@ -1,0 +1,71 @@
+<!--page {"title": "Atlas · Chat", "scope": "atlas", "nav": "chat", "group": "Workspace", "order": 40, "icon": "i-chat", "label": "4. Chat", "desc": "Chat with the workspace's Maestro: Markdown, timestamps, composer, \"Maestro is working…\"."}-->
+    <div class="page page--narrow chat-page">
+
+      <header class="page-head">
+        <div class="page-head__title">
+          <span class="ws-eyebrow" data-ws="blue"><span class="swatch swatch--lg"></span>Atlas <span class="subtle">· Workstation</span></span>
+          <h1>Chat</h1>
+        </div>
+        <div class="page-head__actions"><span class="status" data-status="working">Maestro working</span></div>
+      </header>
+
+      <div class="chat" aria-live="polite">
+        <div class="msg msg--system"><span>Today</span></div>
+
+        <div class="msg msg--maestro">
+          <div class="msg__head"><span class="avatar avatar--sm avatar--maestro">M</span>Maestro<time datetime="2026-11-13T09:02">09:02</time></div>
+          <div class="msg__body prose">
+            <p>Good morning. The Gemini window reset at 09:00, so I woke the floors that were paused overnight.</p>
+            <ul>
+              <li><strong>billing-webhooks</strong>: retry queue done, tests next</li>
+              <li><strong>invoice-pdf</strong>: templates in progress</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="msg msg--you">
+          <div class="msg__body">How is billing-webhooks going? Can we land it today?</div>
+          <time datetime="2026-11-13T13:50">13:50</time>
+        </div>
+
+        <div class="msg msg--maestro">
+          <div class="msg__head"><span class="avatar avatar--sm avatar--maestro">M</span>Maestro<time datetime="2026-11-13T13:52">13:52</time></div>
+          <div class="msg__body prose">
+            <p>Yes. It is in <strong>review</strong> and all 214 tests pass. Two things are left, both in <a href="workspace-tasks.html">Human tasks</a>:</p>
+            <ol>
+              <li>Orin is waiting on a Y/n to add <code>zod</code> for payload validation.</li>
+              <li>Your approval to land it into <code>main</code>.</li>
+            </ol>
+            <p>Retry policy as built:</p>
+            <table>
+              <thead><tr><th>Attempt</th><th>Delay</th></tr></thead>
+              <tbody><tr><td>1–3</td><td>30 s, 2 min, 10 min</td></tr><tr><td>4–8</td><td>1 h each, up to 24 h</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="msg msg--you">
+          <div class="msg__body">Approve the zod install. Also make sure failed retries end up in the dead-letter table.</div>
+          <time datetime="2026-11-13T14:01">14:01</time>
+        </div>
+
+        <div class="msg msg--maestro">
+          <div class="msg__head"><span class="avatar avatar--sm avatar--maestro">M</span>Maestro<time datetime="2026-11-13T14:02">14:02</time></div>
+          <div class="msg__body prose">
+            <p>On it. I told Orin to go ahead and asked Vesper to add a test for the dead-letter path:</p>
+<pre><code>it('moves a webhook to dead_letters after the last attempt', ...)</code></pre>
+          </div>
+        </div>
+
+        <div class="typing" role="status"><span class="typing__dots" aria-hidden="true"><i></i><i></i><i></i></span>Maestro is working…</div>
+      </div>
+
+      <div class="chat-dock">
+        <form class="composer" action="#">
+          <label class="sr-only" for="msg">Message the Maestro</label>
+          <textarea id="msg" rows="1" placeholder="Message the Maestro"></textarea>
+          <button class="btn btn--primary btn--icon" type="submit" aria-label="Send"><svg class="icon" aria-hidden="true"><use href="#i-send"/></svg></button>
+        </form>
+        <p class="chat-dock__hint">Sent through your connector to the Maestro's terminal.</p>
+      </div>
+    </div>

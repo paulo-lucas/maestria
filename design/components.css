@@ -876,7 +876,184 @@ a.agent-line:hover { background: var(--surface-2); }
   font-size: var(--fs-sm);
   text-decoration: none;
 }
+.menu__item { width: 100%; text-align: left; }
+.menu--end .menu__panel { left: auto; right: 0; }
 .menu__item:hover { background: var(--surface-2); text-decoration: none; }
 .menu__item[aria-current="page"] { background: var(--surface-2); font-weight: var(--fw-medium); }
 .menu__item .count, .menu__item .status { margin-left: auto; }
 .menu__sep { height: 1px; margin: var(--space-1) 0; background: var(--line); }
+
+/* ---------- Dialog (native <dialog>) ---------- */
+
+.dialog {
+  width: min(440px, calc(100vw - 32px));
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-2);
+}
+.dialog::backdrop { background: var(--scrim); }
+.dialog__body { display: grid; gap: var(--space-3); padding: var(--space-5); }
+.dialog__icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--radius-lg); background: var(--tone-tint); color: var(--tone-ink); }
+.dialog__title { font-size: var(--fs-lg); }
+.dialog__text { color: var(--text-2); font-size: var(--fs-sm); }
+.dialog__foot { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); padding: var(--space-3) var(--space-5); border-top: 1px solid var(--line); background: var(--surface-2); }
+
+/* ---------- Spinner ---------- */
+
+.spinner {
+  display: inline-block;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--line-strong);
+  border-top-color: var(--text);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+.spinner--lg { width: 28px; height: 28px; border-width: 3px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------- Codes (pairing, secrets, recovery) ---------- */
+
+.code-display {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-lg);
+  background: var(--sunken);
+  font-family: var(--font-mono);
+  font-size: var(--fs-2xl);
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.12em;
+}
+.code-inline {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--sunken);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+}
+.code-inline code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; font-size: inherit; }
+.code-inline .btn { flex: none; }
+
+.recovery-codes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--sunken);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  list-style: none;
+}
+
+.qr {
+  width: 176px;
+  height: 176px;
+  padding: 10px;
+  border-radius: var(--radius-md);
+  background: oklch(1 0 0);   /* QR codes stay dark-on-white in both themes so scanners read them */
+  color: oklch(0.15 0 0);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.qr svg { width: 100%; height: 100%; fill: currentColor; }
+
+/* ---------- Steps ---------- */
+
+.steps { display: flex; gap: var(--space-2); list-style: none; padding: 0; font-size: var(--fs-xs); color: var(--text-3); }
+.steps li { display: flex; align-items: center; gap: 6px; }
+.steps li + li::before { content: ""; width: 16px; height: 1px; background: var(--line-strong); }
+.steps .step__n { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--line-strong); font-weight: var(--fw-semibold); }
+.steps [aria-current="step"] { color: var(--text); font-weight: var(--fw-medium); }
+.steps [aria-current="step"] .step__n { border-color: var(--ink); background: var(--ink); color: var(--on-ink); }
+.steps .is-done .step__n { border-color: transparent; background: var(--surface-3); color: var(--text-2); }
+
+/* ---------- Checklist (onboarding) ---------- */
+
+.checklist { display: grid; gap: 0; list-style: none; padding: 0; counter-reset: check; }
+.checklist > li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-1) var(--space-3);
+  padding: var(--space-4);
+  counter-increment: check;
+}
+.checklist > li + li { border-top: 1px solid var(--line); }
+.checklist > li::before {
+  content: counter(check);
+  grid-row: span 3;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  color: var(--text-2);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-semibold);
+}
+.checklist > li.is-done::before { content: "✓"; border-color: transparent; background: light-dark(oklch(0.93 0.05 150), oklch(0.32 0.06 150)); color: light-dark(oklch(0.4 0.11 150), oklch(0.85 0.1 150)); }
+.checklist > li[aria-current="step"]::before { border-color: var(--ink); background: var(--ink); color: var(--on-ink); }
+.checklist__title { font-weight: var(--fw-semibold); }
+.checklist__text { color: var(--text-2); font-size: var(--fs-sm); }
+.checklist > li > :not(.checklist__title):not(.checklist__text) { grid-column: 2; }
+
+/* ---------- Settings rows ---------- */
+
+.setting {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+.setting + .setting { border-top: 1px solid var(--line); }
+.setting__head { display: flex; align-items: flex-start; gap: var(--space-3); }
+.setting__text { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.setting__title { font-size: var(--fs-sm); font-weight: var(--fw-semibold); }
+.setting__desc { color: var(--text-2); font-size: var(--fs-sm); }
+.setting__controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3) var(--space-5); }
+
+/* ---------- Devices ---------- */
+
+.device { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 2px var(--space-3); padding: var(--space-3) var(--space-4); }
+.device__icon { grid-row: span 2; display: grid; place-items: center; width: 36px; height: 36px; border-radius: var(--radius-md); background: var(--surface-2); color: var(--text-2); }
+.device__name { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); font-size: var(--fs-sm); font-weight: var(--fw-semibold); }
+.device__meta { grid-column: 2; color: var(--text-3); font-size: var(--fs-xs); }
+.device > .btn { grid-row: 1 / span 2; grid-column: 3; }
+
+/* ---------- Docs tree ---------- */
+
+.tree { display: grid; gap: 1px; list-style: none; padding: 0; font-size: var(--fs-sm); }
+.tree ul { list-style: none; padding: 0 0 0 14px; margin-left: 9px; border-left: 1px solid var(--line); display: grid; gap: 1px; }
+.tree a, .tree summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 32px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--text-2);
+  text-decoration: none;
+  cursor: pointer;
+}
+.tree summary { list-style: none; font-weight: var(--fw-medium); }
+.tree summary::-webkit-details-marker { display: none; }
+.tree a:hover, .tree summary:hover { background: var(--surface-2); color: var(--text); text-decoration: none; }
+.tree a[aria-current="page"] { background: var(--surface-3); color: var(--text); font-weight: var(--fw-medium); }
+.tree .icon { width: 16px; height: 16px; color: var(--text-3); }
+
+/* ---------- Stale data (connector offline) ---------- */
+
+.is-stale { opacity: 0.6; }
+.is-stale .btn, .is-stale .chip, .is-stale .input { pointer-events: none; }
