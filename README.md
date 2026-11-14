@@ -1,8 +1,35 @@
-# Maestria
+<p align="center">
+  <a href="https://github.com/paulo-lucas/maestria/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/paulo-lucas/maestria/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/paulo-lucas/maestria/releases"><img alt="Release" src="https://img.shields.io/github/v/release/paulo-lucas/maestria?include_prereleases&sort=semver&label=release"></a>
+  <img alt="Go" src="https://img.shields.io/github/go-mod/go-version/paulo-lucas/maestria?logo=go&logoColor=white">
+  <img alt="Platforms" src="https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-555">
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/github/license/paulo-lucas/maestria"></a>
+  <a href="https://www.themaestri.app"><img alt="Built for Maestri" src="https://img.shields.io/badge/built%20for-Maestri-6b4fbb"></a>
+</p>
 
-**A control panel for [Maestri](https://www.themaestri.app).** See what your AI agents are doing, answer their questions, and follow your floors and your usage, from your computer or your phone.
+<p align="center">
+  <img src="docs/images/logo.svg" width="88" height="88" alt="">
+</p>
 
-When agents work for hours on several projects, they stop and ask: *"Can I merge this?"*, *"Which database?"*. Maestria collects those questions in one place, so you can answer in seconds and let the work go on. It is open source (MIT), and your data stays on your machine.
+<h1 align="center">Maestria</h1>
+
+<p align="center">
+  <strong>Your AI agents, in your pocket.</strong><br>
+  A control panel for <a href="https://www.themaestri.app">Maestri</a>: see what every agent is doing, answer their questions,<br>
+  and keep an eye on floors and usage, from your computer or your phone.
+</p>
+
+<p align="center">
+  <a href="docs/getting-started.md"><strong>Get started</strong></a> ·
+  <a href="docs/concepts.md">How it works</a> ·
+  <a href="docs/self-host.md">Self-host</a> ·
+  <a href="docs/hosted.md">Hosted</a> ·
+  <a href="docs/security.md">Security</a>
+</p>
+
+---
+
+When agents work for hours on several projects, they stop and ask: *"Can I merge this?"*, *"Which database?"*. Maestria collects those questions in one place, so you can answer in seconds and let the work go on. It is open source (MIT), a single Go binary, and your data stays on your machine.
 
 ![The Maestria overview](docs/images/overview.png)
 
