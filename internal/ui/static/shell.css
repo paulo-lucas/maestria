@@ -335,7 +335,7 @@
   z-index: 1;
   gap: var(--space-1);
   background: var(--surface);
-  box-shadow: var(--shadow-2, 0 2px 8px rgb(0 0 0 / 0.18));
+  box-shadow: var(--shadow-2);
 }
 .chat-dock__jump[hidden] { display: none; }
 .chat-dock__jump[data-new] { border-color: var(--focus); color: var(--text); }
