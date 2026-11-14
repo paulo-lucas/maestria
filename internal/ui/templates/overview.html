@@ -1,0 +1,24 @@
+{{define "page"}}{{template "app" .}}{{end}}
+{{define "content"}}
+    <div class="page">
+
+      <header class="page-head">
+        <div class="page-head__title">
+          <h1>Overview</h1>
+          <p class="page-head__sub">Local mode · listening on {{.Listen}}</p>
+        </div>
+      </header>
+
+      {{template "banner" .Banner}}
+
+      <section class="section" aria-labelledby="ws-title">
+        <h2 class="sr-only" id="ws-title">Workspaces</h2>
+        <div class="card empty">
+          <span class="empty__icon">{{icon "i-overview" "icon--lg"}}</span>
+          <p class="empty__title">No workspaces yet</p>
+          <p class="empty__text">Your Maestri workspaces, their tasks and their agents will show up here. This build only has the secure foundation: login, sessions and the kill switch.</p>
+          <div class="btn-row"><a class="btn btn--sm" href="/security">Open security</a></div>
+        </div>
+      </section>
+    </div>
+{{end}}

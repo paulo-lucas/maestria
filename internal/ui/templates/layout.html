@@ -1,0 +1,127 @@
+{{define "head"}}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="referrer" content="same-origin">
+  <title>{{.Title}} · Maestria</title>
+  <link rel="stylesheet" href="{{asset "tokens.css"}}">
+  <link rel="stylesheet" href="{{asset "base.css"}}">
+  <link rel="stylesheet" href="{{asset "components.css"}}">
+  <link rel="stylesheet" href="{{asset "shell.css"}}">
+  <script src="{{asset "app.js"}}"></script>
+</head>{{end}}
+
+{{define "brandmark"}}<svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true"><rect class="brand__bg" width="24" height="24" rx="6"/><path class="brand__bars" d="M7 14.5v2.5M10.3 11v6M13.7 7.5V17M17 10v7"/></svg>{{end}}
+
+{{define "themetoggle"}}<button class="btn btn--ghost btn--icon theme-toggle{{.}}" type="button" data-theme-toggle aria-label="Theme: system" title="Theme: system">
+          {{icon "i-auto" "i-auto"}}
+          {{icon "i-sun" "i-light"}}
+          {{icon "i-moon" "i-dark"}}
+        </button>{{end}}
+
+{{define "banner"}}{{with .}}<div class="banner" data-status="{{.Status}}" role="status">
+      {{icon .Icon}}
+      <div class="banner__body">
+        <p class="banner__title">{{.Title}}</p>
+        {{if .Text}}<p class="banner__text">{{.Text}}</p>{{end}}
+      </div>
+    </div>{{end}}{{end}}
+
+{{define "auth"}}{{template "head" .}}
+<body>
+{{sprite}}
+<main class="auth" id="main">
+  <a class="brand auth__brand" href="/login">{{template "brandmark"}} Maestria</a>
+{{template "content" .}}
+  <footer class="auth__foot">
+    <span>Open source, MIT</span>
+    {{template "themetoggle" " btn--sm"}}
+  </footer>
+</main>
+</body>
+</html>
+{{end}}
+
+{{define "navitem"}}<a class="nav__item" href="{{.Href}}"{{if .On}} aria-current="page"{{end}}>{{icon .Icon}} {{.Label}}</a>{{end}}
+
+{{define "app"}}{{template "head" .}}
+<body>
+{{sprite}}
+<a class="skip-link" href="#main">Skip to content</a>
+
+<div class="app">
+  <aside class="sidebar" aria-label="Main">
+    <a class="brand" href="/">{{template "brandmark"}} Maestria</a>
+    <nav class="nav">
+      <a class="nav__item" href="/"{{if eq .Nav "overview"}} aria-current="page"{{end}}>{{icon "i-overview"}} Overview</a>
+      <div class="nav__group">Workspaces</div>
+      <p class="nav__empty">No workspaces yet</p>
+      <div class="nav__group">System</div>
+      <a class="nav__item" href="/security"{{if eq .Nav "security"}} aria-current="page"{{end}}>{{icon "i-shield"}} Security</a>
+    </nav>
+    <div class="sidebar__foot">
+      <a class="conn-card" href="/security">
+        <span class="dot" data-status="{{if .Killed}}danger{{else}}ok{{end}}"></span>
+        <span class="conn-card__name">This machine</span>
+        <span class="conn-card__ver">{{icon "i-chevron-right" "icon--sm"}}</span>
+        <span class="conn-card__meta">Local mode · {{.Listen}}</span>
+      </a>
+      <div class="account-row">
+        <span class="avatar avatar--sm" data-tone="slate">O</span>
+        <span class="account-row__name truncate">Owner</span>
+        <button class="btn btn--ghost btn--icon btn--sm" type="button" data-open-dialog="kill-dialog" aria-label="Kill switch" title="Kill switch">{{icon "i-power"}}</button>
+        {{template "themetoggle" " btn--sm"}}
+      </div>
+    </div>
+  </aside>
+
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Maestria overview">{{template "brandmark"}}</a>
+    <details class="menu scope">
+      <summary aria-label="Switch workspace">
+        {{icon "i-overview" "scope__all-icon"}}<span class="truncate">All workspaces</span>
+        {{icon "i-chevron-down"}}
+      </summary>
+      <div class="menu__panel">
+        <a class="menu__item" href="/" aria-current="page">{{icon "i-overview"}} All workspaces</a>
+      </div>
+    </details>
+    <div class="topbar__end">
+      <a class="conn-dot" href="/security" aria-label="This machine, local mode" title="This machine, local mode">
+        {{icon "i-plug"}}{{if .Killed}}<span class="dot" data-status="danger"></span>{{end}}
+      </a>
+      <button class="btn btn--ghost btn--icon" type="button" data-open-dialog="kill-dialog" aria-label="Kill switch" title="Kill switch">{{icon "i-power"}}</button>
+      {{template "themetoggle" ""}}
+    </div>
+  </header>
+
+  <main class="main" id="main">
+{{template "content" .}}
+  </main>
+
+  <nav class="bottomnav" aria-label="Sections">
+    <a class="bottomnav__item" href="/"{{if eq .Nav "overview"}} aria-current="page"{{end}}>{{icon "i-overview"}}Overview</a>
+    <a class="bottomnav__item" href="/security"{{if eq .Nav "security"}} aria-current="page"{{end}}>{{icon "i-shield"}}Security</a>
+  </nav>
+
+  <dialog class="dialog" id="kill-dialog" aria-labelledby="kill-d-title">
+    <form method="post" action="/kill-switch">
+      <input type="hidden" name="_csrf" value="{{.CSRF}}">
+      <div class="dialog__body" data-status="danger">
+        <span class="dialog__icon">{{icon "i-power" "icon--lg"}}</span>
+        <h2 class="dialog__title" id="kill-d-title">Turn on the kill switch?</h2>
+        <p class="dialog__text">This signs out every session right away, stops the tunnel with your configured stop command, and blocks all logins. It can only be turned off on this machine: run <code>maestria tunnel on</code>.</p>
+        <label class="check"><input type="checkbox" id="kill-confirm"> I understand this can't be undone from the web</label>
+      </div>
+      <div class="dialog__foot">
+        <button class="btn" type="button" data-close-dialog>Cancel</button>
+        <button class="btn btn--danger" type="submit" data-requires="kill-confirm">{{icon "i-power"}}Turn on kill switch</button>
+      </div>
+    </form>
+  </dialog>
+</div>
+</body>
+</html>
+{{end}}

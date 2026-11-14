@@ -1,0 +1,68 @@
+{{define "page"}}{{template "app" .}}{{end}}
+{{define "content"}}
+    <div class="page page--narrow">
+
+      <header class="page-head">
+        <div class="page-head__title">
+          <h1>Security</h1>
+          <p class="page-head__sub">This machine is the authority: it decides who gets in and for how long.</p>
+        </div>
+      </header>
+
+      {{template "banner" .Banner}}
+
+      <section class="section" aria-labelledby="pol-title">
+        <div class="section__head">
+          <h2 class="section__title" id="pol-title">Sessions</h2>
+          <span class="label">{{icon "i-lock"}}Set on this machine</span>
+        </div>
+        <div class="card">
+          <div class="setting">
+            <dl class="kv">
+              <dt>Idle sign-out</dt><dd>after {{.IdleMinutes}} minutes</dd>
+              <dt>Session length</dt><dd>at most {{.AbsoluteHours}} hours</dd>
+              <dt>Active sessions</dt><dd>{{.SessionCount}}</dd>
+              <dt>This session ends</dt><dd>{{.SessionExpires}}</dd>
+              <dt>Recovery codes left</dt><dd>{{.RecoveryLeft}}</dd>
+            </dl>
+          </div>
+          <div class="setting">
+            <p class="setting__desc">Change these in <code>config.json</code> in the config directory. Sessions are not editable from the browser, so a hijacked session can't loosen them.</p>
+            <form method="post" action="/logout-all">
+              <input type="hidden" name="_csrf" value="{{.CSRF}}">
+              <div class="btn-row"><button class="btn btn--sm" type="submit">Sign out everywhere</button></div>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" aria-labelledby="kill-title">
+        <div class="section__head"><h2 class="section__title" id="kill-title">Kill switch</h2><span class="status" data-status="ok">Off</span></div>
+        <div class="banner" data-status="danger">
+          {{icon "i-power"}}
+          <div class="banner__body">
+            <p class="banner__title">Stop all remote access now</p>
+            <p class="banner__text">Signs out every session, stops the tunnel{{if not .TunnelStop}} (no stop command is configured, so only sessions are cleared){{end}} and blocks logins. Only you, on this machine, can turn it off again.</p>
+          </div>
+          <div class="banner__actions"><button class="btn btn--danger btn--sm" type="button" data-open-dialog="kill-dialog">Turn on</button></div>
+        </div>
+      </section>
+
+      <section class="section" aria-labelledby="audit-title">
+        <div class="section__head"><h2 class="section__title" id="audit-title">Audit log</h2></div>
+        <div class="card table-wrap">
+          <table class="table table--stack">
+            <thead><tr><th>When</th><th>Event</th><th>From</th></tr></thead>
+            <tbody>
+              {{range .Audit}}<tr>
+                <td class="num"><time datetime="{{.ISO}}">{{.When}}</time></td>
+                <td>{{if .Status}}<span class="status" data-status="{{.Status}}">{{.Label}}</span> {{end}}{{.Event}}</td>
+                <td data-label="From">{{if .IP}}{{.IP}}{{else}}local CLI{{end}}</td>
+              </tr>{{else}}<tr><td colspan="3">Nothing recorded yet.</td></tr>{{end}}
+            </tbody>
+          </table>
+        </div>
+        <p class="field__hint">The audit log is append-only: the database refuses edits and deletes.</p>
+      </section>
+    </div>
+{{end}}

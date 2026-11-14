@@ -1,0 +1,23 @@
+{{define "page"}}{{template "auth" .}}{{end}}
+{{define "content"}}
+  <section class="card auth-card" aria-labelledby="t">
+    <div class="auth-card__head">
+      <h1 id="t">Log in</h1>
+      <p>This panel runs on this machine. Enter your password; your authenticator code comes next.</p>
+    </div>
+    {{template "banner" .Banner}}
+    {{if not .Locked}}
+    <form method="post" action="/login">
+      <input type="hidden" name="_csrf" value="{{.CSRF}}">
+      <input class="sr-only" type="text" name="username" value="owner" autocomplete="username" tabindex="-1" aria-hidden="true" readonly>
+      <div class="field">
+        <label class="field__label" for="pw">Password</label>
+        <input class="input" id="pw" name="password" type="password" autocomplete="current-password" required maxlength="256" autofocus{{if .Error}} aria-invalid="true" aria-describedby="pw-err"{{end}}>
+        {{if .Error}}<p class="field__error" id="pw-err">{{.Error}}</p>{{end}}
+      </div>
+      <button class="btn btn--primary btn--block" type="submit">Log in</button>
+    </form>
+    {{end}}
+    <p class="auth-card__alt">Forgot your password? Run <code>maestria auth setup --force</code> on this machine.</p>
+  </section>
+{{end}}
