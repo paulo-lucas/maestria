@@ -1,0 +1,42 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build release archives, checksums, and Homebrew formula
+        run: >-
+          go run ./tools/release
+          -out dist/release
+          -version "${GITHUB_REF_NAME}"
+          -commit "${GITHUB_SHA}"
+          -homebrew-template packaging/homebrew/maestria.rb
+          -homebrew-out dist/release/maestria.rb
+
+      - name: Attach release assets
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
+        with:
+          generate_release_notes: true
+          files: |
+            dist/release/*.tar.gz
+            dist/release/*.zip
+            dist/release/SHA256SUMS
+            dist/release/maestria.rb
