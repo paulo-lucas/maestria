@@ -224,6 +224,9 @@ type seenFloor struct {
 	Name   string `json:"name"`
 	Branch string `json:"branch,omitempty"`
 	Done   bool   `json:"done,omitempty"` // last seen done or merged: it landed rather than being cancelled
+	// First is when the floor was first seen (epoch ms): history recorded since then, for example
+	// by the Maestro running `maestria floor land`, is not recorded a second time.
+	First int64 `json:"first,omitempty"`
 }
 
 func (s *Service) loadSeen() map[string]map[string]seenFloor {
@@ -252,7 +255,11 @@ func (s *Service) trackFloors(wsID string, snap *wire.FeedSnapshot) {
 			continue
 		}
 		done := (f.Status != nil && f.Status.State == "done") || (f.PullRequest != nil && f.PullRequest.State == "merged")
-		cur[f.ID] = seenFloor{Name: f.Name, Branch: f.Branch, Done: done}
+		first := s.opts.Now().UnixMilli()
+		if p, ok := prev[f.ID]; ok && p.First > 0 {
+			first = p.First
+		}
+		cur[f.ID] = seenFloor{Name: f.Name, Branch: f.Branch, Done: done, First: first}
 	}
 	changed := len(prev) != len(cur)
 	for id, p := range prev {
@@ -288,6 +295,18 @@ func (s *Service) recordGone(wsID string, f seenFloor) {
 	for _, e := range existing {
 		if e.Name == f.Name && (e.State == floors.StateActive || e.State == floors.StatePlanned) {
 			known = true
+		}
+	}
+	if !known {
+		// Already closed by the Maestro (`maestria floor land|cancel`) since we first saw it?
+		past, err := floors.List(s.opts.DB, floors.ListOptions{WorkspaceID: wsID, IncludePast: true})
+		if err != nil {
+			return
+		}
+		for _, e := range past {
+			if e.Name == f.Name && (e.State == floors.StateLanded || e.State == floors.StateCancelled) && e.EndedAt != nil && *e.EndedAt >= f.First {
+				return
+			}
 		}
 	}
 	if !known {

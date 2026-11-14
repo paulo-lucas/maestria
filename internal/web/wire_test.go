@@ -102,7 +102,8 @@ func newWireRig(t *testing.T) *wireRig {
 		{ID: "e3", Role: "agent", Kind: "progress", Text: "thinking about it"},
 	}})
 	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
+	// Let the background goroutines finish before the database and temp dirs are removed.
+	t.Cleanup(func() { cancel(); time.Sleep(150 * time.Millisecond) })
 	h.srv.Activity.Start(ctx)
 	waitUntil(t, "wire live", func() bool { _, err := h.srv.Activity.Mgr.Feed(ws.ID); return err == nil })
 	fake.ClearRequests()

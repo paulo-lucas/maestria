@@ -48,7 +48,7 @@
             </div>
             {{if not .IsGround}}<div class="panel__aside"><a href="/workspaces/{{$.CurrentWS.ID}}/floors">Floor</a></div>{{end}}
           </header>
-          {{if or .Branch .StatusText}}<p class="panel__note subtle">{{if .Branch}}{{.Branch}}{{end}}{{if and .Branch .StatusText}} · {{end}}{{.StatusText}}</p>{{end}}
+          {{if or .Branch .StatusText}}<div class="panel__body"><p class="subtle">{{if .Branch}}{{.Branch}}{{end}}{{if and .Branch .StatusText}} · {{end}}{{.StatusText}}</p></div>{{end}}
           <ul class="list">
             {{range .Agents}}
             <li data-key="{{.StateTone}}">
@@ -59,7 +59,7 @@
                   {{if .AgentType}}<span class="subtle">{{.AgentType}}</span>{{end}}
                   <span class="status status--badge" data-status="{{.StateTone}}">{{.StateLabel}}</span>
                 </div>
-                {{if .Brief}}<p class="agent__brief">{{.Brief}}</p>{{end}}
+                {{if and .Brief (or (not .Prompt) (eq .BriefSource "maestro"))}}<p class="agent__brief">{{.Brief}}</p>{{end}}
                 {{if .Prompt}}
                 <div class="agent__prompt" data-status="needs">
                   <p><code>{{.Prompt}}</code></p>

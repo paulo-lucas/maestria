@@ -126,7 +126,8 @@ func start(t *testing.T, grace time.Duration) *rig {
 		OnChange: func(k string) { r.mu.Lock(); r.change = append(r.change, k); r.mu.Unlock() },
 	})
 	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
+	// Let the background goroutines finish before the database and temp dirs are removed.
+	t.Cleanup(func() { cancel(); time.Sleep(150 * time.Millisecond) })
 	r.svc.Start(ctx)
 	waitFor(t, "live", func() bool { _, err := r.svc.Mgr.Feed("atlas"); return err == nil })
 	fake.ClearRequests()
@@ -432,3 +433,25 @@ func TestBriefsAreOneLineAndOverrideTheWirePreview(t *testing.T) {
 		t.Fatal("cleared twice")
 	}
 }
+
+func TestFloorAlreadyClosedByTheMaestroIsNotRecordedAgain(t *testing.T) {
+	r := start(t, time.Minute)
+	withB := feed(feedOpts{})
+	r.fake.SetFeed(wsWire, withB)
+	waitUntil2(t, func() bool { li, _ := r.svc.LiveFloors("atlas"); return len(li) == 1 })
+	if _, err := floors.Start(r.sqlDB, "atlas", "billing", floors.StartInput{Brief: "Billing"}, 1); err != nil {
+		t.Fatal(err)
+	}
+	// The Maestro lands it with the CLI, then lands it in Maestri.
+	if _, err := floors.Land(r.sqlDB, "atlas", "billing", "Shipped", false, time.Now().UnixMilli()+10); err != nil {
+		t.Fatal(err)
+	}
+	r.fake.SetFeed(wsWire, feed(feedOpts{floors: []wire.FloorMeta{{Name: "main"}}}))
+	time.Sleep(200 * time.Millisecond)
+	past, _ := floors.List(r.sqlDB, floors.ListOptions{WorkspaceID: "atlas", IncludePast: true})
+	if len(past) != 1 || past[0].Outcome != "Shipped" {
+		t.Fatalf("history duplicated or overwritten: %+v", past)
+	}
+}
+
+func waitUntil2(t *testing.T, cond func() bool) { t.Helper(); waitFor(t, "condition", cond) }
