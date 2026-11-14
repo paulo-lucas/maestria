@@ -4,7 +4,7 @@ Companion to `docs/v2-spec.md` (product) and `design/` (approved UI). This file 
 
 ## Principles
 
-- **One Go codebase, one `maestria` binary** per OS: `serve` (local mode), `connect` (hosted mode), plus the Maestro CLI (`post`, `inbox`, `answers`, `say`, `wait`, `status`) with the same contract as V1 (see `docs/protocol.md`).
+- **One Go codebase, one `maestria` binary** per OS: `serve` (local mode), `connect` (hosted mode), plus the Maestro CLI (`post`, `inbox`, `answers`, `say`, `wait`, `status`) (see `docs/protocol.md`).
 - **The connector owns data and security.** Workspace data (human tasks, events, chat, floor plans and history, audit, standby state) lives in the connector's SQLite in the config dir. The hosted system stores only accounts, 2FA, linked connectors and paired devices, and relays live traffic.
 - **Live mirror.** No machine online means no data in the panel. Nothing is queued for offline machines.
 - **One API, two transports.** The connector exposes one JSON API + event stream. In local mode the browser calls it directly over HTTP on 127.0.0.1. In hosted mode the browser calls the cloud, which relays each request as a signed envelope over the connector's outbound WebSocket. The frontend is the same.
@@ -26,14 +26,14 @@ Companion to `docs/v2-spec.md` (product) and `design/` (approved UI). This file 
 ```
 cmd/maestria/            main: CLI dispatch
 internal/config          config dir, config.json, maestriDir resolution (config > MAESTRI_HOME > ~/.maestri)
-internal/store           SQLite open, migrations, V1 data import
+internal/store           SQLite open, migrations
 internal/auth            argon2id, TOTP + recovery codes, sessions, CSRF, rate limit/lockout
 internal/audit           append-only audit log
 internal/web             HTTP server, security headers/CSP, JSON API, SSE/WS event stream, embedded UI
 internal/ui              embedded static assets (from design/)
 internal/workspaces      workspace registry (Maestri workspaces discovery + config)
 internal/inbox           human tasks (notice/approve/input/choice + postpone), history
-internal/events          per-workspace event log + wait cursors (V1 semantics)
+internal/events          per-workspace event log + wait cursors
 internal/usage           read-only reader of <maestriDir>/usage/providers/.status.json, grouping by provider account
 internal/standby         thresholds per provider/window, Tell the Maestro / Interrupt agents, wake on reset
 internal/wire            Maestri Wire client: pairing, SPKI-pinned TLS, REST, feed/chat sockets, capability gating
@@ -57,15 +57,14 @@ cmd/maestria-cloud/      hosted multi-tenant server (accounts, email, 2FA, linki
 
 | Floor | Scope | Agent |
 | --- | --- | --- |
-| `v2-foundation` | Go module, config, store + migrations, CLI skeleton, auth (password, TOTP, recovery codes), sessions with configurable policy, CSRF, CSP/security headers, rate limit, audit, `serve` with the design shell and login screens, kill switch. Port the V1 security tests. | Claude (security-critical) |
-| `v2-connector-core` | Workspaces, inbox, events/`wait`, `post/say/inbox/answers/status` (V1 contract), usage reader, standby guard, V1 data import, Overview/Tasks/Usage UI wired to the API | Antigravity |
+| `v2-foundation` | Go module, config, store + migrations, CLI skeleton, auth (password, TOTP, recovery codes), sessions with configurable policy, CSRF, CSP/security headers, rate limit, audit, `serve` with the design shell and login screens, kill switch. Security tests for each of these. | Claude (security-critical) |
+| `v2-connector-core` | Workspaces, inbox, events/`wait`, `post/say/inbox/answers/status`, usage reader, standby guard, Overview/Tasks/Usage UI wired to the API | Antigravity |
 | `v2-wire` | Wire client (pairing, pinning, feed, chat, prompt, approve/reject), Activity + Chat UI, live floors | Antigravity, Claude review |
 | `v2-floors-docs` | Floors plan/history CLI + UI, docs mirror + UI | Antigravity |
 | `v2-cloud` | `maestria-cloud`, linking, relay, device pairing + signing, hosted auth (email, 2FA, reset), Connectors and Devices UI | Claude (security-critical) |
 | `v2-ship` | Service install (macOS, Windows, Linux), release builds, checksums, Homebrew, README | Antigravity |
 
-Each floor is a git-isolated branch that lands on `main`. The Go code (`go.mod`, `cmd/`, `internal/`) lives next to V1 (TypeScript in `src/` and `public/`) without touching its build, and V1 keeps running from `dist/` until v2 reaches parity in local mode. A final landing then removes V1.
-
+Each floor is a git-isolated branch that lands on `main`.
 ## Prerequisites on the owner's side
 
 - Maestri Wire must be enabled (Settings → Wire) before `v2-wire`. It is off today.
