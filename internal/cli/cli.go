@@ -37,6 +37,7 @@ Usage:
   maestria auth setup [--force]      Set the password, enrol an authenticator app, print recovery codes
   maestria auth reset-sessions       Sign out every browser session
   maestria tunnel on|off|status      Turn the kill switch off (locally) or on, or show its state
+  maestria config allow-host <host>  Let the panel answer to a public host name (also: hosts, disallow-host)
   maestria version                   Print the version
 
 Config directory: $MAESTRIA_CONFIG_DIR, %AppData%\maestria (Windows), or ~/.config/maestria
@@ -146,6 +147,8 @@ func run(args []string, env *Env) error {
 		return usagef("Unknown auth command %q\n\n%s", rest[0], help)
 	case "tunnel":
 		return cmdTunnel(rest, env)
+	case "config":
+		return cmdConfig(rest, env)
 	case "workspace", "workspaces":
 		return cmdWorkspace(rest, env)
 	case "floor", "floors":

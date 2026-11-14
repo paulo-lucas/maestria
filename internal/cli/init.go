@@ -26,7 +26,7 @@ import (
 //go:embed skill/SKILL.md
 var embeddedSkillMD []byte
 
-const initUsage = "Usage: maestria init [--maestri-dir <path>] [--workspaces all|none|id1,id2] [--standby default|none] [--skill claude,antigravity|both|none] [--service install|start|none] [--service-mode serve|connect] [--skip-auth] [--skip-wire] [--yes]"
+const initUsage = "Usage: maestria init [--maestri-dir <path>] [--workspaces all|none|id1,id2] [--standby default|none] [--skill claude,antigravity|both|none] [--service install|start|none] [--service-mode serve|connect] [--allow-host <host>|none] [--skip-auth] [--skip-wire] [--yes]"
 
 var providerIDRE = regexp.MustCompile(`(?i)^[a-z0-9*][a-z0-9._:-]{0,63}$`)
 
@@ -57,6 +57,7 @@ func cmdInit(args []string, env *Env) error {
 			"install-skill": true,
 			"service":       true,
 			"service-mode":  true,
+			"allow-host":    true,
 		},
 		Shorts: map[string]string{"y": "yes", "h": "help"},
 	})
@@ -101,6 +102,10 @@ func cmdInit(args []string, env *Env) error {
 	}
 
 	if err := initAuthStep(in, dir, parsed.Bool("skip-auth"), nonInteractive, env); err != nil {
+		return err
+	}
+
+	if err := initHostsStep(in, dir, parsed.String("allow-host"), parsed.HasString("allow-host"), nonInteractive, env); err != nil {
 		return err
 	}
 
@@ -959,6 +964,62 @@ func printInitNextSteps(out io.Writer, serviceResult, goos string) {
 		fmt.Fprintln(out, "  1. Start the panel locally: maestria serve")
 	}
 	fmt.Fprintln(out, "  2. Optionally expose securely via Cloudflare Tunnel + Access (see README.md).")
+}
+
+// initHostsStep asks for the public host name the panel is reached through (for example a
+// Cloudflare Tunnel hostname) and adds it to allowedHosts. Hosted mode (maestria connect) never
+// needs this: the connector only dials out.
+func initHostsStep(in *bufio.Reader, dir, flagHost string, hasFlag, nonInteractive bool, env *Env) error {
+	cfg, err := config.Load(dir, env.Config)
+	if err != nil {
+		return err
+	}
+	host := ""
+	switch {
+	case hasFlag:
+		if strings.EqualFold(strings.TrimSpace(flagHost), "none") {
+			return nil
+		}
+		host = normalizeHostArg(flagHost)
+	case nonInteractive:
+		return nil
+	default:
+		current := "none"
+		if len(cfg.AllowedHosts) > 0 {
+			current = strings.Join(cfg.AllowedHosts, ", ")
+		}
+		fmt.Fprintf(env.Stdout, "\nPublic address (local mode only). Allowed hosts today: %s.\n", current)
+		fmt.Fprintln(env.Stdout, "If you will open this panel through your own tunnel or domain (e.g. a Cloudflare Tunnel), enter that host name. Leave empty to skip.")
+		for {
+			raw, err := env.readLine(in, "Host name (e.g. panel.example.com): ")
+			if err != nil {
+				return err
+			}
+			host = normalizeHostArg(raw)
+			if host == "" || config.ValidHost(host) {
+				break
+			}
+			fmt.Fprintln(env.Stdout, "That is not a valid host name. Try again or leave empty to skip.")
+		}
+		if host == "" {
+			fmt.Fprintln(env.Stdout, `Skipped. Add one later with "maestria config allow-host <host>".`)
+			return nil
+		}
+	}
+	if !config.ValidHost(host) {
+		return usagef("--allow-host: %q is not a valid host name", flagHost)
+	}
+	for _, h := range cfg.AllowedHosts {
+		if h == host {
+			fmt.Fprintf(env.Stdout, "%s is already allowed.\n", host)
+			return nil
+		}
+	}
+	if err := config.SaveAllowedHosts(dir, append(append([]string(nil), cfg.AllowedHosts...), host), env.Config); err != nil {
+		return err
+	}
+	fmt.Fprintf(env.Stdout, "The panel will answer to %s.\n", host)
+	return nil
 }
 
 func askConfirm(in *bufio.Reader, env *Env, prompt string, defaultYes bool) (bool, error) {

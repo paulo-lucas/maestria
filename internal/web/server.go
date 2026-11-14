@@ -263,7 +263,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// DNS-rebinding defence: only answer to known Host names.
 	if !s.hosts[strings.ToLower(r.Host)] {
-		deny(w, http.StatusMisdirectedRequest, "Misdirected request")
+		deny(w, http.StatusMisdirectedRequest, misdirectedMessage(r.Host))
 		return
 	}
 
@@ -439,6 +439,19 @@ func (s *Server) setCookie(w http.ResponseWriter, name, value string, maxAge tim
 
 func (s *Server) clearCookie(w http.ResponseWriter, name string) {
 	http.SetCookie(w, &http.Cookie{Name: name, Value: "", Path: "/", MaxAge: -1, HttpOnly: true, Secure: s.Config.CookieSecure, SameSite: http.SameSiteStrictMode})
+}
+
+// misdirectedMessage explains how to allow an unknown Host. The host is echoed only when it is a
+// plain host name (the response is text/plain either way).
+func misdirectedMessage(host string) string {
+	h := strings.ToLower(strings.TrimSpace(host))
+	if !config.ValidHost(h) {
+		h = "<host>"
+	}
+	return "Misdirected request: this Maestria panel does not answer to " + h + ".\n\n" +
+		"If this is your own address (for example a Cloudflare Tunnel hostname), allow it on the machine that runs Maestria:\n\n" +
+		"    maestria config allow-host " + h + "\n\n" +
+		"then restart the panel (maestria service restart, or restart maestria serve).\n"
 }
 
 func deny(w http.ResponseWriter, code int, msg string) {

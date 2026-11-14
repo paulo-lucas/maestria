@@ -59,8 +59,22 @@ func cmdWirePair(args []string, env *Env) error {
 	return runWirePair(bufio.NewReader(env.Stdin), parsed.String("host"), parsed.String("key"), parsed.HasString("host"), parsed.HasString("key"), env)
 }
 
+const wirePairGuide = `
+Pairing with Maestri Wire. In the Maestri app, open Settings → Wire and turn Wire on. Then:
+  1. Host: press Enter to keep the default (this machine).
+  2. Security key: open the "Manual" tab and copy the "Security key", a long code of
+     letter/number pairs separated by colons (like 3F:A2:09:…). Paste it here. It lets
+     Maestria check it is really talking to your Maestri.
+  3. Pairing code: open the "Pairing" tab and type the 6-digit code shown there (or use
+     the password you set in the Manual tab). A code works once, so you will be asked
+     for a second, fresh code: Maestria pairs twice, once read-only and once for actions.
+`
+
 func runWirePair(in *bufio.Reader, host, keyStr string, hasHost, hasKey bool, env *Env) error {
 	var err error
+	if !hasHost || !hasKey {
+		fmt.Fprint(env.Stdout, wirePairGuide)
+	}
 	if !hasHost {
 		host, err = env.readLine(in, fmt.Sprintf("Maestri Wire host [%s]: ", wire.DefaultHost))
 		if err != nil {
@@ -72,7 +86,7 @@ func runWirePair(in *bufio.Reader, host, keyStr string, hasHost, hasKey bool, en
 		return usagef("%v", err)
 	}
 	if !hasKey {
-		keyStr, err = env.readLine(in, "Security key (Settings → Wire → Manual, or the QR code's key): ")
+		keyStr, err = env.readLine(in, "Security key (Manual tab, e.g. 3F:A2:09:…): ")
 		if err != nil {
 			return err
 		}
@@ -81,7 +95,7 @@ func runWirePair(in *bufio.Reader, host, keyStr string, hasHost, hasKey bool, en
 	if err != nil {
 		return usagef("%v", err)
 	}
-	secret, err := env.readSecret(in, "Pairing code (six digits) or password: ")
+	secret, err := env.readSecret(in, "Pairing code (6 digits, Pairing tab) or Wire password: ")
 	if err != nil {
 		return err
 	}

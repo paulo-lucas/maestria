@@ -214,7 +214,8 @@ func TestInitInteractiveWizardAndIdempotentRerun(t *testing.T) {
 		now:   f.now,
 		lines: []string{"1", "1", "1"}, // dir, workspace #1, standby default
 		afterTOTP: []string{
-			"n", // Pair with Maestri Wire? -> No
+			"https://Panel.Example.com/", // Public host name (pasted as a URL)
+			"n",                          // Pair with Maestri Wire? -> No
 			"2", // Skill: Claude Code only
 			"1", // Service: Install and start
 		},
@@ -250,6 +251,9 @@ func TestInitInteractiveWizardAndIdempotentRerun(t *testing.T) {
 	if err != nil || sec == nil {
 		t.Fatalf("expected credentials saved: %v", err)
 	}
+	if cfg, err := config.Load(f.dir, env.Config); err != nil || len(cfg.AllowedHosts) != 1 || cfg.AllowedHosts[0] != "panel.example.com" {
+		t.Fatalf("expected allowedHosts [panel.example.com], got %+v err=%v", cfg, err)
+	}
 	if _, err := os.Stat(ClaudeSkillPath(home)); err != nil {
 		t.Fatalf("expected claude skill: %v", err)
 	}
@@ -268,6 +272,7 @@ func TestInitInteractiveWizardAndIdempotentRerun(t *testing.T) {
 		"none", // Skip newly detected Beta workspace
 		"1",    // Keep existing standby
 		"1",    // Keep existing credentials
+		"",     // No extra public host
 		"n",    // Skip wire pairing
 		"1",    // Keep existing skill
 		"1",    // Keep existing service

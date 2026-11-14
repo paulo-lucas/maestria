@@ -342,6 +342,30 @@ func TestHostAllowlist(t *testing.T) {
 	}
 }
 
+func TestMisdirectedMessageExplainsAllowHost(t *testing.T) {
+	h := newHarness(t)
+	for host, wantEcho := range map[string]string{
+		"panel.example.com":                 "maestria config allow-host panel.example.com",
+		"<script>alert(1)</script>":         "maestria config allow-host <host>",
+		"evil.example.com\r\nX-Injected: 1": "maestria config allow-host <host>",
+	} {
+		req := httptest.NewRequest(http.MethodGet, "/login", nil)
+		req.Host = host
+		rec := httptest.NewRecorder()
+		h.srv.ServeHTTP(rec, req)
+		body := rec.Body.String()
+		if rec.Code != http.StatusMisdirectedRequest || !strings.Contains(body, wantEcho) {
+			t.Errorf("Host %q: code %d body %q, want 421 containing %q", host, rec.Code, body, wantEcho)
+		}
+		if strings.Contains(body, "<script>") || strings.Contains(body, "X-Injected") {
+			t.Errorf("Host %q echoed unsafely: %q", host, body)
+		}
+		if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/plain") {
+			t.Errorf("Host %q: content type %q", host, ct)
+		}
+	}
+}
+
 // ---- authentication ----
 
 func TestUnauthenticatedRedirectsAndAPI401(t *testing.T) {

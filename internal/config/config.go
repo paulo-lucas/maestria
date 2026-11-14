@@ -590,6 +590,45 @@ func SaveStandby(configDir string, s Standby, env Env) error {
 	return SaveRaw(configDir, append(out, '\n'), env)
 }
 
+// ValidHost reports whether s is an acceptable allowedHosts entry (host name, optional port).
+func ValidHost(s string) bool { return hostRE.MatchString(s) }
+
+// SaveAllowedHosts replaces "allowedHosts" in config.json while preserving other keys. Hosts are
+// lower-cased, de-duplicated and validated; an empty list removes the key.
+func SaveAllowedHosts(configDir string, hosts []string, env Env) error {
+	top, _, err := loadTopMap(configDir)
+	if err != nil {
+		return err
+	}
+	seen := map[string]bool{}
+	clean := make([]string, 0, len(hosts))
+	for _, h := range hosts {
+		h = strings.ToLower(strings.TrimSpace(h))
+		if h == "" || seen[h] {
+			continue
+		}
+		if !ValidHost(h) {
+			return errorf("config: invalid host %q", h)
+		}
+		seen[h] = true
+		clean = append(clean, h)
+	}
+	if len(clean) == 0 {
+		delete(top, "allowedHosts")
+	} else {
+		raw, err := json.Marshal(clean)
+		if err != nil {
+			return err
+		}
+		top["allowedHosts"] = raw
+	}
+	out, err := json.MarshalIndent(top, "", "  ")
+	if err != nil {
+		return err
+	}
+	return SaveRaw(configDir, append(out, '\n'), env)
+}
+
 // EnsureDir creates the config directory with owner-only permissions.
 func EnsureDir(configDir string) error { return privfile.EnsureDir(configDir) }
 
