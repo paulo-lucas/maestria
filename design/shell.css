@@ -314,14 +314,24 @@
 .chat-page .chat { align-content: end; }
 .chat-dock {
   position: sticky;
-  bottom: calc(var(--bottomnav-h) + env(safe-area-inset-bottom) + var(--space-2));
+  bottom: calc(var(--bottomnav-h) + env(safe-area-inset-bottom)); /* sits right on the nav: nothing shows between */
   display: grid;
   gap: var(--space-2);
-  padding-top: var(--space-2);
-  background: linear-gradient(to bottom, transparent, var(--bg) 24px);
+  padding: var(--space-2) 0 var(--space-3);
+  background: var(--bg); /* opaque: messages never show through */
+}
+.chat-dock::before { /* soft fade above the dock as messages scroll under it */
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  height: var(--space-5);
+  background: linear-gradient(to bottom, transparent, var(--bg));
+  pointer-events: none;
 }
 .chat-dock__hint { color: var(--text-3); font-size: var(--fs-xs); text-align: center; }
-.main:has(.chat-page) { padding-bottom: calc(var(--bottomnav-h) + env(safe-area-inset-bottom) + var(--space-2)); }
+.main:has(.chat-page) { padding-bottom: calc(var(--bottomnav-h) + env(safe-area-inset-bottom)); }
 
 /* ---------- Docs page ---------- */
 
