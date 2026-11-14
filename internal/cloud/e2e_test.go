@@ -122,7 +122,7 @@ func TestEndToEndTwoConnectors(t *testing.T) {
 	}
 	// An HTML view (the frontend renders workspace pages from it).
 	page := f.a.call(f.br, f.dev, "GET", "/workspaces/"+wsID+"/tasks", "", nil)
-	if page.StatusCode != 200 || !strings.Contains(page.Header.Get("Content-Type"), "text/html") || !strings.Contains(page.body, "Human tasks") && !strings.Contains(page.body, "Needs you") {
+	if page.StatusCode != 200 || !strings.Contains(page.Header.Get("Content-Type"), "text/html") || !strings.Contains(page.body, "Human tasks") || strings.Contains(page.body, "needs JavaScript") {
 		t.Fatalf("html view: %d %s", page.StatusCode, page.body[:min(200, len(page.body))])
 	}
 }

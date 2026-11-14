@@ -62,7 +62,7 @@
       case 'expired': meta = 'The code expired. Start again.'; break;
       case 'mismatch': meta = 'The key did not match what this machine received. Do not approve it. Start again.'; break;
       default:
-        meta = (code ? 'Run <code>maestria devices approve ' + esc(code) + '</code>' : 'Waiting for the machine…');
+        meta = (code ? 'Waiting for approval… code <strong class="nowrap">' + esc(code) + '</strong>' : 'Waiting for the machine…');
         right = '<span class="spinner"></span>';
     }
     return '<li class="device"><span class="device__icon">' + icon('i-laptop') + '</span><span class="device__name">' + esc(m.name) + '</span><span class="device__meta">' + meta + '</span>' + right + '</li>';

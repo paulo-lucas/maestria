@@ -398,7 +398,8 @@
     var tone = !online.length ? 'offline' : (needPair.length || online.some(function (c) { return c.killSwitch; })) ? 'warn' : 'ok';
     if (dot) dot.setAttribute('data-status', tone);
     if (cdot) { cdot.setAttribute('aria-label', 'Machines: ' + txt); cdot.setAttribute('title', 'Machines: ' + txt); }
-    document.title = (cur ? cur.name + ' · ' : '') + (({ overview: 'Overview', security: 'Devices & security', usage: 'Usage & standby', connectors: 'Connectors', link: 'Link a machine' })[r.name] || 'Maestria') + ' · Maestria';
+    var tabTitle = ({ tasks: 'Human tasks', chat: 'Chat', activity: 'Activity', floors: 'Floors', docs: 'Docs' })[r.tab];
+    document.title = (cur ? cur.name + ' · ' + (tabTitle || 'Workspace') : ({ overview: 'Overview', security: 'Devices & security', usage: 'Usage & standby', connectors: 'Connectors', link: 'Link a machine' })[r.name] || 'Maestria') + ' · Maestria';
   }
 
   // ---- page content ----
@@ -627,6 +628,8 @@
     rewriteLinks(m, cid);
     // Forms and "Kill switch" dialogs of the local shell do not belong here.
     $$('dialog', m).forEach(function (d) { d.remove(); });
+    var cn = connector(cid);
+    $$('.ws-eyebrow .subtle', m).forEach(function (el) { el.textContent = '\u00b7 ' + (cn ? cn.name : 'machine'); });
     await hydrateImages(m, cid);
     return m.innerHTML;
   }

@@ -50,6 +50,14 @@ func (s *Server) views(userID string) ([]connectorView, error) {
 	return out, nil
 }
 
+// displayVersion shows 2.0.3 as v2.0.3 and leaves names like "dev" alone.
+func displayVersion(v string) string {
+	if v != "" && v[0] >= '0' && v[0] <= '9' {
+		return "v" + v
+	}
+	return v
+}
+
 func prettyOS(os, arch string) string {
 	name := map[string]string{"darwin": "macOS", "windows": "Windows", "linux": "Linux"}[os]
 	if name == "" {
@@ -107,6 +115,12 @@ func (s *Server) shellData(r *http.Request, title, nav string) *pageData {
 // getApp serves the app shell for every in-app route. Cloud-owned pages are rendered here;
 // pages made of connector data are filled in by the browser after it signs requests.
 func (s *Server) getApp(w http.ResponseWriter, r *http.Request) {
+	// /c/<id>/... is both a page address and the relay address. A request that carries the
+	// signature header is the app asking a machine; anything else is a person opening the page.
+	if strings.HasPrefix(r.URL.Path, "/c/") && r.Header.Get(relay.HeaderSig) != "" {
+		s.relayHandler(w, r)
+		return
+	}
 	path := r.URL.Path
 	nav, page, title := "overview", "app-js", "Overview"
 	switch {
@@ -135,7 +149,7 @@ func (s *Server) getApp(w http.ResponseWriter, r *http.Request) {
 		}
 		now := s.now()
 		for _, v := range views {
-			cp := connectorPage{ID: v.ID, Name: v.Name, Online: v.Online, Version: v.Version, System: prettyOS(v.OS, v.Arch),
+			cp := connectorPage{ID: v.ID, Name: v.Name, Online: v.Online, Version: displayVersion(v.Version), System: prettyOS(v.OS, v.Arch),
 				KillSwitch: v.KillSwitch, Linked: time.UnixMilli(v.CreatedAt).Format("Jan 2")}
 			if v.Online {
 				cp.Connected = span(now.Sub(time.UnixMilli(v.ConnectedAt)))
