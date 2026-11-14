@@ -315,8 +315,18 @@ func (s *Service) recordGone(wsID string, f seenFloor) {
 			return
 		}
 	}
+	// Wire does not say whether a floor was landed or deleted. Git does: a floor whose branch tip
+	// is already in the default branch was landed. Otherwise fall back to what Wire last showed.
+	landed := f.Done
+	if !landed {
+		for _, w := range s.workspaces() {
+			if w.ID == wsID {
+				landed = BranchLanded(w.Path, f.Branch)
+			}
+		}
+	}
 	outcome := "cancelled"
-	if f.Done {
+	if landed {
 		outcome = "landed"
 		_, err = floors.Land(s.opts.DB, wsID, f.Name, "", true, nowMs)
 	} else {

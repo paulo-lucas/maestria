@@ -41,8 +41,9 @@ Keep briefs current: when you hand work to a teammate, set what it is doing (`ma
 When the human has paired the connector with Maestri Wire (`maestria wire pair`), the panel mirrors your terminal, your teammates, and the floors live, and its Chat sends straight into your terminal. Nothing changes for you: `say`, `post` and `wait` work the same, whether Wire is on or off. What differs:
 
 - A message the human types in the panel Chat arrives in your terminal as a normal prompt (no `chat` event) while Wire is live; with Wire off it is a `chat` event for `maestria wait`, as before.
+- `maestria say` messages still go to the local log, and with Wire live the panel Chat shows them in the same conversation, ordered by time, with a small "via maestria" badge.
 - Y/n prompts an agent waits on appear in the human's Needs you as "Agent prompt" and can be answered from the panel. You do not need to post them.
-- A floor that disappears from Maestri (landed or deleted) is recorded in Past automatically, with an empty outcome. Run `maestria floor land|cancel <name> --outcome "..."` before you land it in Maestri to keep the outcome you want (it is not recorded twice), or fill it in later with `maestria floor edit`.
+- A floor that disappears from Maestri (landed or deleted) is recorded in Past automatically, with an empty outcome: landed when its branch tip is already in the workspace's default branch (read-only `git merge-base --is-ancestor`) or Wire last showed it done or merged, cancelled otherwise. Run `maestria floor land|cancel <name> --outcome "..."` before you land it in Maestri to keep the outcome you want (it is not recorded twice), or fill it in later with `maestria floor edit`.
 - On a `standby` event whose action is "Interrupt agents", the panel sends Esc to the working agents of that provider itself. On `resume` after a reset, with wake-on-reset on, it prompts you in your terminal.
 
 Human-side commands: `maestria wire pair`, `maestria wire status`, `maestria wire unpair`.

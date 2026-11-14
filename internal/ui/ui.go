@@ -260,6 +260,7 @@ type TaskView struct {
 type ChatMessageView struct {
 	ID        int64
 	Key       string // stable id of a Wire chat entry
+	Via       string // "maestria" for a message posted with `maestria say`
 	Author    string
 	BodyHTML  template.HTML // sanitized via bluemonday before passing into ChatMessageView
 	TimeLabel string

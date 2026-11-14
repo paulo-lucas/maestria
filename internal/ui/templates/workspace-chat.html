@@ -23,7 +23,7 @@
             <div class="msg msg--system" data-msg-key="{{.Key}}"><span>{{.BodyHTML}}</span></div>
             {{else}}
             <div class="msg msg--maestro" data-msg-key="{{.Key}}">
-              <div class="msg__head"><span class="avatar avatar--sm avatar--maestro">M</span>Maestro{{if .TimeLabel}}<time datetime="{{.TimeISO}}">{{.TimeLabel}}</time>{{end}}</div>
+              <div class="msg__head"><span class="avatar avatar--sm avatar--maestro">M</span>Maestro{{if .TimeLabel}}<time datetime="{{.TimeISO}}">{{.TimeLabel}}</time>{{end}}{{if .Via}}<span class="status status--quiet" title="Posted with maestria say">via {{.Via}}</span>{{end}}</div>
               <div class="msg__body prose">{{.BodyHTML}}</div>
             </div>
             {{end}}

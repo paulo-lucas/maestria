@@ -299,7 +299,14 @@ func (s *Server) wireChatView(ws workspaces.Workspace, now time.Time) *ui.WireCh
 		v.Connecting = true
 		return v
 	}
-	lastDay := ""
+	type item struct {
+		m   ui.ChatMessageView
+		t   time.Time // when it happened; a Wire entry without a time inherits the previous one's
+		has bool
+	}
+	var items []item
+	var carry time.Time
+	var first time.Time // time of the oldest dated Wire entry: say messages before it are not shown
 	for _, e := range cv.Snapshot.Entries {
 		text := strings.TrimSpace(e.Text)
 		if text == "" {
@@ -325,8 +332,47 @@ func (s *Server) wireChatView(ws workspaces.Workspace, now time.Time) *ui.WireCh
 			}
 			m.BodyHTML = template.HTML(inbox.RenderMarkdown(text))
 		}
-		if t, ok := entryTime(e.TS); ok && m.Author != "system" {
-			lt := t.Local()
+		it := item{m: m, t: carry}
+		if t, ok := entryTime(e.TS); ok {
+			it.t, it.has, carry = t, true, t
+			if first.IsZero() {
+				first = t
+			}
+		}
+		items = append(items, it)
+	}
+	// Messages the Maestro posted with `maestria say` go in the same conversation, by time.
+	if local, err := chat.List(s.DB, ws.ID, 0, 200); err == nil {
+		var said []item
+		for _, lm := range local {
+			if lm.Sender != chat.SenderMaestro {
+				continue
+			}
+			t := time.UnixMilli(lm.CreatedAt)
+			if !first.IsZero() && t.Before(first) {
+				continue
+			}
+			said = append(said, item{m: ui.ChatMessageView{Key: "say-" + strconv.FormatInt(lm.ID, 10), Author: "maestro", Via: "maestria", BodyHTML: template.HTML(lm.BodyHTML)}, t: t, has: true})
+		}
+		if first.IsZero() && len(said) > 20 {
+			said = said[len(said)-20:]
+		}
+		merged := make([]item, 0, len(items)+len(said))
+		i := 0
+		for _, sm := range said {
+			for i < len(items) && !items[i].t.After(sm.t) {
+				merged = append(merged, items[i])
+				i++
+			}
+			merged = append(merged, sm)
+		}
+		items = append(merged, items[i:]...)
+	}
+	lastDay := ""
+	for _, it := range items {
+		m := it.m
+		if it.has && m.Author != "system" {
+			lt := it.t.Local()
 			m.TimeLabel, m.TimeISO = lt.Format("15:04"), lt.Format(time.RFC3339)
 			if day := formatDayDivider(lt, now.Local()); day != lastDay {
 				m.DayLabel, lastDay = day, day

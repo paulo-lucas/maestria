@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -337,22 +336,37 @@ func TestPromptingAnAgentFromActivity(t *testing.T) {
 
 func TestChatUsesTheMaestrosTerminalWhenWireIsLive(t *testing.T) {
 	r := newWireRig(t)
-	if err := os.Remove(filepath.Join(r.srv.Config.ConfigDir, "nothing")); err == nil {
-		t.Fatal("unexpected")
-	}
-	// A message in the local log must not show up in Wire mode.
-	if _, _, err := chat.Send(r.db, r.ws.ID, chat.SenderMaestro, "old local reply", 0); err != nil {
-		t.Fatal(err)
+	// Messages posted with `maestria say` join the conversation by time, with a badge; one from
+	// before the Wire tail starts is left out.
+	at := func(iso string) int64 { ts, _ := time.Parse(time.RFC3339, iso); return ts.UnixMilli() }
+	for _, m := range []struct {
+		body string
+		ms   int64
+	}{
+		{"ancient local reply", at("2020-01-01T00:00:00Z")},
+		{"said in between", at("2026-11-14T13:00:00Z")},
+		{"said last", at("2026-11-14T14:00:00Z")},
+	} {
+		if _, _, err := chat.Send(r.db, r.ws.ID, chat.SenderMaestro, m.body, m.ms); err != nil {
+			t.Fatal(err)
+		}
 	}
 	waitUntil(t, "chat live", func() bool { v, err := r.srv.Activity.Mgr.Chat(r.ws.ID); return err == nil && v.Live })
 	page := r.c.get("/workspaces/" + r.ws.ID + "/chat")
-	for _, want := range []string{"How is billing going?", "<strong>Almost done.</strong>", "Sent through your connector"} {
+	for _, want := range []string{"How is billing going?", "<strong>Almost done.</strong>", "Sent through your connector", "said in between", "said last", "via maestria"} {
 		if !strings.Contains(page.body, want) {
 			t.Errorf("chat missing %q", want)
 		}
 	}
-	if strings.Contains(page.body, "old local reply") || strings.Contains(page.body, "thinking about it") {
-		t.Error("local log or progress entries shown in Wire mode")
+	if strings.Contains(page.body, "ancient local reply") || strings.Contains(page.body, "thinking about it") {
+		t.Error("old local message or progress entry shown in Wire mode")
+	}
+	i1, i2, i3, i4 := strings.Index(page.body, "How is billing going?"), strings.Index(page.body, "said in between"), strings.Index(page.body, "Almost done."), strings.Index(page.body, "said last")
+	if !(i1 < i2 && i2 < i3 && i3 < i4) {
+		t.Errorf("messages are not interleaved by time: %d %d %d %d", i1, i2, i3, i4)
+	}
+	if strings.Count(page.body, "via maestria") != 2 {
+		t.Errorf("badge count = %d, want 2 (only the say messages)", strings.Count(page.body, "via maestria"))
 	}
 	// Working: header chip and typing indicator.
 	r.fake.SetChat(wTermM, wire.ChatSnapshot{TerminalID: wTermM, Enabled: true, Status: "working", Entries: []wire.ChatEntry{{ID: "e1", Role: "user", Kind: "message", Text: "Go"}}})
