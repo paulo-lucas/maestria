@@ -44,6 +44,9 @@ var rules = []rule{
 	r("GET", `/api/feed/stream`, false, ScopeRead),
 	r("GET", `/api/terminals/`+uuid+`/chat`, false, ScopeRead),
 	r("GET", `/api/terminals/`+uuid+`/chat/stream`, false, ScopeRead),
+	// The other threads of a chat, read-only: selects nothing and marks nothing read. Never
+	// PUT/DELETE .../chat/thread, which would switch or clear a thread in the app.
+	r("GET", `/api/terminals/`+uuid+`/chat/threads`, false, ScopeRead),
 
 	// Writes (owner): text prompts, Y/n answers, and the terminal stream used only to send Esc.
 	r("POST", `/api/terminals/`+uuid+`/prompt`, false, ScopeWrite),

@@ -157,6 +157,14 @@ func (c *Client) Workspaces(ctx context.Context) ([]WorkspaceMeta, error) {
 	return out.Workspaces, err
 }
 
+// ChatThreads is GET /api/terminals/{id}/chat/threads: the newest entries of the chat's other
+// threads. It selects nothing and marks nothing read.
+func (c *Client) ChatThreads(ctx context.Context, terminalID string) (ChatThreadPreviews, error) {
+	var out ChatThreadPreviews
+	err := c.do(ctx, http.MethodGet, "/api/terminals/"+terminalID+"/chat/threads", nil, &out)
+	return out, err
+}
+
 // Prompt sends text to a terminal (owner only). A transport failure after the request may have
 // been sent is reported as ErrAmbiguous and is never retried.
 func (c *Client) Prompt(ctx context.Context, terminalID, text string) error {

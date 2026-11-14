@@ -547,12 +547,15 @@ func (s *Server) apiChatSend(w http.ResponseWriter, r *http.Request) {
 	}
 	var body struct {
 		Body string `json:"body"`
+		// Thread is the colour the page was showing. Wire can only write to the thread selected
+		// in Maestri, so a send is refused when that is no longer the one the person saw.
+		Thread string `json:"thread"`
 	}
 	if err := decodeJSONBody(r, &body); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid_json"})
 		return
 	}
-	if s.sendWireChat(w, r, ws, body.Body) {
+	if s.sendWireChat(w, r, ws, body.Body, body.Thread) {
 		return
 	}
 	msg, _, err := chat.Send(s.DB, ws.ID, chat.SenderHuman, body.Body, s.Now().UnixMilli())

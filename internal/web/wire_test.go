@@ -67,6 +67,10 @@ func wFeed(prompt string, maestroRunning bool) wire.FeedSnapshot {
 	}
 }
 
+// wirePW is the fake host's pairing password. It must be long and distinctive: the leak test
+// searches every page for it, and a short value ("pw") matched random CSRF/session tokens.
+const wirePW = "fake-wire-pairing-password-9c41"
+
 // newWireRig builds a panel with the Wire service on top of a fake Maestri.
 func newWireRig(t *testing.T) *wireRig {
 	t.Helper()
@@ -75,8 +79,8 @@ func newWireRig(t *testing.T) *wireRig {
 		t.Fatal(err)
 	}
 	t.Cleanup(fake.Close)
-	fake.SetPassword("pw")
-	creds, err := wire.Provision(context.Background(), fake.Host, fake.Pin(), "T", "pw", nil)
+	fake.SetPassword(wirePW)
+	creds, err := wire.Provision(context.Background(), fake.Host, fake.Pin(), "T", wirePW, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -463,7 +467,7 @@ func TestNoTokensInPagesAPIsOrAudit(t *testing.T) {
 	r.setPrompt("Go? (Y/n)")
 	waitUntil(t, "prompt", func() bool { return len(r.agentPrompts()) == 1 })
 	_ = r.c.postJSON("/api/workspaces/"+r.ws.ID+"/agents/"+wTermO+"/approve", map[string]string{"promptHash": wire.PromptHash("Go? (Y/n)")}, r.csrf)
-	secrets := []string{r.creds.Guest.Token, r.creds.Owner.Token, r.creds.Guest.DeviceID, r.creds.Owner.DeviceID, "pw"}
+	secrets := []string{r.creds.Guest.Token, r.creds.Owner.Token, r.creds.Guest.DeviceID, r.creds.Owner.DeviceID, wirePW}
 	paths := []string{
 		"/", "/workspaces/" + r.ws.ID + "/activity", "/workspaces/" + r.ws.ID + "/chat", "/workspaces/" + r.ws.ID + "/tasks",
 		"/workspaces/" + r.ws.ID + "/floors", "/security", "/api/wire", "/api/workspaces", "/api/inbox", "/api/audit", "/api/floors",
@@ -521,10 +525,9 @@ func TestDisabledStates(t *testing.T) {
 				}
 			}
 		}
-		// Chat falls back to the local log, which keeps working.
-		if page := r.c.get("/workspaces/" + r.ws.ID + "/chat"); page.Code != 200 || !strings.Contains(page.body, "maestria wait") {
-			t.Fatalf("local chat fallback: %d", page.Code)
-		}
+		// Chat explains why, with the composer off and the saved log still readable.
+		assertChatNeedsWire(t, r.c.get("/workspaces/"+r.ws.ID+"/chat"), "Maestri Wire is off or can&#39;t be reached", "Settings → Wire")
+		// The agents' contract is untouched: the API still takes a local message.
 		local := r.c.postJSON("/api/workspaces/"+r.ws.ID+"/chat", map[string]string{"body": "still works"}, r.csrf)
 		if local.Code != 200 || !strings.Contains(local.body, `"message"`) {
 			t.Fatalf("local send: %d %s", local.Code, local.body)
@@ -547,6 +550,7 @@ func TestDisabledStates(t *testing.T) {
 				t.Errorf("missing %q", want)
 			}
 		}
+		assertChatNeedsWire(t, r.c.get("/workspaces/"+r.ws.ID+"/chat"), "security key changed", "maestria wire unpair")
 	})
 	t.Run("access revoked", func(t *testing.T) {
 		r := newWireRig(t)
@@ -556,6 +560,7 @@ func TestDisabledStates(t *testing.T) {
 		if !strings.Contains(body, "no longer accepts") || !strings.Contains(body, "maestria wire pair") {
 			t.Errorf("revoked page:\n%s", body)
 		}
+		assertChatNeedsWire(t, r.c.get("/workspaces/"+r.ws.ID+"/chat"), "no longer accepts", "maestria wire pair")
 	})
 	t.Run("workspace not open in Maestri", func(t *testing.T) {
 		r := newWireRig(t)
@@ -565,6 +570,7 @@ func TestDisabledStates(t *testing.T) {
 		if !strings.Contains(body, "isn&#39;t open in Maestri") {
 			t.Errorf("unmapped page:\n%s", body)
 		}
+		assertChatNeedsWire(t, r.c.get("/workspaces/"+r.ws.ID+"/chat"), "isn&#39;t open in Maestri")
 	})
 	t.Run("no Wire service at all", func(t *testing.T) {
 		h := newHarness(t)
@@ -574,6 +580,7 @@ func TestDisabledStates(t *testing.T) {
 		if body := c.get("/workspaces/" + ws.ID + "/activity").body; !strings.Contains(body, "maestria wire pair") {
 			t.Errorf("not paired page:\n%s", body)
 		}
+		assertChatNeedsWire(t, c.get("/workspaces/"+ws.ID+"/chat"), "Maestri Wire isn&#39;t connected", "maestria wire pair")
 		if resp := c.get("/api/wire"); resp.Code != 200 || !strings.Contains(resp.body, `"disabled"`) {
 			t.Errorf("api/wire: %d %s", resp.Code, resp.body)
 		}

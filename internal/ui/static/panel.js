@@ -679,7 +679,8 @@
       try {
         await api(`/api/workspaces/${encodeURIComponent(wsId)}/chat`, {
           method: 'POST',
-          body: { body: bodyText },
+          // The thread on screen: the server refuses the send if Maestri has moved to another one.
+          body: form.dataset.thread ? { body: bodyText, thread: form.dataset.thread } : { body: bodyText },
         });
         ta.value = '';
         ta.rows = 1;

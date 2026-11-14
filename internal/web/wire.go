@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"html/template"
 	"net/http"
 	"regexp"
 	"strconv"
@@ -253,136 +252,6 @@ func entryTime(raw json.RawMessage) (time.Time, bool) {
 	}
 }
 
-// wireChatView returns the live chat of a workspace's Maestro, or nil when the local chat log
-// should be shown instead (Wire off, workspace not open in Maestri, or no chat capability).
-func (s *Server) wireChatView(ws workspaces.Workspace, now time.Time) *ui.WireChatView {
-	if s.Activity == nil {
-		return nil
-	}
-	cv, err := s.Activity.Mgr.Chat(ws.ID)
-	if err != nil {
-		return nil
-	}
-	st := s.Activity.Mgr.Status()
-	v := &ui.WireChatView{CanSend: st.OwnerOK}
-	running := cv.Terminal.ID != "" && cv.Terminal.IsRunning && !cv.Terminal.IsUnloaded
-	status := ""
-	if cv.Snapshot != nil {
-		status = cv.Snapshot.Status
-		if status == "notRunning" || status == "unloaded" {
-			running = false
-		}
-	}
-	switch {
-	case cv.Terminal.ID == "":
-		v.NotRunning = true
-		v.StatusTone, v.StatusLabel = "offline", "Maestro not running"
-		v.OffTitle = "The Maestro isn't running"
-		v.OffText = "There is no Maestro terminal in the " + ws.Name + " workspace in Maestri. Open one there to chat again."
-	case !running:
-		v.NotRunning = true
-		v.StatusTone, v.StatusLabel = "offline", "Maestro not running"
-		v.OffTitle = "The Maestro isn't running"
-		v.OffText = "Its terminal in the " + ws.Name + " workspace is closed. Open it in Maestri to chat again."
-	case status == "working":
-		v.StatusTone, v.StatusLabel, v.Typing = "working", "Maestro working", true
-	case status == "needsAttention":
-		v.StatusTone, v.StatusLabel = "needs", "Maestro needs you"
-	}
-	v.CanSend = v.CanSend && running
-	if !running {
-		v.SendNote = ""
-	} else if !st.OwnerOK {
-		v.SendNote = "Sending is off: this connector only has read access to Maestri. Run `maestria wire pair` to allow it."
-	}
-	if cv.Snapshot == nil || !cv.Live {
-		v.Connecting = true
-		return v
-	}
-	type item struct {
-		m   ui.ChatMessageView
-		t   time.Time // when it happened; a Wire entry without a time inherits the previous one's
-		has bool
-	}
-	var items []item
-	var carry time.Time
-	var first time.Time // time of the oldest dated Wire entry: say messages before it are not shown
-	for _, e := range cv.Snapshot.Entries {
-		text := strings.TrimSpace(e.Text)
-		if text == "" {
-			var parts []string
-			for _, sg := range e.Segments {
-				parts = append(parts, sg.Text)
-			}
-			text = strings.TrimSpace(strings.Join(parts, ""))
-		}
-		m := ui.ChatMessageView{Key: e.ID, Author: "maestro"}
-		switch {
-		case e.Kind == "divider":
-			m.Author = "system"
-			if text == "" {
-				text = "New conversation"
-			}
-			m.BodyHTML = template.HTML(template.HTMLEscapeString(text))
-		case e.Kind == "progress" || text == "":
-			continue
-		default:
-			if e.Role == "user" {
-				m.Author = "human"
-			}
-			m.BodyHTML = template.HTML(inbox.RenderMarkdown(text))
-		}
-		it := item{m: m, t: carry}
-		if t, ok := entryTime(e.TS); ok {
-			it.t, it.has, carry = t, true, t
-			if first.IsZero() {
-				first = t
-			}
-		}
-		items = append(items, it)
-	}
-	// Messages the Maestro posted with `maestria say` go in the same conversation, by time.
-	if local, err := chat.List(s.DB, ws.ID, 0, 200); err == nil {
-		var said []item
-		for _, lm := range local {
-			if lm.Sender != chat.SenderMaestro {
-				continue
-			}
-			t := time.UnixMilli(lm.CreatedAt)
-			if !first.IsZero() && t.Before(first) {
-				continue
-			}
-			said = append(said, item{m: ui.ChatMessageView{Key: "say-" + strconv.FormatInt(lm.ID, 10), Author: "maestro", Via: "maestria", BodyHTML: template.HTML(lm.BodyHTML)}, t: t, has: true})
-		}
-		if first.IsZero() && len(said) > 20 {
-			said = said[len(said)-20:]
-		}
-		merged := make([]item, 0, len(items)+len(said))
-		i := 0
-		for _, sm := range said {
-			for i < len(items) && !items[i].t.After(sm.t) {
-				merged = append(merged, items[i])
-				i++
-			}
-			merged = append(merged, sm)
-		}
-		items = append(merged, items[i:]...)
-	}
-	lastDay := ""
-	for _, it := range items {
-		m := it.m
-		if it.has && m.Author != "system" {
-			lt := it.t.Local()
-			m.TimeLabel, m.TimeISO = lt.Format("15:04"), lt.Format(time.RFC3339)
-			if day := formatDayDivider(lt, now.Local()); day != lastDay {
-				m.DayLabel, lastDay = day, day
-			}
-		}
-		v.Messages = append(v.Messages, m)
-	}
-	return v
-}
-
 // ---- pages ----
 
 func (s *Server) getWorkspaceActivity(w http.ResponseWriter, r *http.Request) {
@@ -561,12 +430,23 @@ func (s *Server) apiAgentPrompt(w http.ResponseWriter, r *http.Request) {
 
 // sendWireChat sends a Chat message to the Maestro's terminal. It reports whether Wire handled
 // the request; false means the local chat log should take it.
-func (s *Server) sendWireChat(w http.ResponseWriter, r *http.Request, ws workspaces.Workspace, text string) bool {
+func (s *Server) sendWireChat(w http.ResponseWriter, r *http.Request, ws workspaces.Workspace, text, thread string) bool {
 	if s.Activity == nil {
 		return false
 	}
-	if _, err := s.Activity.Mgr.Chat(ws.ID); err != nil {
+	cv, err := s.Activity.Mgr.Chat(ws.ID)
+	if err != nil {
 		return false
+	}
+	if thread != "" && cv.Snapshot != nil && cv.Snapshot.Threads != nil {
+		th := cv.Snapshot.Threads
+		for _, it := range th.Items {
+			if it.ID == th.ActiveSlot && !strings.EqualFold(it.Color, thread) {
+				writeJSON(w, http.StatusConflict, wireErrorBody{Code: "thread_changed",
+					Error: "Messages go to the thread selected in Maestri (" + threadLabel(it.Color) + "), not the one on screen. Nothing was sent."})
+				return true
+			}
+		}
 	}
 	text = strings.TrimSpace(text)
 	if text == "" || len([]rune(text)) > chat.MaxBodyChars {

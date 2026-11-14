@@ -196,6 +196,50 @@ func TestChatStreamSnapshotsReplaceTheTail(t *testing.T) {
 	waitFor(t, "chat live again", func() bool { v, _ := e.mgr.Chat("atlas"); return v.Live && v.Snapshot != nil })
 }
 
+func TestChatThreadsAreReadWithTheGuestTokenAndSwitchNothing(t *testing.T) {
+	e := start(t)
+	e.waitLive(t)
+	e.fake.SetChat(termM, wire.ChatSnapshot{TerminalID: termM, ConversationID: "c-blue", Enabled: true, Status: "idle",
+		Entries: []wire.ChatEntry{{ID: "b1", Role: "agent", Kind: "message", Text: "blue"}},
+		Threads: &wire.ChatThreads{ActiveSlot: 0, CanSelect: true, Items: []wire.ChatThreadItem{
+			{ID: 0, Color: "blue", HasMessages: true}, {ID: 1, Color: "purple", HasMessages: true}, {ID: 2, Color: "pink"},
+		}}})
+	e.fake.SetThreads(termM, wire.ChatThreadPreviews{Threads: []wire.ChatThreadPreview{
+		{ID: 1, ConversationID: "c-purple", Entries: []wire.ChatEntry{{ID: "p1", Role: "user", Kind: "message", Text: "purple"}}},
+	}})
+	waitFor(t, "threads in the snapshot", func() bool {
+		v, err := e.mgr.Chat("atlas")
+		return err == nil && v.Snapshot != nil && v.Snapshot.Threads != nil
+	})
+	got, err := e.mgr.ChatThreads(context.Background(), "atlas")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Threads) != 1 || got.Threads[0].ID != 1 || got.Threads[0].Entries[0].Text != "purple" {
+		t.Fatalf("threads = %+v", got)
+	}
+	for _, r := range e.fake.Requests() {
+		if r.Path == "/api/terminals/"+termM+"/chat/threads" {
+			if r.Method != "GET" || r.Role != "guest" {
+				t.Errorf("threads were read with %s as %s", r.Method, r.Role)
+			}
+		}
+		if strings.HasSuffix(r.Path, "/chat/thread") || r.Method == "PUT" || r.Method == "DELETE" {
+			t.Errorf("a thread was switched or cleared: %s %s", r.Method, r.Path)
+		}
+	}
+}
+
+func TestChatThreadsNeedTheirCapability(t *testing.T) {
+	e := start(t)
+	e.waitLive(t)
+	e.fake.SetCapabilities("terminalChat", "feedSnapshots", "workspaceActions")
+	waitFor(t, "capability change", func() bool {
+		_, err := e.mgr.ChatThreads(context.Background(), "atlas")
+		return errors.Is(err, wire.ErrNoCapability)
+	})
+}
+
 func TestWritesGoThroughTheOwnerTokenAndAreAudited(t *testing.T) {
 	e := start(t)
 	e.waitLive(t)

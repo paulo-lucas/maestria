@@ -340,6 +340,67 @@
 .chat-dock__jump[hidden] { display: none; }
 .chat-dock__jump[data-new] { border-color: var(--focus); color: var(--text); }
 .main:has(.chat-page) { padding-bottom: calc(var(--bottomnav-h) + env(safe-area-inset-bottom)); }
+.chat-top { display: grid; gap: var(--space-3); }
+
+/* Thread selector: one swatch per Maestri chat thread (seven colours). A filled dot has
+   messages, a ring is empty, a badge is unread; the thread shown is outlined. Names show
+   for the current thread, and for all of them once there is room. */
+.threads { display: grid; gap: var(--space-2); }
+.threads__list { display: flex; flex-wrap: wrap; gap: var(--space-1); list-style: none; margin: 0; padding: 0; }
+.thread {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--text-3);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
+  text-decoration: none;
+  transition: background-color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+a.thread:hover { background: var(--surface-2); color: var(--text); }
+.thread__dot {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--tone);
+  background: transparent; /* empty thread: a ring */
+}
+.thread[data-has] { color: var(--text-2); }
+.thread[data-has] .thread__dot { background: var(--tone); }
+.thread[aria-current] {
+  border-color: var(--tone);
+  background: var(--tone-tint);
+  color: var(--tone-ink);
+}
+.thread[aria-disabled] { opacity: 0.55; cursor: not-allowed; }
+.thread__badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--tone);
+  box-shadow: 0 0 0 2px var(--bg);
+}
+.thread:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.thread__name { display: none; }
+.thread[aria-current] .thread__name { display: inline; }
+.threads__note { color: var(--text-2); font-size: var(--fs-xs); }
+@container (min-width: 520px) { .thread__name { display: inline; } }
+
+/* No live Chat (Wire off): the notice, then the saved log, read-only. */
+.chat-page .chat-local { display: grid; align-content: start; gap: var(--space-4); }
+.chat-local__title { font-size: var(--fs-sm); font-weight: var(--fw-semibold); color: var(--text-2); }
+.chat-local__log { display: grid; gap: var(--space-3); }
 
 /* ---------- Docs page ---------- */
 

@@ -35,7 +35,7 @@ import (
 // AllCapabilities is what the fake advertises by default.
 var AllCapabilities = []string{
 	"feedSnapshots", "terminalStreaming", "terminalInputBytes", "terminalInputText", "terminalResize",
-	"terminalChat", "promptSegments", "workspaceActions", "floorStatus", "deviceRoles", "pairingCodes", "someFutureThing",
+	"terminalChat", "chatThreadPreviews", "promptSegments", "workspaceActions", "floorStatus", "deviceRoles", "pairingCodes", "someFutureThing",
 }
 
 // Device is a paired device.
@@ -73,6 +73,7 @@ type Server struct {
 	workspaces []wire.WorkspaceMeta
 	feeds      map[string]*feedState
 	chats      map[string]*chatState
+	threads    map[string]wire.ChatThreadPreviews
 	reqs       []Request
 	inputs     []Input
 	feedSubs   []string // roles of every feed subscription ever made
@@ -131,7 +132,7 @@ func newCert() (tls.Certificate, wire.Pin, error) {
 func New() (*Server, error) {
 	s := &Server{
 		caps: append([]string(nil), AllCapabilities...), protocol: 1, codes: map[string]bool{}, pairRole: "owner",
-		throttleAt: 1 << 30, devices: map[string]*Device{}, feeds: map[string]*feedState{}, chats: map[string]*chatState{},
+		throttleAt: 1 << 30, devices: map[string]*Device{}, feeds: map[string]*feedState{}, chats: map[string]*chatState{}, threads: map[string]wire.ChatThreadPreviews{},
 		sockets: map[*websocket.Conn]struct{}{},
 	}
 	var err error
@@ -227,6 +228,14 @@ func (s *Server) SetFeed(wsID string, snap wire.FeedSnapshot) {
 		default:
 		}
 	}
+	s.mu.Unlock()
+}
+
+// SetThreads sets what GET /api/terminals/{id}/chat/threads answers for a terminal: the other
+// threads (not the selected one) that hold messages.
+func (s *Server) SetThreads(terminalID string, p wire.ChatThreadPreviews) {
+	s.mu.Lock()
+	s.threads[terminalID] = p
 	s.mu.Unlock()
 }
 
@@ -489,6 +498,14 @@ func (s *Server) authed(w *recorder, r *http.Request, dev *Device) {
 		writeJSON(w, map[string]any{"workspaces": ws})
 	case r.Method == http.MethodGet && p == "/api/feed/stream":
 		s.feedStream(w, r, dev)
+	case len(parts) == 5 && parts[1] == "terminals" && parts[3] == "chat" && parts[4] == "threads" && r.Method == http.MethodGet:
+		s.mu.Lock()
+		p := s.threads[parts[2]]
+		s.mu.Unlock()
+		if p.Threads == nil {
+			p.Threads = []wire.ChatThreadPreview{}
+		}
+		writeJSON(w, p)
 	case len(parts) == 5 && parts[1] == "terminals" && parts[3] == "chat" && parts[4] == "stream":
 		s.chatStream(w, r, parts[2])
 	case len(parts) == 4 && parts[1] == "terminals" && parts[3] == "stream":

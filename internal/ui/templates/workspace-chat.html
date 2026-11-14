@@ -2,68 +2,103 @@
 {{define "content"}}
     <div class="page page--narrow chat-page" data-live-root="workspace-chat">
 
-      <header class="page-head">
-        <div class="page-head__title">
-          <span class="ws-eyebrow" data-ws="{{.CurrentWS.Tone}}"><span class="swatch swatch--lg"></span>{{.CurrentWS.Name}}{{if .CurrentWS.Machine}} <span class="subtle">· {{.CurrentWS.Machine}}</span>{{end}}</span>
-          <h1>Chat</h1>
-        </div>
-        {{if and .WireChat .WireChat.StatusLabel}}<div class="page-head__actions"><span class="status" data-status="{{.WireChat.StatusTone}}">{{.WireChat.StatusLabel}}</span></div>{{end}}
-      </header>
-
-      <div class="chat" aria-live="polite" id="chat-log">
-        {{if .WireChat}}
-          {{range .WireChat.Messages}}
-            {{if .DayLabel}}<div class="msg msg--system"><span>{{.DayLabel}}</span></div>{{end}}
-            {{if eq .Author "human"}}
-            <div class="msg msg--you" data-msg-key="{{.Key}}">
-              <div class="msg__body prose">{{.BodyHTML}}</div>
-              {{if .TimeLabel}}<time datetime="{{.TimeISO}}">{{.TimeLabel}}</time>{{end}}
-            </div>
-            {{else if eq .Author "system"}}
-            <div class="msg msg--system" data-msg-key="{{.Key}}"><span>{{.BodyHTML}}</span></div>
-            {{else}}
-            <div class="msg msg--maestro" data-msg-key="{{.Key}}">
-              <div class="msg__head"><span class="avatar avatar--sm avatar--maestro">M</span>Maestro{{if .TimeLabel}}<time datetime="{{.TimeISO}}">{{.TimeLabel}}</time>{{end}}{{if .Via}}<span class="status status--quiet" title="Posted with maestria say">via {{.Via}}</span>{{end}}</div>
-              <div class="msg__body prose">{{.BodyHTML}}</div>
-            </div>
-            {{end}}
-          {{else}}
-          <div class="empty empty--compact">
-            <span class="empty__icon">{{icon "i-chat"}}</span>
-            <p class="empty__title">{{if .WireChat.Connecting}}Connecting to the Maestro's chat…{{else}}No messages yet{{end}}</p>
-            <p class="empty__text">{{if .WireChat.Connecting}}The conversation appears as soon as Maestri answers.{{else}}Send a note to {{.CurrentWS.Name}}'s Maestro below.{{end}}</p>
+      <div class="chat-top">
+        <header class="page-head">
+          <div class="page-head__title">
+            <span class="ws-eyebrow" data-ws="{{.CurrentWS.Tone}}"><span class="swatch swatch--lg"></span>{{.CurrentWS.Name}}{{if .CurrentWS.Machine}} <span class="subtle">· {{.CurrentWS.Machine}}</span>{{end}}</span>
+            <h1>Chat</h1>
           </div>
-          {{end}}
-          {{if .WireChat.Typing}}<div class="typing" role="status"><span class="typing__dots" aria-hidden="true"><i></i><i></i><i></i></span>Maestro is working…</div>{{end}}
-        {{else}}
-        {{if .ChatMessages}}
-          {{range .ChatMessages}}
-            {{if .DayLabel}}<div class="msg msg--system"><span>{{.DayLabel}}</span></div>{{end}}
-            {{if eq .Author "human"}}
-            <div class="msg msg--you" data-msg-id="{{.ID}}">
-              <div class="msg__body prose">{{.BodyHTML}}</div>
-              <time datetime="{{.TimeISO}}">{{.TimeLabel}}</time>
-            </div>
-            {{else}}
-            <div class="msg msg--maestro" data-msg-id="{{.ID}}">
-              <div class="msg__head"><span class="avatar avatar--sm avatar--maestro">M</span>Maestro<time datetime="{{.TimeISO}}">{{.TimeLabel}}</time></div>
-              <div class="msg__body prose">{{.BodyHTML}}</div>
-            </div>
+          {{if and .WireChat .WireChat.StatusLabel}}<div class="page-head__actions"><span class="status" data-status="{{.WireChat.StatusTone}}">{{.WireChat.StatusLabel}}</span></div>{{end}}
+        </header>
+        {{if and .WireChat .WireChat.Threads}}
+        <nav class="threads" aria-label="Chat threads">
+          <ul class="threads__list">
+            {{range .WireChat.Threads}}
+            <li>
+              {{if .Disabled}}<span class="thread" data-tone="{{.Tone}}" data-has aria-disabled="true" title="{{.Label}}: this Maestri can't show other threads"><span class="thread__dot" aria-hidden="true"></span><span class="thread__name">{{.Label}}</span></span>
+              {{else}}<a class="thread" data-tone="{{.Tone}}" href="{{.Href}}"{{if .Current}} aria-current="true"{{end}}{{if .HasMessages}} data-has{{end}}{{if .Active}} data-active{{end}}{{if .Unread}} data-unread{{end}} title="{{.Label}}{{if .Active}} · selected in Maestri{{end}}{{if not .HasMessages}} · no messages{{end}}"><span class="thread__dot" aria-hidden="true"></span><span class="thread__name">{{.Label}}</span>{{if .Unread}}<span class="thread__badge" aria-hidden="true"></span><span class="sr-only"> unread</span>{{end}}{{if .Active}}<span class="sr-only"> (selected in Maestri)</span>{{end}}</a>{{end}}
+            </li>
             {{end}}
+          </ul>
+          {{if not .WireChat.ViewingActive}}<p class="threads__note">Reading the {{.WireChat.ThreadLabel}} thread. Maestri has {{.WireChat.ActiveLabel}} selected.</p>{{end}}
+        </nav>
+        {{end}}
+      </div>
+
+      {{if .Wire}}
+      <div class="chat-local">
+        {{template "wirestate" .Wire}}
+        {{if .ChatMessages}}
+        <section class="chat-local__log" aria-label="Messages saved on this machine">
+          <h2 class="chat-local__title">Saved here <span class="subtle">· read-only</span></h2>
+          <div class="chat" id="chat-local">
+            {{range .ChatMessages}}
+              {{if .DayLabel}}<div class="msg msg--system"><span>{{.DayLabel}}</span></div>{{end}}
+              {{if eq .Author "human"}}
+              <div class="msg msg--you" data-msg-id="{{.ID}}">
+                <div class="msg__body prose">{{.BodyHTML}}</div>
+                <time datetime="{{.TimeISO}}">{{.TimeLabel}}</time>
+              </div>
+              {{else}}
+              <div class="msg msg--maestro" data-msg-id="{{.ID}}">
+                <div class="msg__head"><span class="avatar avatar--sm avatar--maestro">M</span>Maestro<time datetime="{{.TimeISO}}">{{.TimeLabel}}</time></div>
+                <div class="msg__body prose">{{.BodyHTML}}</div>
+              </div>
+              {{end}}
+            {{end}}
+          </div>
+        </section>
+        {{end}}
+      </div>
+      {{else}}
+      <div class="chat" aria-live="polite" id="chat-log">
+        {{range .WireChat.Messages}}
+          {{if .DayLabel}}<div class="msg msg--system"><span>{{.DayLabel}}</span></div>{{end}}
+          {{if eq .Author "human"}}
+          <div class="msg msg--you" data-msg-key="{{.Key}}">
+            <div class="msg__body prose">{{.BodyHTML}}</div>
+            {{if .TimeLabel}}<time datetime="{{.TimeISO}}">{{.TimeLabel}}</time>{{end}}
+          </div>
+          {{else if eq .Author "system"}}
+          <div class="msg msg--system" data-msg-key="{{.Key}}"><span>{{.BodyHTML}}</span></div>
+          {{else}}
+          <div class="msg msg--maestro" data-msg-key="{{.Key}}">
+            <div class="msg__head"><span class="avatar avatar--sm avatar--maestro">M</span>Maestro{{if .TimeLabel}}<time datetime="{{.TimeISO}}">{{.TimeLabel}}</time>{{end}}{{if .Via}}<span class="status status--quiet" title="Posted with maestria say">via {{.Via}}</span>{{end}}</div>
+            <div class="msg__body prose">{{.BodyHTML}}</div>
+          </div>
           {{end}}
         {{else}}
         <div class="empty empty--compact">
           <span class="empty__icon">{{icon "i-chat"}}</span>
+          {{if .WireChat.Connecting}}
+          <p class="empty__title">Connecting to the Maestro's chat…</p>
+          <p class="empty__text">The conversation appears as soon as Maestri answers.</p>
+          {{else if .WireChat.ThreadError}}
+          <p class="empty__title">Couldn't read this thread</p>
+          <p class="empty__text">{{.WireChat.ThreadError}}</p>
+          {{else if not .WireChat.ViewingActive}}
+          <p class="empty__title">No messages in the {{.WireChat.ThreadLabel}} thread</p>
+          <p class="empty__text">It is empty in Maestri too.</p>
+          {{else}}
           <p class="empty__title">No messages yet</p>
-          <p class="empty__text">Send a note to {{.CurrentWS.Name}}'s Maestro below or have agents post with <code>maestria say</code>.</p>
+          <p class="empty__text">Send a note to {{.CurrentWS.Name}}'s Maestro below.</p>
+          {{end}}
         </div>
         {{end}}
-        {{end}}
+        {{if .WireChat.Typing}}<div class="typing" role="status"><span class="typing__dots" aria-hidden="true"><i></i><i></i><i></i></span>Maestro is working…</div>{{end}}
       </div>
+      {{end}}
 
       <div class="chat-dock">
         <button class="btn btn--sm chat-dock__jump" type="button" data-chat-jump hidden aria-label="Jump to the latest message">{{icon "i-chevron-down"}}<span data-chat-jump-label>Latest</span></button>
-        {{if .WireChat}}
+        {{if .Wire}}
+        <form class="composer" data-ws-id="{{.CurrentWS.ID}}" aria-disabled="true">
+          <label class="sr-only" for="msg">Message the Maestro</label>
+          <textarea id="msg" rows="1" placeholder="Chat is off" disabled></textarea>
+          <button class="btn btn--primary btn--icon" type="submit" aria-label="Send" disabled>{{icon "i-send"}}</button>
+        </form>
+        <p class="chat-dock__hint">Chat needs Maestri Wire. Agents can still post with <code>maestria say</code> and listen with <code>maestria wait</code>.</p>
+        {{else}}
         {{if .WireChat.NotRunning}}
         <div class="banner" data-status="warn">
           {{icon "i-terminal"}}
@@ -73,21 +108,13 @@
           </div>
         </div>
         {{end}}
-        <form class="composer" data-chat-form data-ws-id="{{.CurrentWS.ID}}"{{if not .WireChat.CanSend}} aria-disabled="true"{{end}}>
+        <form class="composer" data-chat-form data-ws-id="{{.CurrentWS.ID}}"{{if .WireChat.ThreadColor}} data-thread="{{.WireChat.ThreadColor}}"{{end}}{{if not .WireChat.CanSend}} aria-disabled="true"{{end}}>
           <label class="sr-only" for="msg">Message the Maestro</label>
-          <textarea id="msg" data-draft-key="chat:{{.CurrentWS.ID}}" rows="1" placeholder="{{if .WireChat.CanSend}}Message the Maestro{{else if .WireChat.NotRunning}}Maestro not running{{else}}Sending is off{{end}}"{{if not .WireChat.CanSend}} disabled{{end}}></textarea>
+          <textarea id="msg" data-draft-key="chat:{{.CurrentWS.ID}}" rows="1" placeholder="{{if .WireChat.CanSend}}Message the Maestro{{else if .WireChat.NotRunning}}Maestro not running{{else if not .WireChat.ViewingActive}}Sending goes to {{.WireChat.ActiveLabel}}{{else}}Sending is off{{end}}"{{if not .WireChat.CanSend}} disabled{{end}}></textarea>
           <button class="btn btn--primary btn--icon" type="submit" aria-label="Send"{{if not .WireChat.CanSend}} disabled{{end}}>{{icon "i-send"}}</button>
         </form>
         <p class="field__error" hidden data-chat-error></p>
-        <p class="chat-dock__hint">{{if .WireChat.CanSend}}Sent through your connector to the Maestro's terminal.{{else}}{{.WireChat.SendNote}}{{end}}</p>
-        {{else}}
-        <form class="composer" data-chat-form data-ws-id="{{.CurrentWS.ID}}">
-          <label class="sr-only" for="msg">Message the Maestro</label>
-          <textarea id="msg" data-draft-key="chat:{{.CurrentWS.ID}}" rows="1" placeholder="Message the Maestro"></textarea>
-          <button class="btn btn--primary btn--icon" type="submit" aria-label="Send">{{icon "i-send"}}</button>
-        </form>
-        <p class="field__error" hidden data-chat-error></p>
-        <p class="chat-dock__hint">Saved locally and delivered to agents listening with <code>maestria wait</code>.</p>
+        <p class="chat-dock__hint">{{if .WireChat.CanSend}}Sent through your connector to the Maestro's terminal{{if .WireChat.ThreadLabel}} ({{.WireChat.ThreadLabel}} thread){{end}}.{{else}}{{.WireChat.SendNote}}{{end}}</p>
         {{end}}
       </div>
     </div>
