@@ -166,21 +166,59 @@ func ReadSnapshot(db *sql.DB, cfg *config.Config, now time.Time) Snapshot {
 	snap.UpdatedAt = fileUpdatedAt
 	snap.Available = true
 
+	type namedProviderRaw struct {
+		key string
+		raw json.RawMessage
+	}
+	var entries []namedProviderRaw
+
 	rawProviders := top["providers"]
 	if len(rawProviders) == 0 {
 		// Support root map without top-level "providers" wrapper.
 		rawProviders = raw
 	}
-	var providerMap map[string]json.RawMessage
-	if err := json.Unmarshal(rawProviders, &providerMap); err != nil {
-		snap.Available = false
-		snap.Issue = &SetupIssue{
-			Code:    "invalid_status_json",
-			Title:   "Invalid providers object in usage file",
-			Message: err.Error(),
-			Path:    statusPath,
+	var providerArr []json.RawMessage
+	if len(rawProviders) > 0 && strings.TrimSpace(string(rawProviders))[0] == '[' {
+		if err := json.Unmarshal(rawProviders, &providerArr); err != nil {
+			snap.Available = false
+			snap.Issue = &SetupIssue{
+				Code:    "invalid_status_json",
+				Title:   "Invalid providers array in usage file",
+				Message: err.Error(),
+				Path:    statusPath,
+			}
+			return snap
 		}
-		return snap
+		for i, item := range providerArr {
+			var probe map[string]json.RawMessage
+			if json.Unmarshal(item, &probe) == nil && probe != nil {
+				k := firstNonEmptyStr(strField(probe["id"]), strField(probe["provider"]), fmt.Sprintf("provider-%d", i+1))
+				entries = append(entries, namedProviderRaw{key: k, raw: item})
+			}
+		}
+	} else {
+		var providerMap map[string]json.RawMessage
+		if err := json.Unmarshal(rawProviders, &providerMap); err != nil {
+			snap.Available = false
+			snap.Issue = &SetupIssue{
+				Code:    "invalid_status_json",
+				Title:   "Invalid providers object in usage file",
+				Message: err.Error(),
+				Path:    statusPath,
+			}
+			return snap
+		}
+		keys := make([]string, 0, len(providerMap))
+		for k := range providerMap {
+			if k == "updatedAt" || k == "version" {
+				continue
+			}
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			entries = append(entries, namedProviderRaw{key: k, raw: providerMap[k]})
+		}
 	}
 
 	cache := loadCache(db)
@@ -190,18 +228,9 @@ func ReadSnapshot(db *sql.DB, cfg *config.Config, now time.Time) Snapshot {
 		staleAfter = 15 * time.Minute
 	}
 
-	keys := make([]string, 0, len(providerMap))
-	for k := range providerMap {
-		if k == "updatedAt" || k == "version" {
-			continue
-		}
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
 	cacheDirty := false
-	for _, pKey := range keys {
-		parsed, ok := parseProviderEntry(pKey, providerMap[pKey], fileUpdatedAt, now)
+	for _, ent := range entries {
+		parsed, ok := parseProviderEntry(ent.key, ent.raw, fileUpdatedAt, now)
 		if !ok {
 			continue
 		}
@@ -339,20 +368,24 @@ type parsedEntry struct {
 }
 
 type rawMeter struct {
-	ID            string   `json:"id"`
-	Key           string   `json:"key"`
-	Label         string   `json:"label"`
-	Name          string   `json:"name"`
-	UsedPercent   *float64 `json:"usedPercent"`
-	Used          *float64 `json:"used"`
-	Limit         *float64 `json:"limit"`
-	ResetsAt      any      `json:"resetsAt"`
-	ResetAt       any      `json:"resetAt"`
-	ResetTime     any      `json:"resetTime"`
-	Account       string   `json:"account"`
-	Plan          string   `json:"plan"`
-	Email         string   `json:"email"`
-	WindowMinutes int      `json:"windowMinutes"`
+	ID              string     `json:"id"`
+	Key             string     `json:"key"`
+	Label           string     `json:"label"`
+	Title           string     `json:"title"`
+	Name            string     `json:"name"`
+	UsedPercent     *float64   `json:"usedPercent"`
+	Used            *float64   `json:"used"`
+	Limit           *float64   `json:"limit"`
+	ResetsAt        any        `json:"resetsAt"`
+	ResetAt         any        `json:"resetAt"`
+	ResetTime       any        `json:"resetTime"`
+	Account         string     `json:"account"`
+	Plan            string     `json:"plan"`
+	Email           string     `json:"email"`
+	WindowMinutes   int        `json:"windowMinutes"`
+	DurationSeconds int        `json:"durationSeconds"`
+	Ring            string     `json:"ring"`
+	Windows         []rawMeter `json:"windows"`
 }
 
 func parseProviderEntry(rawKey string, rawVal json.RawMessage, fileUpdatedAt int64, now time.Time) (parsedEntry, bool) {
@@ -360,9 +393,15 @@ func parseProviderEntry(rawKey string, rawVal json.RawMessage, fileUpdatedAt int
 	if json.Unmarshal(rawVal, &obj) != nil || obj == nil {
 		return parsedEntry{}, false
 	}
+	if rawEnabled, ok := obj["enabled"]; ok {
+		var enabled bool
+		if json.Unmarshal(rawEnabled, &enabled) == nil && !enabled {
+			return parsedEntry{}, false
+		}
+	}
 
-	provider := normalizeProviderID(rawKey, strField(obj["provider"]))
-	providerLabel := displayProviderName(provider)
+	provider := normalizeProviderID(rawKey, firstNonEmptyStr(strField(obj["provider"]), strField(obj["id"])))
+	providerLabel := firstNonEmptyStr(strField(obj["name"]), displayProviderName(provider))
 	state := strings.TrimSpace(strField(obj["state"]))
 	if state == "" {
 		state = strings.TrimSpace(strField(obj["status"]))
@@ -450,10 +489,12 @@ func extractWindows(obj map[string]json.RawMessage, now time.Time) []windowWithA
 	var out []windowWithAccount
 	seen := map[string]bool{}
 	appendUnique := func(acct, plan string, w Window) {
-		if seen[w.ID] {
+		k := acct + "\x00" + w.ID
+		if seen[k] {
 			w.ID = fmt.Sprintf("%s-%d", w.ID, len(seen)+1)
+			k = acct + "\x00" + w.ID
 		}
-		seen[w.ID] = true
+		seen[k] = true
 		out = append(out, windowWithAccount{account: acct, plan: plan, window: w})
 	}
 
@@ -517,12 +558,49 @@ func extractWindows(obj map[string]json.RawMessage, now time.Time) []windowWithA
 		}
 	}
 
-	// 2. Meters array (real ~/.maestri/usage/providers/.status.json format).
+	// 2. Meters array (real ~/.maestri/usage/providers/.status.json format: flat meters or meters[].windows[]).
 	if rawMeters, ok := obj["meters"]; ok {
 		var meters []rawMeter
 		if json.Unmarshal(rawMeters, &meters) == nil {
+			multiNested := 0
+			for _, rm := range meters {
+				if len(rm.Windows) > 0 {
+					multiNested++
+				}
+			}
 			for i, rm := range meters {
-				rawName := firstNonEmptyStr(rm.ID, rm.Key, rm.Label, rm.Name)
+				if len(rm.Windows) > 0 {
+					groupAcct := firstNonEmptyStr(rm.Account, rm.Email)
+					if groupAcct == "" && multiNested > 1 {
+						groupAcct = firstNonEmptyStr(rm.Label, rm.Name, rm.ID)
+					}
+					for j, rw := range rm.Windows {
+						rawName := firstNonEmptyStr(rw.Ring, rw.ID, rw.Key, rw.Title, rw.Label, rw.Name)
+						id := normalizeWindowID(rawName)
+						if rw.ID == "" && rw.Key == "" && rw.Ring == "" {
+							mins := rw.WindowMinutes
+							if mins == 0 && rw.DurationSeconds > 0 {
+								mins = rw.DurationSeconds / 60
+							}
+							if mins >= 240 && mins <= 360 {
+								id = "session"
+							} else if mins >= 9000 && mins <= 11000 {
+								id = "weekly"
+							}
+						}
+						if id == "" {
+							id = fmt.Sprintf("window-%d-%d", i+1, j+1)
+						}
+						label := firstNonEmptyStr(rw.Title, rw.Label, rw.Name, rw.ID, id)
+						if w, ok := buildWindow(id, label, rw, now); ok {
+							acct := firstNonEmptyStr(rw.Account, rw.Email, groupAcct)
+							pl := firstNonEmptyStr(rw.Plan, rm.Plan)
+							appendUnique(acct, pl, w)
+						}
+					}
+					continue
+				}
+				rawName := firstNonEmptyStr(rm.Ring, rm.ID, rm.Key, rm.Title, rm.Label, rm.Name)
 				id := normalizeWindowID(rawName)
 				if rm.ID == "" && rm.Key == "" {
 					if rm.WindowMinutes >= 240 && rm.WindowMinutes <= 360 {
@@ -534,7 +612,7 @@ func extractWindows(obj map[string]json.RawMessage, now time.Time) []windowWithA
 				if id == "" {
 					id = fmt.Sprintf("meter-%d", i+1)
 				}
-				label := firstNonEmptyStr(rm.Label, rm.Name, rm.Key, id)
+				label := firstNonEmptyStr(rm.Title, rm.Label, rm.Name, rm.Key, id)
 				if w, ok := buildWindow(id, label, rm, now); ok {
 					appendUnique(rm.Account, rm.Plan, w)
 				}

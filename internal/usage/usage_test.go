@@ -157,3 +157,95 @@ func TestReadSnapshotGroupingErrorHidingAnd24hCache(t *testing.T) {
 		t.Fatal(".status.json must never be modified")
 	}
 }
+
+func TestReadSnapshotSupportsV1ProvidersArrayAndNestedWindows(t *testing.T) {
+	now := time.Date(2026, 11, 14, 12, 0, 0, 0, time.UTC)
+	maestriDir := t.TempDir()
+	providersDir := filepath.Join(maestriDir, "usage", "providers")
+	if err := os.MkdirAll(providersDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	payload := `{
+		"updatedAt": "2026-11-14T11:58:00Z",
+		"providers": [
+			{
+				"id": "claude",
+				"name": "Claude",
+				"enabled": true,
+				"state": "ready",
+				"plan": "Max",
+				"meters": [
+					{
+						"id": "claude",
+						"label": "Claude",
+						"windows": [
+							{"id": "five_hour", "title": "Session (5h)", "usedPercent": 42, "resetsAt": "2026-11-14T15:00:00Z", "ring": "session"},
+							{"id": "seven_day", "title": "Weekly", "usedPercent": 61, "resetsAt": "2026-11-18T00:00:00Z", "ring": "weekly"}
+						]
+					}
+				]
+			},
+			{
+				"id": "multi",
+				"name": "MultiAcct",
+				"enabled": true,
+				"state": "ready",
+				"meters": [
+					{"id": "acct-a", "label": "Work", "windows": [{"id": "primary", "title": "5h", "usedPercent": 15, "ring": "session"}]},
+					{"id": "acct-b", "label": "Personal", "windows": [{"id": "primary", "title": "5h", "usedPercent": 55, "ring": "session"}]}
+				]
+			},
+			{
+				"id": "disabled",
+				"name": "Disabled",
+				"enabled": false,
+				"state": "off"
+			},
+			{
+				"id": "copilot",
+				"name": "Copilot",
+				"enabled": true,
+				"state": "failed",
+				"error": "auth expired"
+			}
+		]
+	}`
+	if err := os.WriteFile(filepath.Join(providersDir, ".status.json"), []byte(payload), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := &config.Config{
+		MaestriDir: maestriDir,
+		Usage:      config.Usage{StaleMinutes: 15},
+		Standby: config.Standby{
+			Thresholds: map[string]map[string]int{"claude": {"weekly": 60}},
+		},
+	}
+	db, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	snap := ReadSnapshot(db, cfg, now)
+	if !snap.Available || snap.Issue != nil {
+		t.Fatalf("unexpected issue: %+v", snap.Issue)
+	}
+	if len(snap.Accounts) != 3 {
+		t.Fatalf("expected 3 account groups (1 claude + 2 multi, skipping disabled/failed), got %d: %+v", len(snap.Accounts), snap.Accounts)
+	}
+	if snap.HiddenCount != 1 || len(snap.Hidden) != 1 || snap.Hidden[0].Provider != "copilot" {
+		t.Fatalf("expected 1 hidden copilot provider, got %+v", snap.Hidden)
+	}
+	var claudeFound bool
+	for _, a := range snap.Accounts {
+		if a.Provider == "claude" {
+			claudeFound = true
+			if len(a.Windows) != 2 || a.Windows[0].ID != "session" || a.Windows[1].ID != "weekly" || !a.Windows[1].Tripped {
+				t.Fatalf("unexpected claude windows: %+v", a.Windows)
+			}
+		}
+	}
+	if !claudeFound {
+		t.Fatal("claude account missing from V1 array parse")
+	}
+}
