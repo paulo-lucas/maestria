@@ -1,0 +1,24 @@
+<!--page {"title": "Choose a new password", "layout": "auth", "group": "Auth", "order": 87, "icon": "i-lock", "label": "8h. Reset password (new)", "desc": "New password, confirmed with a 2FA code. Reset never bypasses 2FA."}-->
+  <section class="card auth-card" aria-labelledby="t">
+    <div class="auth-card__head">
+      <h1 id="t">Choose a new password</h1>
+      <p>For you@example.com</p>
+    </div>
+    <form action="#">
+      <div class="field">
+        <label class="field__label" for="pw">New password</label>
+        <input class="input" id="pw" type="password" autocomplete="new-password" aria-describedby="pw-hint">
+        <p class="field__hint" id="pw-hint">At least 12 characters.</p>
+      </div>
+      <div class="field">
+        <label class="field__label" for="code">Code from your authenticator app</label>
+        <input class="input input--code" id="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000" aria-describedby="code-hint">
+        <p class="field__hint" id="code-hint">Required: a password reset never turns off two-factor. Lost your phone? Use a recovery code.</p>
+      </div>
+      <a class="btn btn--primary btn--block" href="auth-login.html">Set password and log in</a>
+    </form>
+    <div class="banner" data-status="info">
+      <svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg>
+      <div class="banner__body"><p class="banner__text">Every other session is signed out, and paired devices must be approved on your machine again.</p></div>
+    </div>
+  </section>

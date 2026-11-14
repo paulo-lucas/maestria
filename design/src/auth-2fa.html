@@ -1,0 +1,25 @@
+<!--page {"title": "Two-factor check", "layout": "auth", "group": "Auth", "order": 85, "icon": "i-key", "label": "8f. 2FA challenge", "desc": "6-digit code, with a recovery-code fallback and an error state."}-->
+  <section class="card auth-card" aria-labelledby="t">
+    <div class="auth-card__head">
+      <h1 id="t">Enter your code</h1>
+      <p>Open your authenticator app and enter the 6-digit code for Maestria.</p>
+    </div>
+    <form action="#">
+      <div class="field">
+        <label class="field__label sr-only" for="code">Authentication code</label>
+        <input class="input input--code" id="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" value="482913" aria-invalid="true" aria-describedby="code-err">
+        <p class="field__error" id="code-err">That code didn't work. Check the time on your phone and try again. 4 attempts left.</p>
+      </div>
+      <a class="btn btn--primary btn--block" href="overview.html">Verify</a>
+    </form>
+    <details class="disclosure">
+      <summary><svg class="icon" aria-hidden="true"><use href="#i-chevron-right"/></svg>Use a recovery code instead</summary>
+      <form action="#">
+        <div class="inline-form">
+          <label class="sr-only" for="rc">Recovery code</label>
+          <input class="input mono" id="rc" type="text" autocomplete="off" placeholder="xxxx-xxxx">
+          <button class="btn" type="submit">Use code</button>
+        </div>
+      </form>
+    </details>
+  </section>

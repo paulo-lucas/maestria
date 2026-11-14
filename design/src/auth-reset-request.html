@@ -1,0 +1,15 @@
+<!--page {"title": "Reset password", "layout": "auth", "group": "Auth", "order": 86, "icon": "i-lock", "label": "8g. Reset password (request)", "desc": "Ask for a reset link by email."}-->
+  <section class="card auth-card" aria-labelledby="t">
+    <div class="auth-card__head">
+      <h1 id="t">Reset your password</h1>
+      <p>We'll email you a link. You will still need your authenticator app or a recovery code.</p>
+    </div>
+    <form action="#">
+      <div class="field">
+        <label class="field__label" for="email">Email</label>
+        <input class="input" id="email" type="email" autocomplete="email" placeholder="you@example.com">
+      </div>
+      <a class="btn btn--primary btn--block" href="auth-reset.html">Send reset link</a>
+    </form>
+    <p class="auth-card__alt"><a href="auth-login.html">Back to log in</a></p>
+  </section>

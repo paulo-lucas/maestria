@@ -1,0 +1,25 @@
+<!--page {"title": "Sign up", "layout": "auth", "group": "Auth", "order": 80, "icon": "i-user", "label": "8a. Sign up", "desc": "Create an account: email and password. 2FA is required next."}-->
+  <section class="card auth-card" aria-labelledby="t">
+    <ol class="steps" aria-label="Sign-up steps"><li aria-current="step"><span class="step__n">1</span><span class="step__label">Account</span></li><li><span class="step__n">2</span><span class="step__label">Verify email</span></li><li><span class="step__n">3</span><span class="step__label">Two-factor</span></li></ol>
+    <div class="auth-card__head">
+      <h1 id="t">Create your account</h1>
+      <p>One account sees every workspace on every machine you link.</p>
+    </div>
+    <form action="#">
+      <div class="field">
+        <label class="field__label" for="email">Email</label>
+        <input class="input" id="email" type="email" autocomplete="email" placeholder="you@example.com">
+      </div>
+      <div class="field">
+        <label class="field__label" for="pw">Password</label>
+        <input class="input" id="pw" type="password" autocomplete="new-password" aria-describedby="pw-hint">
+        <p class="field__hint" id="pw-hint">At least 12 characters. A passphrase works well.</p>
+      </div>
+      <button class="btn btn--primary btn--block" type="submit">Continue</button>
+    </form>
+    <div class="banner" data-status="info">
+      <svg class="icon" aria-hidden="true"><use href="#i-lock"/></svg>
+      <div class="banner__body"><p class="banner__text">Two-factor authentication is required. Chats, docs and agent previews are encrypted at rest.</p></div>
+    </div>
+    <p class="auth-card__alt">Already have an account? <a href="auth-login.html">Log in</a></p>
+  </section>

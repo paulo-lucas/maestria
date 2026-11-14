@@ -1,0 +1,18 @@
+<!--page {"title": "Log in", "layout": "auth", "group": "Auth", "order": 84, "icon": "i-user", "label": "8e. Log in", "desc": "Email and password; the 2FA challenge follows."}-->
+  <section class="card auth-card" aria-labelledby="t">
+    <div class="auth-card__head">
+      <h1 id="t">Log in</h1>
+    </div>
+    <form action="#">
+      <div class="field">
+        <label class="field__label" for="email">Email</label>
+        <input class="input" id="email" type="email" autocomplete="username" placeholder="you@example.com">
+      </div>
+      <div class="field">
+        <div class="auth-card__row"><label class="field__label" for="pw">Password</label><a href="auth-reset-request.html">Forgot password?</a></div>
+        <input class="input" id="pw" type="password" autocomplete="current-password">
+      </div>
+      <a class="btn btn--primary btn--block" href="auth-2fa.html">Log in</a>
+    </form>
+    <p class="auth-card__alt">New here? <a href="auth-signup.html">Create an account</a></p>
+  </section>
