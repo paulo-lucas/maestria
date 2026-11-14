@@ -8,9 +8,17 @@ import (
 	"github.com/maestria-dev/maestria/internal/cloud"
 )
 
-// version is set at build time: -ldflags "-X main.version=1.2.3".
-var version = "dev"
+// Build metadata injected at build time:
+// -ldflags "-X main.version=1.2.3 -X main.commit=abc1234 -X main.date=2026-11-14T00:00:00Z".
+var (
+	version = "dev"
+	commit  = ""
+	date    = ""
+)
 
 func main() {
-	os.Exit(cloud.Run(os.Args[1:], cloud.DefaultEnv(version)))
+	env := cloud.DefaultEnv(version)
+	env.Commit = commit
+	env.Date = date
+	os.Exit(cloud.Run(os.Args[1:], env))
 }

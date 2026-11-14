@@ -42,7 +42,10 @@ type Env struct {
 	Getenv         func(string) string
 	Home           string
 	Now            func() time.Time
-	Version        string
+	// Version, Commit and Date are injected at build time via -ldflags.
+	Version string
+	Commit  string
+	Date    string
 	// Ready is called with the listening address once `serve` is up (tests).
 	Ready func(addr string)
 	// Stop ends `serve` (tests). nil means SIGINT/SIGTERM.
@@ -104,7 +107,18 @@ func run(args []string, env *Env) error {
 	}
 	switch args[0] {
 	case "version", "--version":
-		fmt.Fprintf(env.Stdout, "maestria-cloud %s\n", env.Version)
+		var meta []string
+		if env.Commit != "" {
+			meta = append(meta, "commit "+env.Commit)
+		}
+		if env.Date != "" {
+			meta = append(meta, "built "+env.Date)
+		}
+		if len(meta) == 0 {
+			fmt.Fprintf(env.Stdout, "maestria-cloud %s\n", env.Version)
+		} else {
+			fmt.Fprintf(env.Stdout, "maestria-cloud %s (%s)\n", env.Version, strings.Join(meta, ", "))
+		}
 		return nil
 	case "serve":
 		return cmdServe(args[1:], env)
