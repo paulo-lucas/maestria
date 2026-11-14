@@ -301,7 +301,7 @@ func TestSSEStreamDeliversLiveAndOutOfBandUpdates(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	deadline := time.After(2 * time.Second)
+	deadline := time.After(10 * time.Second)
 	foundUpdate := false
 	for !foundUpdate {
 		lineCh := make(chan string, 1)

@@ -34,7 +34,11 @@ jobs:
         run: go vet ./...
 
       - name: Test
-        run: go test -count=1 ./...
+        shell: bash
+        # Failing tests become annotations on the run (readable without the full log).
+        run: |
+          set -o pipefail
+          go test -json -count=1 ./... | go run ./tools/ciannotate
 
       - name: Check embedded design assets
         run: go run ./tools/syncdesign -check

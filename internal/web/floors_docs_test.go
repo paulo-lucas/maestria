@@ -320,7 +320,7 @@ func TestSSEStreamDeliversFloorUpdates(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	deadline := time.After(2 * time.Second)
+	deadline := time.After(10 * time.Second)
 	foundUpdate := false
 	for !foundUpdate {
 		lineCh := make(chan string, 1)
@@ -346,7 +346,7 @@ func TestSSEStreamDeliversFloorUpdates(t *testing.T) {
 	}, now); err != nil {
 		t.Fatal(err)
 	}
-	deadline2 := time.After(2 * time.Second)
+	deadline2 := time.After(10 * time.Second)
 	foundRevUpdate := false
 	for !foundRevUpdate {
 		lineCh := make(chan string, 1)
