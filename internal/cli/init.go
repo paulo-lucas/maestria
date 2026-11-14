@@ -128,7 +128,11 @@ func cmdInit(args []string, env *Env) error {
 		return err
 	}
 
-	printInitNextSteps(env.Stdout, svcResult, env.Config.GOOS)
+	port, hosts := config.DefaultPort, []string(nil)
+	if cfg, err := config.Load(dir, env.Config); err == nil {
+		port, hosts = cfg.Port, cfg.AllowedHosts
+	}
+	printInitNextSteps(env.Stdout, svcResult, env.Config.GOOS, port, hosts)
 	return nil
 }
 
@@ -945,8 +949,13 @@ func initServiceStep(in *bufio.Reader, flagService, mode string, hasFlagService,
 	return "installed", nil
 }
 
-func printInitNextSteps(out io.Writer, serviceResult, goos string) {
-	fmt.Fprintln(out, "\nSetup complete. Next steps:")
+func printInitNextSteps(out io.Writer, serviceResult, goos string, port int, hosts []string) {
+	fmt.Fprintln(out, "\nSetup complete.")
+	fmt.Fprintf(out, "  Panel:   http://127.0.0.1:%d (this machine only)\n", port)
+	for _, h := range hosts {
+		fmt.Fprintf(out, "  Public:  https://%s (through your tunnel to port %d)\n", h, port)
+	}
+	fmt.Fprintln(out, "\nNext steps:")
 	switch {
 	case serviceResult == "started":
 		fmt.Fprintln(out, "  Panel service is running.")

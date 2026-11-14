@@ -54,4 +54,10 @@ func TestInitAllowHostFlag(t *testing.T) {
 	if err != nil || len(cfg.AllowedHosts) != 1 || cfg.AllowedHosts[0] != "panel.example.com" {
 		t.Fatalf("allowedHosts = %v err=%v", cfg.AllowedHosts, err)
 	}
+	out := f.out.String()
+	for _, want := range []string{"Panel:   http://127.0.0.1:4777", "Public:  https://panel.example.com"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("init summary missing %q:\n%s", want, out)
+		}
+	}
 }
