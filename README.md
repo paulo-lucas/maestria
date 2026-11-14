@@ -187,7 +187,11 @@ maestria devices pending && maestria devices approve <code>          # approve e
 maestria connect status | maestria connect unlink
 ```
 
-Per-machine policy (device approval and idle limits, rate limit) lives in the `relay` section of the machine's `config.json`; the local kill switch (`maestria tunnel off`) blocks the relay entirely. Local mode (`maestria serve`) is unchanged.
+Per-machine policy (device approval and idle limits, rate limit) lives in the `relay` section of the machine's `config.json`; the local kill switch (`maestria tunnel off`) blocks the relay entirely.
+
+**One process for both.** Once a machine is linked, `maestria serve` also keeps the cloud connection (unless `relay.enabled` is false in `config.json` or you pass `--no-connect`; `--connect` insists and fails if it cannot). The local panel and the relay then share one Wire subscription and one standby guard. `maestria connect` is the connection without a local panel. Only one process may run `serve` or `connect` per config directory: a lock (`run.lock` in the config directory) makes a second one refuse with a clear message, while CLI commands such as `post`, `say`, `wait` and `devices` keep working next to it. As a service: `maestria service install --mode serve|connect|both` (`both` runs `maestria serve --connect`).
+
+Releases include `maestria-cloud` for the same five targets as `maestria`, with checksums in `SHA256SUMS`.
 
 ---
 

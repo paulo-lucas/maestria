@@ -333,6 +333,10 @@
     var needs = wss.reduce(function (n, w) { return n + w.needs; }, 0);
     var r = state.route || {};
     var cur = r.name === 'workspace' ? wss.filter(function (w) { return w.cid === r.cid && w.id === r.ws; })[0] : null;
+    // Two machines may each have a workspace with the same name: then say which is which.
+    var seen = {};
+    wss.forEach(function (w) { seen[w.name] = (seen[w.name] || 0) + 1; });
+    var wname = function (w) { return seen[w.name] > 1 ? w.name + ' · ' + w.machine : w.name; };
 
     var navNeeds = $('#nav-needs');
     if (navNeeds) { navNeeds.textContent = needs; navNeeds.hidden = !needs; }
@@ -344,7 +348,7 @@
     wss.forEach(function (w) {
       var href = wsHref(w.cid, w.id, 'tasks');
       var active = cur && cur.cid === w.cid && cur.id === w.id;
-      html += '<a class="nav__item" href="' + esc(href) + '" data-ws="' + esc(w.tone) + '"><span class="swatch"></span> ' + esc(w.name) + (w.needs ? ' <span class="count">' + w.needs + '</span>' : '') + '</a>';
+      html += '<a class="nav__item" href="' + esc(href) + '" data-ws="' + esc(w.tone) + '"><span class="swatch"></span> ' + esc(wname(w)) + (w.needs ? ' <span class="count">' + w.needs + '</span>' : '') + '</a>';
       if (active) {
         var tab = function (t, ic, label, extra) {
           return '<a class="nav__item" href="' + esc(wsHref(w.cid, w.id, t)) + '"' + (r.tab === t ? ' aria-current="page"' : '') + '>' + icon(ic) + ' ' + label + (extra || '') + '</a>';
@@ -359,13 +363,13 @@
 
     // Scope menu (small screens).
     var label = $('#scope-label');
-    if (label) label.textContent = cur ? cur.name : 'All workspaces';
+    if (label) label.textContent = cur ? wname(cur) : 'All workspaces';
     var panel = $('#scope-panel');
     if (panel) {
       var ph = '<a class="menu__item" href="/"' + (!cur ? ' aria-current="page"' : '') + '>' + icon('i-overview') + ' All workspaces' + (needs ? ' <span class="count" data-status="needs">' + needs + '</span>' : '') + '</a>';
       if (wss.length) ph += '<div class="menu__sep"></div>';
       wss.forEach(function (w) {
-        ph += '<a class="menu__item" href="' + esc(wsHref(w.cid, w.id, 'tasks')) + '" data-ws="' + esc(w.tone) + '"' + (cur && cur.cid === w.cid && cur.id === w.id ? ' aria-current="page"' : '') + '><span class="swatch swatch--lg"></span> ' + esc(w.name) + (w.needs ? ' <span class="count">' + w.needs + '</span>' : '') + '</a>';
+        ph += '<a class="menu__item" href="' + esc(wsHref(w.cid, w.id, 'tasks')) + '" data-ws="' + esc(w.tone) + '"' + (cur && cur.cid === w.cid && cur.id === w.id ? ' aria-current="page"' : '') + '><span class="swatch swatch--lg"></span> ' + esc(wname(w)) + (w.needs ? ' <span class="count">' + w.needs + '</span>' : '') + '</a>';
       });
       panel.innerHTML = ph;
     }

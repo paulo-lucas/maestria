@@ -50,9 +50,10 @@ func (n *node) localPanel(t *testing.T, relayJSON string) int {
 
 // serve runs `maestria serve <args>` in the background and returns how to stop it.
 type served struct {
-	cancel context.CancelFunc
-	done   chan int
-	out    *syncBuf
+	cancel   context.CancelFunc
+	finished chan struct{} // closed when serve returned
+	code     int
+	out      *syncBuf
 }
 
 func (n *node) serve(args ...string) *served {
@@ -61,12 +62,15 @@ func (n *node) serve(args ...string) *served {
 	env.Ctx = ctx
 	out := &syncBuf{}
 	env.Stdin, env.Stdout, env.Stderr = strings.NewReader(""), out, out
-	s := &served{cancel: cancel, done: make(chan int, 1), out: out}
-	go func() { s.done <- cli.Run(append([]string{"serve"}, args...), env) }()
+	s := &served{cancel: cancel, finished: make(chan struct{}), out: out}
+	go func() {
+		s.code = cli.Run(append([]string{"serve"}, args...), env)
+		close(s.finished)
+	}()
 	n.t.Cleanup(func() {
 		cancel()
 		select {
-		case <-s.done:
+		case <-s.finished:
 		case <-time.After(5 * time.Second):
 		}
 	})
@@ -77,8 +81,8 @@ func (s *served) stop(t *testing.T) int {
 	t.Helper()
 	s.cancel()
 	select {
-	case code := <-s.done:
-		return code
+	case <-s.finished:
+		return s.code
 	case <-time.After(8 * time.Second):
 		t.Fatal("serve did not stop")
 		return -1
