@@ -1057,3 +1057,6 @@ a.agent-line:hover { background: var(--surface-2); }
 
 .is-stale { opacity: 0.6; }
 .is-stale .btn, .is-stale .chip, .is-stale .input { pointer-events: none; }
+.input-suffix .select { width: 96px; }
+.spacer-auto { margin-right: auto; }
+.segmented .dot { width: 7px; height: 7px; }

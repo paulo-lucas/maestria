@@ -1,0 +1,180 @@
+<!--page {"title": "Usage & standby", "scope": "all", "nav": "usage", "group": "All workspaces", "order": 70, "icon": "i-gauge", "label": "7. Usage & standby", "desc": "Gauges per provider and window, standby guard settings and the current standby state."}-->
+    <div class="page page--narrow">
+
+      <header class="page-head">
+        <div class="page-head__title">
+          <h1>Usage &amp; standby</h1>
+          <p class="page-head__sub">The standby guard pauses work before a provider limit is hit and wakes the Maestro when the window resets. It runs on your machine, so it keeps working even if this site is down.</p>
+        </div>
+      </header>
+
+      <div class="field">
+        <span class="field__label" id="machine-label">Machine</span>
+        <div class="segmented" role="radiogroup" aria-labelledby="machine-label">
+          <label><input type="radio" name="machine" checked><span><span class="dot" data-status="ok"></span>Workstation</span></label>
+          <label><input type="radio" name="machine"><span><span class="dot" data-status="offline"></span>Laptop</span></label>
+        </div>
+        <p class="field__hint">Each connector reads usage on its own machine and enforces its own standby rules.</p>
+      </div>
+
+      <div class="banner" data-status="warn">
+        <svg class="icon" aria-hidden="true"><use href="#i-pause"/></svg>
+        <div class="banner__body">
+          <p class="banner__title">Standby: Gemini paused at 93%</p>
+          <p class="banner__text">Agents on Gemini were told to pause at 14:31. The Maestro wakes at 15:20, when the 5-hour window resets.</p>
+        </div>
+        <div class="banner__actions"><button class="btn btn--sm" type="button">Resume now</button></div>
+      </div>
+
+      <div class="section">
+        <section class="card panel" aria-labelledby="p-claude">
+          <header class="panel__head">
+            <h2 class="panel__title" id="p-claude">Claude</h2>
+            <span class="status status--badge" data-status="ok">Armed</span>
+          </header>
+            <div class="setting">
+              <div class="gauge gauge--lg">
+                <div class="gauge__row"><span class="gauge__label">5-hour session</span><span class="gauge__value">64%</span></div>
+                <div class="gauge__track"><progress class="gauge__bar" max="100" value="64">64%</progress><span class="gauge__mark mark-90" title="Standby at 90%"></span></div>
+                <div class="gauge__foot"><span>Resets in 2h 10m</span></div>
+              </div>
+              <div class="setting__controls">
+                <div class="switch-row">
+                  <label class="field__label" for="claude-5h-on">Standby guard</label>
+                  <input class="switch" id="claude-5h-on" type="checkbox" role="switch" checked>
+                </div>
+                <div class="input-suffix">
+                  <label class="field__label" for="claude-5h-pct">Pause at</label>
+                  <select class="select" id="claude-5h-pct"><option>50%</option><option>55%</option><option>60%</option><option>65%</option><option>70%</option><option>75%</option><option>80%</option><option>85%</option><option selected>90%</option><option>95%</option><option>100%</option></select>
+                </div>
+                <div class="segmented" role="radiogroup" aria-label="When the limit is hit">
+                  <label><input type="radio" name="claude-5h-mode" checked><span>Tell the Maestro</span></label>
+                  <label><input type="radio" name="claude-5h-mode"><span>Interrupt agents</span></label>
+                </div>
+                <label class="check"><input type="checkbox" checked> Wake the Maestro on reset</label>
+              </div>
+            </div>
+            <div class="setting">
+              <div class="gauge gauge--lg">
+                <div class="gauge__row"><span class="gauge__label">Weekly</span><span class="gauge__value">41%</span></div>
+                <div class="gauge__track"><progress class="gauge__bar" max="100" value="41">41%</progress><span class="gauge__mark mark-95" title="Standby at 95%"></span></div>
+                <div class="gauge__foot"><span>Resets Mon 09:00</span></div>
+              </div>
+              <div class="setting__controls">
+                <div class="switch-row">
+                  <label class="field__label" for="claude-wk-on">Standby guard</label>
+                  <input class="switch" id="claude-wk-on" type="checkbox" role="switch" checked>
+                </div>
+                <div class="input-suffix">
+                  <label class="field__label" for="claude-wk-pct">Pause at</label>
+                  <select class="select" id="claude-wk-pct"><option>50%</option><option>55%</option><option>60%</option><option>65%</option><option>70%</option><option>75%</option><option>80%</option><option>85%</option><option>90%</option><option selected>95%</option><option>100%</option></select>
+                </div>
+                <div class="segmented" role="radiogroup" aria-label="When the limit is hit">
+                  <label><input type="radio" name="claude-wk-mode" checked><span>Tell the Maestro</span></label>
+                  <label><input type="radio" name="claude-wk-mode"><span>Interrupt agents</span></label>
+                </div>
+                <label class="check"><input type="checkbox" checked> Wake the Maestro on reset</label>
+              </div>
+            </div>
+          <div class="panel__foot btn-row btn-row--end"><span class="spacer-auto">Applied by the Workstation connector</span><button class="btn btn--primary btn--sm" type="button">Save</button></div>
+        </section>
+
+        <section class="card panel" aria-labelledby="p-gemini">
+          <header class="panel__head">
+            <h2 class="panel__title" id="p-gemini">Gemini</h2>
+            <span class="status status--badge" data-status="warn">Paused</span>
+          </header>
+            <div class="setting">
+              <div class="gauge gauge--lg" data-status="danger">
+                <div class="gauge__row"><span class="gauge__label">5-hour session</span><span class="gauge__value">93%</span></div>
+                <div class="gauge__track"><progress class="gauge__bar" max="100" value="93">93%</progress><span class="gauge__mark mark-90" title="Standby at 90%"></span></div>
+                <div class="gauge__foot"><span>Resets at 15:20</span><span>Paused at 14:31</span></div>
+              </div>
+              <div class="setting__controls">
+                <div class="switch-row">
+                  <label class="field__label" for="gemini-5h-on">Standby guard</label>
+                  <input class="switch" id="gemini-5h-on" type="checkbox" role="switch" checked>
+                </div>
+                <div class="input-suffix">
+                  <label class="field__label" for="gemini-5h-pct">Pause at</label>
+                  <select class="select" id="gemini-5h-pct"><option>50%</option><option>55%</option><option>60%</option><option>65%</option><option>70%</option><option>75%</option><option>80%</option><option>85%</option><option selected>90%</option><option>95%</option><option>100%</option></select>
+                </div>
+                <div class="segmented" role="radiogroup" aria-label="When the limit is hit">
+                  <label><input type="radio" name="gemini-5h-mode" checked><span>Tell the Maestro</span></label>
+                  <label><input type="radio" name="gemini-5h-mode"><span>Interrupt agents</span></label>
+                </div>
+                <label class="check"><input type="checkbox" checked> Wake the Maestro on reset</label>
+              </div>
+            </div>
+            <div class="setting">
+              <div class="gauge gauge--lg" data-status="warn">
+                <div class="gauge__row"><span class="gauge__label">Weekly</span><span class="gauge__value">78%</span></div>
+                <div class="gauge__track"><progress class="gauge__bar" max="100" value="78">78%</progress><span class="gauge__mark mark-90" title="Standby at 90%"></span></div>
+                <div class="gauge__foot"><span>Resets Thu 02:00</span></div>
+              </div>
+              <div class="setting__controls">
+                <div class="switch-row">
+                  <label class="field__label" for="gemini-wk-on">Standby guard</label>
+                  <input class="switch" id="gemini-wk-on" type="checkbox" role="switch" checked>
+                </div>
+                <div class="input-suffix">
+                  <label class="field__label" for="gemini-wk-pct">Pause at</label>
+                  <select class="select" id="gemini-wk-pct"><option>50%</option><option>55%</option><option>60%</option><option>65%</option><option>70%</option><option>75%</option><option>80%</option><option>85%</option><option selected>90%</option><option>95%</option><option>100%</option></select>
+                </div>
+                <div class="segmented" role="radiogroup" aria-label="When the limit is hit">
+                  <label><input type="radio" name="gemini-wk-mode" checked><span>Tell the Maestro</span></label>
+                  <label><input type="radio" name="gemini-wk-mode"><span>Interrupt agents</span></label>
+                </div>
+                <label class="check"><input type="checkbox" checked> Wake the Maestro on reset</label>
+              </div>
+            </div>
+          <div class="panel__foot btn-row btn-row--end"><span class="spacer-auto">Applied by the Workstation connector</span><button class="btn btn--primary btn--sm" type="button">Save</button></div>
+        </section>
+
+        <section class="card panel" aria-labelledby="p-codex">
+          <header class="panel__head">
+            <h2 class="panel__title" id="p-codex">Codex</h2>
+            <span class="status status--badge" data-status="idle">Off</span>
+          </header>
+            <div class="setting">
+              <div class="gauge gauge--lg">
+                <div class="gauge__row"><span class="gauge__label">Weekly</span><span class="gauge__value">18%</span></div>
+                <div class="gauge__track"><progress class="gauge__bar" max="100" value="18">18%</progress></div>
+                <div class="gauge__foot"><span>Resets Sun 21:00</span></div>
+              </div>
+              <div class="setting__controls">
+                <div class="switch-row">
+                  <label class="field__label" for="codex-wk-on">Standby guard</label>
+                  <input class="switch" id="codex-wk-on" type="checkbox" role="switch">
+                </div>
+                <div class="input-suffix">
+                  <label class="field__label" for="codex-wk-pct">Pause at</label>
+                  <select class="select" id="codex-wk-pct" disabled><option>50%</option><option>55%</option><option>60%</option><option>65%</option><option>70%</option><option>75%</option><option>80%</option><option>85%</option><option selected>90%</option><option>95%</option><option>100%</option></select>
+                </div>
+                <div class="segmented" role="radiogroup" aria-label="When the limit is hit">
+                  <label><input type="radio" name="codex-wk-mode" checked disabled><span>Tell the Maestro</span></label>
+                  <label><input type="radio" name="codex-wk-mode" disabled><span>Interrupt agents</span></label>
+                </div>
+                <label class="check"><input type="checkbox" disabled> Wake the Maestro on reset</label>
+              </div>
+            </div>
+          <div class="panel__foot btn-row btn-row--end"><span class="spacer-auto">Applied by the Workstation connector</span><button class="btn btn--primary btn--sm" type="button">Save</button></div>
+        </section>
+
+        <details class="disclosure">
+          <summary><svg class="icon" aria-hidden="true"><use href="#i-chevron-right"/></svg>Hidden providers <span class="count">1</span></summary>
+          <div class="card">
+            <div class="setting">
+              <div class="setting__head">
+                <div class="setting__text">
+                  <span class="setting__title">Copilot</span>
+                  <span class="setting__desc">No data: the provider returned an error on the last 3 reads (14:20). Hidden from the overview until it reports again.</span>
+                </div>
+                <span class="status" data-status="danger">Error</span>
+              </div>
+              <label class="check"><input type="checkbox"> Show it anyway</label>
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
