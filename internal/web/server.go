@@ -23,6 +23,7 @@ import (
 	"github.com/maestria-dev/maestria/internal/audit"
 	"github.com/maestria-dev/maestria/internal/auth"
 	"github.com/maestria-dev/maestria/internal/config"
+	"github.com/maestria-dev/maestria/internal/devices"
 	"github.com/maestria-dev/maestria/internal/docs"
 	"github.com/maestria-dev/maestria/internal/floors"
 	"github.com/maestria-dev/maestria/internal/tunnel"
@@ -63,6 +64,10 @@ type Deps struct {
 	// Activity is the Maestri Wire mirror and what the panel derives from it. nil means Wire is
 	// not wired in: every Wire view then shows its "not connected" state.
 	Activity *activity.Service
+	// Devices holds the browsers approved on this machine for hosted mode. nil in local mode.
+	Devices *devices.Manager
+	// ConnectorName is this machine's name in the cloud (hosted mode), shown in /api/relay/info.
+	ConnectorName string
 	// Env overrides OS environment lookup (used in tests).
 	Env config.Env
 	Now func() time.Time
@@ -161,6 +166,9 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /api/tunnel", s.apiTunnel)
 	m.HandleFunc("POST /api/kill-switch", s.apiKillSwitch)
 	m.HandleFunc("GET /api/audit", s.apiAudit)
+	m.HandleFunc("GET /api/relay/info", s.apiRelayInfo)
+	m.HandleFunc("GET /api/devices", s.apiDevices)
+	m.HandleFunc("POST /api/devices/{id}/revoke", s.apiDeviceRevoke)
 
 	m.HandleFunc("GET /api/stream", s.apiStream)
 	m.HandleFunc("GET /api/workspaces", s.apiWorkspaces)

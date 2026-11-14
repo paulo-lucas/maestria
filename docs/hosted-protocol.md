@@ -101,7 +101,7 @@ All messages have `t` (type).
 | `chunk` | `id, b, more` | following chunks of a response |
 | `err` | `id, code, s` | the connector refused or failed the request |
 | `pair_challenge` | `pair, r` | answer to `pair_offer` (section 6.2) |
-| `pair_state` | `pair, state, code?` | `pending`, `approved`, `rejected`, `expired`, `mismatch` |
+| `pair_state` | `pair, state, code?` | `pending`, `revealed`, `approved`, `rejected`, `expired`, `mismatch` (`code` carries a refusal reason such as `kill_switch`; the pairing code is never sent) |
 | `devices` | `devices:[…]` | device list changed (revoked, approved) |
 
 ### 5.2 Cloud to connector
@@ -114,7 +114,7 @@ All messages have `t` (type).
 | `ack` | `id, n` | flow control credit: `n` response bytes were delivered to the browser |
 | `cancel` | `id` | the browser went away |
 | `pair_offer` | `pair, commit, label, ua` | section 6.2 |
-| `pair_reveal` | `pair, spki, n` | section 6.2 |
+| `pair_reveal` | `pair, spki, nonce` | section 6.2 |
 | `forget_devices` | `at` | tighten-only: revoke every paired device (section 6.5) |
 
 ## 6. Device pairing (per machine)
@@ -129,13 +129,13 @@ A short code can only be compared by a human if the attacker (here: a hostile cl
 
 1. The browser creates the key pair and a random nonce `n` (16 bytes). It sends `commit = b64u(sha256("maestria-pair-commit-v1" ‖ spki ‖ n))` and a `label` ("Safari on iPhone") to `POST /api/pair` (session + CSRF). The cloud creates a pairing (5 min, in memory) and sends `pair_offer {pair, commit, label, ua}` to **every online connector** of the account.
 2. Each connector stores a pending pairing (max 5 pending, 5 min TTL, none while the kill switch is on), generates `r` (16 random bytes) and answers `pair_challenge {pair, r}`.
-3. The browser polls `GET /api/pair/<pair>` (or follows the presence stream) and, for each connector that answered, computes its code and reveals the key: `POST /api/pair/<pair>/reveal {connectorId, spki, n}`. The cloud sends `pair_reveal {pair, spki, n}` to that connector.
+3. The browser polls `GET /api/pair/<pair>` (or follows the presence stream) and, for each connector that answered, computes its code and reveals the key: `POST /api/pair/<pair>/reveal {connectorId, spki, nonce}`. The cloud sends `pair_reveal {pair, spki, n}` to that connector.
 4. The connector checks `sha256("maestria-pair-commit-v1" ‖ spki ‖ n) == commit`, that `deviceId = sha256(spki)[0:32]`, and that `spki` parses as a P-256 public key. Any failure → `pair_state mismatch`. Otherwise it computes the **code**.
 5. **Code**: `d = sha256("maestria-pair-sas-v1" ‖ spki ‖ n ‖ r)`; take the first 4 bytes as a big-endian `uint32`, `mod 10^6`, zero padded to 6 digits, shown as `47 · 12 · 86`. The browser computes the same value, so each machine row on the waiting screen shows its own code.
 6. The user compares and runs **`maestria devices approve <code>`** on that machine. The CLI accepts only a code of a live, revealed pairing. Typing the code the browser shows *is* the comparison. `maestria devices pending` lists them, `reject <code>` drops one.
 7. On approval the connector stores the device (`id`, `spki`, `label`, `approvedAt`), sends `pair_state approved`, and the waiting screen turns that row to "Approved". From now on the browser may sign requests for that connector.
 
-Why a hostile cloud cannot win: it must give the connector a commit for *its* key before it sees `r`, and the user's browser computes its code from the *real* key, nonce and the same `r`. Matching codes then happen with probability 10⁻⁶ per attempt, and the attempt is visible as a pending request the user does not approve. A wrong code typed on the machine is a failure and is rate limited (5 per pairing).
+Why a hostile cloud cannot win: it must give the connector a commit for *its* key before it sees `r`, and the user's browser computes its code from the *real* key, nonce and the same `r`. Matching codes then happen with probability 10⁻⁶ per attempt, and the attempt is visible as a pending request the user does not approve. A wrong code typed on the machine simply finds no pairing.
 
 ### 6.3 Re-approval and expiry
 
