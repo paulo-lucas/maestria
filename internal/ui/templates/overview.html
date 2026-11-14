@@ -185,19 +185,42 @@
             {{end}}
           </section>
 
-          <!-- Active floors (coming soon until Wire) -->
+          <!-- Active floors -->
           <section class="card panel" aria-labelledby="floors-title">
             <header class="panel__head">
               <h2 class="panel__title" id="floors-title">
                 {{icon "i-floors"}}
                 Active floors
               </h2>
-              <div class="panel__aside">Coming soon</div>
             </header>
+            {{if .ActiveFloors}}
+            <ul class="list">
+              {{range .ActiveFloors}}
+              <li class="floor-line" data-status="{{.Status}}">
+                <div class="floor-line__top">
+                  <span class="ws" data-ws="{{.WorkspaceTone}}">{{.WorkspaceName}}</span>
+                  <span class="floor-line__name truncate">{{.Name}}</span>
+                  {{if .Ongoing}}
+                    <span class="status status--quiet">{{icon "i-loop" "icon--sm"}}Ongoing</span>
+                  {{else}}
+                    <span class="status" data-status="{{.Status}}">{{.StatusLabel}}</span>
+                  {{end}}
+                </div>
+                {{if .Ongoing}}
+                  <div class="ongoing" role="img" aria-label="Ongoing, no end date"></div>
+                {{else if .HasProgress}}
+                  <progress class="progress" max="1" value="{{.ProgressValue}}">{{.ProgressPct}}%</progress>
+                {{end}}
+                {{if .StatusText}}<p class="floor-line__text">{{.StatusText}}</p>{{end}}
+              </li>
+              {{end}}
+            </ul>
+            {{else}}
             <div class="empty empty--compact">
-              <p class="empty__title">Floor status comes with Wire</p>
-              <p class="empty__text">Active workspace floors and progress will appear here in the next milestone.</p>
+              <p class="empty__title">No active floors</p>
+              <p class="empty__text">Floors started by your Maestros will appear here.</p>
             </div>
+            {{end}}
           </section>
 
         </div>

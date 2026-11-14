@@ -192,7 +192,7 @@ func TestConnectorPagesRenderOverviewTasksChatAndUsage(t *testing.T) {
 		"<strong>214 tests</strong>",
 		"Pick default format", "Staging base URL?",
 		"Live agent stream comes with Wire",
-		"Floor status comes with Wire",
+		"No active floors",
 		"Claude", "93%", "mark-90",
 		"1 provider hidden: no data (error)",
 	} {

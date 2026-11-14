@@ -145,6 +145,9 @@ type dbSignature struct {
 	inboxPostp   int64
 	chatMaxID    int64
 	eventsMaxID  int64
+	floorsCount  int64
+	floorsMaxID  int64
+	floorsRevSum int64
 	standbyRaw   string
 }
 
@@ -156,6 +159,7 @@ func dbChangeSignature(db *sql.DB) dbSignature {
 		FROM inbox`).Scan(&sig.inboxCount, &sig.inboxMaxID, &sig.inboxOpen, &sig.inboxPostp)
 	_ = db.QueryRow(`SELECT COALESCE(MAX(id), 0) FROM chat_messages`).Scan(&sig.chatMaxID)
 	_ = db.QueryRow(`SELECT COALESCE(MAX(id), 0) FROM events`).Scan(&sig.eventsMaxID)
+	_ = db.QueryRow(`SELECT COUNT(*), COALESCE(MAX(id), 0), COALESCE(SUM(rev), 0) FROM floors`).Scan(&sig.floorsCount, &sig.floorsMaxID, &sig.floorsRevSum)
 	_ = db.QueryRow(`SELECT COALESCE((SELECT value FROM kv WHERE key = 'standby.state_v1'), '')`).Scan(&sig.standbyRaw)
 	return sig
 }

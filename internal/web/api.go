@@ -11,6 +11,8 @@ import (
 
 	"github.com/maestria-dev/maestria/internal/chat"
 	"github.com/maestria-dev/maestria/internal/config"
+	"github.com/maestria-dev/maestria/internal/docs"
+	"github.com/maestria-dev/maestria/internal/floors"
 	"github.com/maestria-dev/maestria/internal/inbox"
 	"github.com/maestria-dev/maestria/internal/standby"
 	"github.com/maestria-dev/maestria/internal/usage"
@@ -648,6 +650,143 @@ func (s *Server) apiStandbyResume(w http.ResponseWriter, r *http.Request) {
 		"standby": tr.Summary,
 		"resumed": len(tr.Events),
 	})
+}
+
+type apiFloorItem struct {
+	floors.Floor
+	WorkspaceName string `json:"workspace_name,omitempty"`
+	WorkspaceTone string `json:"workspace_tone,omitempty"`
+}
+
+func (s *Server) apiFloors(w http.ResponseWriter, r *http.Request) {
+	wsFilter := strings.TrimSpace(r.URL.Query().Get("workspace"))
+	list, err := s.mergedWorkspaces()
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+
+	var out []apiFloorItem
+	if wsFilter != "" {
+		ws, ok := s.findWorkspace(list, wsFilter)
+		if !ok {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "workspace not found"})
+			return
+		}
+		items, err := floors.ListWithLive(s.DB, ws.ID, true, s.LiveFloors)
+		if err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+		for _, fl := range items {
+			out = append(out, apiFloorItem{
+				Floor:         fl,
+				WorkspaceName: ws.Name,
+				WorkspaceTone: ws.Tone,
+			})
+		}
+	} else {
+		for _, ws := range list {
+			items, err := floors.ListWithLive(s.DB, ws.ID, false, s.LiveFloors)
+			if err != nil {
+				s.serverError(w, r, err)
+				return
+			}
+			for _, fl := range items {
+				if fl.State != floors.StateActive {
+					continue
+				}
+				out = append(out, apiFloorItem{
+					Floor:         fl,
+					WorkspaceName: ws.Name,
+					WorkspaceTone: ws.Tone,
+				})
+			}
+		}
+	}
+	if out == nil {
+		out = []apiFloorItem{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"floors": out})
+}
+
+func (s *Server) apiWorkspaceFloors(w http.ResponseWriter, r *http.Request) {
+	wsID := r.PathValue("id")
+	list, err := s.mergedWorkspaces()
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	ws, ok := s.findWorkspace(list, wsID)
+	if !ok {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "workspace not found"})
+		return
+	}
+	all, err := floors.ListWithLive(s.DB, ws.ID, true, s.LiveFloors)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	present := []floors.Floor{}
+	future := []floors.Floor{}
+	past := []floors.Floor{}
+	for _, fl := range all {
+		switch fl.State {
+		case floors.StateActive:
+			present = append(present, fl)
+		case floors.StatePlanned:
+			future = append(future, fl)
+		case floors.StateLanded, floors.StateCancelled:
+			past = append(past, fl)
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"workspace": ws,
+		"present":   present,
+		"future":    future,
+		"past":      past,
+		"floors":    all,
+	})
+}
+
+func (s *Server) apiWorkspaceDocs(w http.ResponseWriter, r *http.Request) {
+	wsID := r.PathValue("id")
+	list, err := s.mergedWorkspaces()
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	ws, ok := s.findWorkspace(list, wsID)
+	if !ok {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "workspace not found"})
+		return
+	}
+	if ws.Path == "" {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "workspace has no local path"})
+		return
+	}
+	res, err := s.docs.View(ws.ID, ws.Path, r.URL.Query().Get("doc"))
+	if err != nil {
+		switch {
+		case errors.Is(err, docs.ErrInvalidPath), errors.Is(err, docs.ErrNotMarkdown):
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		case errors.Is(err, docs.ErrTooLarge):
+			writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": err.Error()})
+		case errors.Is(err, docs.ErrNotFound):
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+		default:
+			s.serverError(w, r, err)
+		}
+		return
+	}
+	if res.ETag != "" {
+		w.Header().Set("ETag", res.ETag)
+		if match := strings.TrimSpace(r.Header.Get("If-None-Match")); match == res.ETag {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, res)
 }
 
 func writeInboxError(w http.ResponseWriter, err error) {

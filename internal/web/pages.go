@@ -1,14 +1,20 @@
 package web
 
 import (
+	"errors"
 	"fmt"
 	"html/template"
 	"net/http"
+	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/maestria-dev/maestria/internal/chat"
+	"github.com/maestria-dev/maestria/internal/docs"
+	"github.com/maestria-dev/maestria/internal/floors"
 	"github.com/maestria-dev/maestria/internal/inbox"
 	"github.com/maestria-dev/maestria/internal/standby"
 	"github.com/maestria-dev/maestria/internal/ui"
@@ -87,6 +93,7 @@ func (s *Server) getOverview(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	d.ActiveFloors = s.activeFloorViews(list, byID, now)
 	s.populateUsage(d, now, false)
 	s.render(w, ui.PageOverview, d)
 }
@@ -175,6 +182,116 @@ func (s *Server) getWorkspaceChat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.render(w, ui.PageChat, d)
+}
+
+func (s *Server) getWorkspaceFloors(w http.ResponseWriter, r *http.Request) {
+	wsID := r.PathValue("id")
+	d := s.appData(r, "Floors", "floors")
+	list, byID := s.populateShell(d, wsID)
+	ws, ok := s.findWorkspace(list, wsID)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	d.Title = ws.Name + " · Floors"
+	now := s.Now()
+
+	all, err := floors.ListWithLive(s.DB, ws.ID, true, s.LiveFloors)
+	if err == nil {
+		for _, fl := range all {
+			fv := toFloorView(fl, byID, now)
+			switch fl.State {
+			case floors.StateActive:
+				d.PresentFloors = append(d.PresentFloors, fv)
+			case floors.StatePlanned:
+				fv.Next = len(d.FutureFloors) == 0
+				d.FutureFloors = append(d.FutureFloors, fv)
+			case floors.StateLanded, floors.StateCancelled:
+				d.PastFloors = append(d.PastFloors, fv)
+			}
+		}
+	}
+
+	s.render(w, ui.PageFloors, d)
+}
+
+func (s *Server) getWorkspaceDocs(w http.ResponseWriter, r *http.Request) {
+	wsID := r.PathValue("id")
+	d := s.appData(r, "Docs", "docs")
+	list, _ := s.populateShell(d, wsID)
+	ws, ok := s.findWorkspace(list, wsID)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	d.Title = ws.Name + " · Docs"
+
+	snap, err := s.docs.View(ws.ID, ws.Path, r.URL.Query().Get("doc"))
+	if err != nil {
+		switch {
+		case errors.Is(err, docs.ErrInvalidPath), errors.Is(err, docs.ErrNotMarkdown):
+			deny(w, http.StatusBadRequest, "Invalid doc path")
+		case errors.Is(err, docs.ErrTooLarge):
+			deny(w, http.StatusRequestEntityTooLarge, "Document exceeds size limit")
+		case errors.Is(err, docs.ErrNotFound):
+			http.NotFound(w, r)
+		default:
+			s.serverError(w, r, err)
+		}
+		return
+	}
+
+	d.DocsAvailable = snap.HasDocs
+	d.DocsTruncated = snap.Truncated
+	d.DocsTree = toDocTreeNodes(ws.ID, snap.Tree)
+	if snap.Doc != nil {
+		d.DocMetaPath = snap.Doc.DisplayPath
+		d.DocUpdated = docs.FormatModTime(snap.Doc.ModTime, s.Now())
+		d.DocHTML = template.HTML(snap.Doc.HTML) // sanitized via bluemonday
+	}
+
+	s.render(w, ui.PageDocs, d)
+}
+
+func (s *Server) getWorkspaceDocsAsset(w http.ResponseWriter, r *http.Request) {
+	wsID := r.PathValue("id")
+	list, err := s.mergedWorkspaces()
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	ws, ok := s.findWorkspace(list, wsID)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+
+	asset, err := s.docs.ReadAsset(ws.Path, r.URL.Query().Get("path"))
+	if err != nil {
+		switch {
+		case errors.Is(err, docs.ErrInvalidPath), errors.Is(err, docs.ErrNotImage):
+			deny(w, http.StatusBadRequest, "Invalid asset path")
+		case errors.Is(err, docs.ErrTooLarge):
+			deny(w, http.StatusRequestEntityTooLarge, "Asset exceeds size limit")
+		case errors.Is(err, docs.ErrNotFound):
+			http.NotFound(w, r)
+		default:
+			s.serverError(w, r, err)
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", asset.ContentType)
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("ETag", asset.ETag)
+	if r.Header.Get("If-None-Match") == asset.ETag {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	if r.Method == http.MethodHead {
+		return
+	}
+	_, _ = w.Write(asset.Data)
 }
 
 func (s *Server) getWorkspaceComingSoon(nav, title, icon, text string) http.HandlerFunc {
@@ -506,4 +623,122 @@ func formatDayDivider(t, now time.Time) string {
 		return "Yesterday"
 	}
 	return t.Format("Jan 2")
+}
+
+func (s *Server) activeFloorViews(list []workspaces.Workspace, byID map[string]workspaces.Workspace, now time.Time) []ui.FloorView {
+	var out []ui.FloorView
+	for _, ws := range list {
+		wsFloors, err := floors.ListWithLive(s.DB, ws.ID, false, s.LiveFloors)
+		if err != nil {
+			continue
+		}
+		for _, fl := range wsFloors {
+			if fl.State == floors.StateActive {
+				out = append(out, toFloorView(fl, byID, now))
+			}
+		}
+	}
+	return out
+}
+
+func toFloorView(fl floors.Floor, byID map[string]workspaces.Workspace, now time.Time) ui.FloorView {
+	wsName := fl.WorkspaceID
+	wsTone := "blue"
+	if w, ok := byID[fl.WorkspaceID]; ok {
+		wsName = w.Name
+		wsTone = w.Tone
+	}
+
+	fv := ui.FloorView{
+		ID:            fl.ID,
+		WorkspaceID:   fl.WorkspaceID,
+		WorkspaceName: wsName,
+		WorkspaceTone: wsTone,
+		Name:          fl.Name,
+		BriefHTML:     template.HTML(fl.BriefHTML),
+		State:         fl.State,
+		Ongoing:       fl.Ongoing,
+		Status:        fl.Status,
+		StatusLabel:   floorStatusLabel(fl.Status),
+		StatusText:    fl.StatusText,
+		OutcomeHTML:   template.HTML(fl.OutcomeHTML),
+	}
+	if !fl.Ongoing && fl.Progress != nil {
+		fv.HasProgress = true
+		fv.ProgressValue = strconv.FormatFloat(*fl.Progress, 'f', 3, 64)
+		fv.ProgressPct = int(*fl.Progress*100 + 0.5)
+	}
+	if len(fl.Agents) > 0 {
+		fv.AgentNames = strings.Join(fl.Agents, ", ")
+		fv.Agents = make([]ui.FloorAgentView, 0, len(fl.Agents))
+		for _, a := range fl.Agents {
+			fv.Agents = append(fv.Agents, ui.FloorAgentView{
+				Name:    a,
+				Initial: firstUpperInitial(a),
+				Tone:    agentTone(a),
+			})
+		}
+	}
+	if fl.EndedAt != nil && *fl.EndedAt > 0 {
+		fv.EndedLabel = formatShortDate(*fl.EndedAt, now)
+	}
+	return fv
+}
+
+func floorStatusLabel(status string) string {
+	switch status {
+	case floors.StatusBlocked:
+		return "Blocked"
+	case floors.StatusReview:
+		return "Review"
+	case floors.StatusDone:
+		return "Done"
+	default:
+		return "Working"
+	}
+}
+
+func firstUpperInitial(name string) string {
+	for _, r := range strings.TrimSpace(name) {
+		return string(unicode.ToUpper(r))
+	}
+	return "?"
+}
+
+var agentTonePalette = []string{"sky", "green", "pink", "blue", "violet", "teal", "amber", "orange", "rose", "slate"}
+
+func agentTone(name string) string {
+	var h uint32
+	for i := 0; i < len(name); i++ {
+		h = h*31 + uint32(name[i])
+	}
+	return agentTonePalette[int(h)%len(agentTonePalette)]
+}
+
+func formatShortDate(ms int64, now time.Time) string {
+	t := time.UnixMilli(ms).Local()
+	if t.Year() == now.Local().Year() {
+		return t.Format("Jan 2")
+	}
+	return t.Format("Jan 2, 2006")
+}
+
+func toDocTreeNodes(wsID string, nodes []*docs.Node) []*ui.DocTreeNode {
+	if len(nodes) == 0 {
+		return nil
+	}
+	out := make([]*ui.DocTreeNode, 0, len(nodes))
+	for _, n := range nodes {
+		out = append(out, &ui.DocTreeNode{
+			WSID:     wsID,
+			Name:     n.Name,
+			Path:     n.Path,
+			URLPath:  url.QueryEscape(n.Path),
+			IsDir:    n.IsDir,
+			Active:   n.Active,
+			Open:     n.Open,
+			Children: toDocTreeNodes(wsID, n.Children),
+		})
+	}
+	return out
 }

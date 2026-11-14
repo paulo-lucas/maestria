@@ -1,0 +1,54 @@
+{{define "page"}}{{template "app" .}}{{end}}
+{{define "doctree"}}{{range .}}{{if .IsDir}}<li>
+                <details{{if .Open}} open{{end}}>
+                  <summary>{{icon "i-folder"}}{{.Name}}</summary>
+                  <ul>
+                    {{template "doctree" .Children}}
+                  </ul>
+                </details>
+              </li>{{else}}<li><a href="/workspaces/{{.WSID}}/docs?doc={{.URLPath}}"{{if .Active}} aria-current="page"{{end}}>{{icon "i-file"}}{{.Name}}</a></li>{{end}}{{end}}{{end}}
+{{define "content"}}
+    <div class="page" data-live-root="workspace-docs">
+
+      <header class="page-head">
+        <div class="page-head__title">
+          <span class="ws-eyebrow" data-ws="{{.CurrentWS.Tone}}"><span class="swatch swatch--lg"></span>{{.CurrentWS.Name}}{{if .CurrentWS.Machine}} <span class="subtle">· {{.CurrentWS.Machine}}</span>{{end}}</span>
+          <h1>Docs</h1>
+        </div>
+      </header>
+
+      <div class="banner" data-status="info">
+        {{icon "i-info"}}
+        <div class="banner__body">
+          <p class="banner__title">Managed by the Maestro</p>
+          <p class="banner__text">A read-only copy of the project's <code>docs/</code> folder. To change something, ask the Maestro in <a href="/workspaces/{{.CurrentWS.ID}}/chat">Chat</a>.</p>
+        </div>
+      </div>
+
+      {{if .DocsAvailable}}
+      <div class="docs-layout">
+        <details class="card docs-nav" open>
+          <summary>{{icon "i-folder"}}docs/{{icon "i-chevron-down"}}</summary>
+          <ul class="tree">
+            {{template "doctree" .DocsTree}}
+          </ul>
+        </details>
+
+        <article class="card docs-body">
+          <div class="docs-meta">
+            <span class="mono">{{.DocMetaPath}}</span>
+            {{if .DocUpdated}}<span>Updated · {{.DocUpdated}}</span>{{end}}
+            {{if .DocsTruncated}}<span>Tree capped at 500 files</span>{{end}}
+          </div>
+          <div class="prose">{{.DocHTML}}</div>
+        </article>
+      </div>
+      {{else}}
+      <div class="card empty">
+        <span class="empty__icon">{{icon "i-docs"}}</span>
+        <p class="empty__title">No documentation found</p>
+        <p class="empty__text">Add Markdown files to <code>docs/</code> or a root <code>README.md</code> in {{.CurrentWS.Name}}.</p>
+      </div>
+      {{end}}
+    </div>
+{{end}}

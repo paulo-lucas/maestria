@@ -22,6 +22,8 @@ import (
 	"github.com/maestria-dev/maestria/internal/audit"
 	"github.com/maestria-dev/maestria/internal/auth"
 	"github.com/maestria-dev/maestria/internal/config"
+	"github.com/maestria-dev/maestria/internal/docs"
+	"github.com/maestria-dev/maestria/internal/floors"
 	"github.com/maestria-dev/maestria/internal/tunnel"
 	"github.com/maestria-dev/maestria/internal/ui"
 )
@@ -55,6 +57,8 @@ type Deps struct {
 	Tunnel   *tunnel.Controller
 	// Access is the optional Cloudflare Access verifier.
 	Access *auth.AccessVerifier
+	// LiveFloors optionally enriches Present floors with live runtime data (e.g. Wire).
+	LiveFloors floors.LiveSource
 	// Env overrides OS environment lookup (used in tests).
 	Env config.Env
 	Now func() time.Time
@@ -64,6 +68,7 @@ type Deps struct {
 type Server struct {
 	Deps
 	ui    *ui.UI
+	docs  *docs.Viewer
 	auth  *auth.Authenticator
 	mux   *http.ServeMux
 	hosts map[string]bool
@@ -94,6 +99,7 @@ func New(d Deps) (*Server, error) {
 	s := &Server{
 		Deps:   d,
 		ui:     u,
+		docs:   docs.NewViewer(),
 		mux:    http.NewServeMux(),
 		hosts:  map[string]bool{},
 		env:    env,
@@ -134,8 +140,9 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /workspaces/{id}/tasks", s.getWorkspaceTasks)
 	m.HandleFunc("GET /workspaces/{id}/chat", s.getWorkspaceChat)
 	m.HandleFunc("GET /workspaces/{id}/activity", s.getWorkspaceComingSoon("activity", "Activity", "i-activity", "Live agent activity per workspace arrives with Wire."))
-	m.HandleFunc("GET /workspaces/{id}/floors", s.getWorkspaceComingSoon("floors", "Floors", "i-floors", "Worktree floor tracking arrives with Wire."))
-	m.HandleFunc("GET /workspaces/{id}/docs", s.getWorkspaceComingSoon("docs", "Docs", "i-docs", "Shared workspace specs and docs browsing arrives with Wire."))
+	m.HandleFunc("GET /workspaces/{id}/floors", s.getWorkspaceFloors)
+	m.HandleFunc("GET /workspaces/{id}/docs", s.getWorkspaceDocs)
+	m.HandleFunc("GET /workspaces/{id}/docs/asset", s.getWorkspaceDocsAsset)
 	m.HandleFunc("GET /usage", s.getUsage)
 	m.HandleFunc("GET /security", s.getSecurity)
 
@@ -155,6 +162,9 @@ func (s *Server) routes() {
 	m.HandleFunc("POST /api/workspaces/{id}/inbox/{itemId}/postpone", s.apiInboxPostpone)
 	m.HandleFunc("GET /api/workspaces/{id}/chat", s.apiChatList)
 	m.HandleFunc("POST /api/workspaces/{id}/chat", s.apiChatSend)
+	m.HandleFunc("GET /api/floors", s.apiFloors)
+	m.HandleFunc("GET /api/workspaces/{id}/floors", s.apiWorkspaceFloors)
+	m.HandleFunc("GET /api/workspaces/{id}/docs", s.apiWorkspaceDocs)
 	m.HandleFunc("GET /api/usage", s.apiUsage)
 	m.HandleFunc("POST /api/standby/config", s.apiStandbyConfig)
 	m.HandleFunc("POST /api/standby/resume", s.apiStandbyResume)

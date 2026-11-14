@@ -1,0 +1,118 @@
+{{define "page"}}{{template "app" .}}{{end}}
+{{define "content"}}
+    <div class="page" data-live-root="workspace-floors">
+
+      <header class="page-head">
+        <div class="page-head__title">
+          <span class="ws-eyebrow" data-ws="{{.CurrentWS.Tone}}"><span class="swatch swatch--lg"></span>{{.CurrentWS.Name}}{{if .CurrentWS.Machine}} <span class="subtle">· {{.CurrentWS.Machine}}</span>{{end}}</span>
+          <h1>Floors</h1>
+          <p class="page-head__sub">What is being built now, what is next, and what already shipped. Planned by the Maestro.</p>
+        </div>
+      </header>
+
+      <!-- Present -->
+      <section class="section" aria-labelledby="present-title">
+        <div class="section__head">
+          <h2 class="section__title" id="present-title">Present</h2>
+          <span class="count">{{len .PresentFloors}}</span>
+        </div>
+        {{if .PresentFloors}}
+        <div class="grid-cards">
+          {{range .PresentFloors}}
+          <article class="floor-card{{if .Ongoing}} floor-card--ongoing{{end}}" data-status="{{.Status}}">
+            <header class="floor-card__head">
+              {{if .Ongoing}}{{icon "i-loop"}}{{else}}{{icon "i-branch"}}{{end}}
+              <h3 class="floor-card__name truncate">{{.Name}}</h3>
+              {{if .Ongoing}}
+                <span class="status status--quiet">Ongoing</span>
+              {{else}}
+                <span class="status status--badge" data-status="{{.Status}}">{{.StatusLabel}}</span>
+              {{end}}
+            </header>
+            {{if .BriefHTML}}<div class="floor-card__brief">{{.BriefHTML}}</div>{{end}}
+            {{if .Ongoing}}
+              <div class="ongoing" role="img" aria-label="Ongoing, no end"></div>
+            {{else if .HasProgress}}
+              <progress class="progress" max="1" value="{{.ProgressValue}}">{{.ProgressPct}}%</progress>
+            {{end}}
+            {{if .StatusText}}<p class="floor-card__state">{{.StatusText}}</p>{{end}}
+            <footer class="floor-card__foot">
+              {{if .Agents}}
+                <span class="avatar-stack">{{range .Agents}}<span class="avatar avatar--sm" data-tone="{{.Tone}}">{{.Initial}}</span>{{end}}</span>{{.AgentNames}}
+              {{else if .Ongoing}}
+                Ongoing
+              {{else}}
+                No agents right now
+              {{end}}
+            </footer>
+          </article>
+          {{end}}
+        </div>
+        {{else}}
+        <div class="card empty empty--compact">
+          <span class="empty__icon">{{icon "i-floors"}}</span>
+          <p class="empty__title">No active floors</p>
+          <p class="empty__text">Start a planned floor with <code>maestria floor start &lt;name&gt;</code>.</p>
+        </div>
+        {{end}}
+      </section>
+
+      <!-- Future -->
+      <section class="section" aria-labelledby="future-title">
+        <div class="section__head">
+          <h2 class="section__title" id="future-title">Future</h2>
+          <span class="count">{{len .FutureFloors}}</span>
+          <div class="panel__aside">In planned order</div>
+        </div>
+        {{if .FutureFloors}}
+        <div class="grid-cards">
+          {{range .FutureFloors}}
+          <article class="floor-card floor-card--planned{{if .Ongoing}} floor-card--ongoing{{end}}">
+            <header class="floor-card__head">
+              {{if .Ongoing}}{{icon "i-loop"}}{{else}}{{icon "i-floors"}}{{end}}
+              <h3 class="floor-card__name truncate">{{.Name}}</h3>
+              <span class="status status--quiet">{{if .Next}}Next{{else}}Planned{{end}}</span>
+            </header>
+            {{if .BriefHTML}}<div class="floor-card__brief">{{.BriefHTML}}</div>{{end}}
+          </article>
+          {{end}}
+        </div>
+        {{else}}
+        <div class="card empty empty--compact">
+          <p class="empty__title">No planned floors</p>
+          <p class="empty__text">Plan upcoming work with <code>maestria floor plan &lt;name&gt; --brief "..."</code>.</p>
+        </div>
+        {{end}}
+      </section>
+
+      <!-- Past -->
+      <section class="section" aria-labelledby="past-title">
+        <details class="disclosure" data-disclosure-id="floors-past:{{.CurrentWS.ID}}">
+          <summary>{{icon "i-chevron-right"}}<span id="past-title">Past</span> <span class="count">{{len .PastFloors}}</span></summary>
+          {{if .PastFloors}}
+          <ul class="card list">
+            {{range .PastFloors}}
+            <li class="floor-past" data-status="{{if eq .State "landed"}}done{{else}}offline{{end}}">
+              <span class="floor-past__icon">{{if eq .State "landed"}}{{icon "i-merge"}}{{else}}{{icon "i-x"}}{{end}}</span>
+              <div class="floor-past__top">
+                <span class="floor-line__name">{{.Name}}</span>
+                {{if eq .State "landed"}}
+                  <span class="status" data-status="done">Landed</span>
+                {{else}}
+                  <span class="status status--quiet">Cancelled</span>
+                {{end}}
+                {{if .EndedLabel}}<span class="subtle">{{.EndedLabel}}</span>{{end}}
+              </div>
+              {{if .OutcomeHTML}}<div class="floor-past__outcome">{{.OutcomeHTML}}</div>{{end}}
+            </li>
+            {{end}}
+          </ul>
+          {{else}}
+          <div class="card empty empty--compact">
+            <p class="empty__text">No landed or cancelled floors yet.</p>
+          </div>
+          {{end}}
+        </details>
+      </section>
+    </div>
+{{end}}

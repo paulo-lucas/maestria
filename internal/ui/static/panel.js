@@ -87,6 +87,14 @@
     });
   }
 
+  function syncDocsNavPicker(root = document) {
+    if (window.matchMedia('(max-width: 1023px)').matches) {
+      root.querySelectorAll('.docs-nav[open]').forEach((d) => {
+        d.removeAttribute('open');
+      });
+    }
+  }
+
   function captureOpenDisclosures() {
     const open = new Set();
     document.querySelectorAll('details[data-disclosure-id][open]').forEach((d) => {
@@ -178,6 +186,7 @@
       restoreOpenDisclosures(openDisclosures, newMain);
       restoreDrafts(newMain);
       applyOverviewFilter(newMain);
+      syncDocsNavPicker(newMain);
 
       if (curChat && wasAtBottom) {
         window.scrollTo(0, document.body.scrollHeight);
@@ -520,10 +529,11 @@
 
   restoreDrafts(document);
   applyOverviewFilter(document);
+  syncDocsNavPicker(document);
 
   if (typeof EventSource === 'function') {
     const es = new EventSource('/api/stream');
-    ['update', 'refresh', 'inbox', 'chat', 'standby', 'usage', 'workspaces'].forEach((ev) => {
+    ['update', 'refresh', 'inbox', 'chat', 'standby', 'usage', 'workspaces', 'floors'].forEach((ev) => {
       es.addEventListener(ev, scheduleRefresh);
     });
     es.onmessage = scheduleRefresh;

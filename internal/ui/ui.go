@@ -40,6 +40,8 @@ const (
 	PageOverview   = "overview"
 	PageTasks      = "workspace-tasks"
 	PageChat       = "workspace-chat"
+	PageFloors     = "workspace-floors"
+	PageDocs       = "workspace-docs"
 	PageUsage      = "usage"
 	PageSecurity   = "security"
 	PageComingSoon = "coming-soon"
@@ -133,7 +135,7 @@ func New() (*UI, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, name := range []string{PageLogin, PageTwoFA, PageOverview, PageTasks, PageChat, PageUsage, PageSecurity, PageComingSoon} {
+	for _, name := range []string{PageLogin, PageTwoFA, PageOverview, PageTasks, PageChat, PageFloors, PageDocs, PageUsage, PageSecurity, PageComingSoon} {
 		t, err := template.Must(base.Clone()).ParseFS(files, "templates/"+name+".html")
 		if err != nil {
 			return nil, err
@@ -322,6 +324,48 @@ type StandbyBannerView struct {
 	Text     string
 }
 
+// FloorAgentView renders an agent avatar and name on a floor card.
+type FloorAgentView struct {
+	Name    string
+	Initial string
+	Tone    string
+}
+
+// FloorView renders a Present, Future, Past, or Overview floor entry.
+type FloorView struct {
+	ID            int64
+	WorkspaceID   string
+	WorkspaceName string
+	WorkspaceTone string
+	Name          string
+	BriefHTML     template.HTML // sanitized via bluemonday before passing into FloorView
+	State         string
+	Ongoing       bool
+	HasProgress   bool
+	ProgressValue string
+	ProgressPct   int
+	Status        string
+	StatusLabel   string
+	StatusText    string
+	Agents        []FloorAgentView
+	AgentNames    string
+	OutcomeHTML   template.HTML // sanitized via bluemonday before passing into FloorView
+	EndedLabel    string
+	Next          bool
+}
+
+// DocTreeNode renders a file or directory node in the workspace Docs sidebar.
+type DocTreeNode struct {
+	WSID     string
+	Name     string
+	Path     string
+	URLPath  string
+	IsDir    bool
+	Active   bool
+	Open     bool
+	Children []*DocTreeNode
+}
+
 // Data is the template data for every page.
 type Data struct {
 	Title  string
@@ -362,6 +406,20 @@ type Data struct {
 
 	// Chat page.
 	ChatMessages []ChatMessageView
+
+	// Overview & Workspace Floors.
+	ActiveFloors  []FloorView
+	PresentFloors []FloorView
+	FutureFloors  []FloorView
+	PastFloors    []FloorView
+
+	// Workspace Docs.
+	DocsAvailable bool
+	DocsTruncated bool
+	DocsTree      []*DocTreeNode
+	DocMetaPath   string
+	DocUpdated    string
+	DocHTML       template.HTML // sanitized via bluemonday before passing into Data
 
 	// Usage & standby page + overview card.
 	UsageAvailable    bool
