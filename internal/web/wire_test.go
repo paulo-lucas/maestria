@@ -67,6 +67,10 @@ func wFeed(prompt string, maestroRunning bool) wire.FeedSnapshot {
 	}
 }
 
+// wirePW is the fake host's pairing password. It must be long and distinctive: the leak test
+// searches every page for it, and a short value ("pw") matched random CSRF/session tokens.
+const wirePW = "fake-wire-pairing-password-9c41"
+
 // newWireRig builds a panel with the Wire service on top of a fake Maestri.
 func newWireRig(t *testing.T) *wireRig {
 	t.Helper()
@@ -75,8 +79,8 @@ func newWireRig(t *testing.T) *wireRig {
 		t.Fatal(err)
 	}
 	t.Cleanup(fake.Close)
-	fake.SetPassword("pw")
-	creds, err := wire.Provision(context.Background(), fake.Host, fake.Pin(), "T", "pw", nil)
+	fake.SetPassword(wirePW)
+	creds, err := wire.Provision(context.Background(), fake.Host, fake.Pin(), "T", wirePW, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -463,7 +467,7 @@ func TestNoTokensInPagesAPIsOrAudit(t *testing.T) {
 	r.setPrompt("Go? (Y/n)")
 	waitUntil(t, "prompt", func() bool { return len(r.agentPrompts()) == 1 })
 	_ = r.c.postJSON("/api/workspaces/"+r.ws.ID+"/agents/"+wTermO+"/approve", map[string]string{"promptHash": wire.PromptHash("Go? (Y/n)")}, r.csrf)
-	secrets := []string{r.creds.Guest.Token, r.creds.Owner.Token, r.creds.Guest.DeviceID, r.creds.Owner.DeviceID, "pw"}
+	secrets := []string{r.creds.Guest.Token, r.creds.Owner.Token, r.creds.Guest.DeviceID, r.creds.Owner.DeviceID, wirePW}
 	paths := []string{
 		"/", "/workspaces/" + r.ws.ID + "/activity", "/workspaces/" + r.ws.ID + "/chat", "/workspaces/" + r.ws.ID + "/tasks",
 		"/workspaces/" + r.ws.ID + "/floors", "/security", "/api/wire", "/api/workspaces", "/api/inbox", "/api/audit", "/api/floors",
