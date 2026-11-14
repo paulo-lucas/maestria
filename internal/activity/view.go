@@ -140,9 +140,11 @@ func previewLines(raw []string) []string {
 	return out
 }
 
+// lastLine is the last line with something readable in it (not a bare prompt character).
 func lastLine(lines []string) string {
 	for i := len(lines) - 1; i >= 0; i-- {
-		if s := strings.TrimSpace(lines[i]); s != "" {
+		s := strings.TrimSpace(lines[i])
+		if strings.IndexFunc(s, func(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) }) >= 0 {
 			return s
 		}
 	}

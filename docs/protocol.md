@@ -27,6 +27,26 @@ This workspace uses Maestria (`maestria` CLI) to talk to the human:
 | `maestria wait [--cursor <name>] [--since <id>] [--from-now] [--timeout <sec>] [--json]` | Block until new events arrive for the workspace, advance the named SQLite cursor, print events, and exit. |
 | `maestria status [--json]` | Show workspace counts (`needsYou`, `updates`, `history`) and panel server reachability. |
 
+## Agent briefs
+
+| Command | Purpose |
+| --- | --- |
+| `maestria agent brief <name> "<text>" [-w <workspace>]` | Set the one-line brief (up to 160 characters) the Activity page and the Overview "Agents at work" panel show for an agent. `-` reads the text from stdin. |
+| `maestria agent brief <name> --clear` | Remove it; the panel falls back to the last readable line of the agent's terminal. |
+
+Keep briefs current: when you hand work to a teammate, set what it is doing (`maestria agent brief Vesper "Writing retry tests for webhook signature failures"`), and update it when that changes.
+
+## Maestri Wire (live agents, chat, floors)
+
+When the human has paired the connector with Maestri Wire (`maestria wire pair`), the panel mirrors your terminal, your teammates, and the floors live, and its Chat sends straight into your terminal. Nothing changes for you: `say`, `post` and `wait` work the same, whether Wire is on or off. What differs:
+
+- A message the human types in the panel Chat arrives in your terminal as a normal prompt (no `chat` event) while Wire is live; with Wire off it is a `chat` event for `maestria wait`, as before.
+- Y/n prompts an agent waits on appear in the human's Needs you as "Agent prompt" and can be answered from the panel. You do not need to post them.
+- A floor that disappears from Maestri (landed or deleted) is recorded in Past automatically, with an empty outcome. Run `maestria floor land|cancel <name> --outcome "..."` before you land it in Maestri to keep the outcome you want (it is not recorded twice), or fill it in later with `maestria floor edit`.
+- On a `standby` event whose action is "Interrupt agents", the panel sends Esc to the working agents of that provider itself. On `resume` after a reset, with wake-on-reset on, it prompts you in your terminal.
+
+Human-side commands: `maestria wire pair`, `maestria wire status`, `maestria wire unpair`.
+
 ## Floors
 
 Floors track planned (**Future**), active (**Present**), and landed or cancelled (**Past**) work in the workspace. Every `maestria floor` command infers the workspace from the current working directory (`-w` / `--workspace` overrides it) and supports `--json`.

@@ -55,6 +55,17 @@ When `maestria wait` exits:
 2. Act on them (`maestria answers` for inbox replies, `maestria say` for chat replies; see **Standby** below for `standby` / `resume`).
 3. Start `maestria wait` in the background again.
 
+### 4b. Keep Agent Briefs Current
+
+The panel's **Activity** page (and the Overview "Agents at work" list) shows one line per agent. Set it when you give a teammate work and whenever it changes, so the human sees what each agent is doing at a glance:
+
+```sh
+maestria agent brief Vesper "Writing retry tests for webhook signature failures"
+maestria agent brief Vesper --clear
+```
+
+Briefs are one line, up to 160 characters. Without one, the panel shows the last readable line of the agent's terminal. With Maestri Wire connected, chat messages from the human arrive in your terminal as prompts, and agent Y/n prompts reach the human on their own.
+
 ### 5. Track Floors (Future / Present / Past)
 
 Keep the panel's **Floors** page current as you plan, start, update, and finish floors:
