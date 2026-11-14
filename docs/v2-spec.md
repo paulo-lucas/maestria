@@ -67,3 +67,12 @@ Status: agreed direction, design phase starting. V1 (the local panel in this rep
 - 100% open source (MIT). **One binary**, `maestria`, with two modes: `maestria connect` (hosted system) and `maestria serve` (local panel on 127.0.0.1, V1-style). Size cost is small. The hosted multi-tenant server is a separate build from the same repo that only we run.
 - Floor history is recorded on landing AND on cancel (floor deleted without landing), with brief and outcome.
 - Agent brief: written by the Maestro via CLI. Wire `preview` (last terminal lines) is a fallback/expandable detail. Present-floor progress comes from Maestri's native floor status (state + text + progress 0–1).
+
+## Decisions (design review, 2026-11-13)
+
+- **Live mirror.** The panel mirrors Maestri running on the user's machines. An offline machine's workspaces disappear from every view. With no machine online, the panel shows no data, only a "No machine online" state. The Connectors page still lists offline machines (last seen, revoke). Nothing is queued for offline machines.
+- Consequence: workspace data (human tasks, floor history, chat, docs, usage) lives on the connector (local SQLite), not in the hosted system. The hosted system stores only accounts, 2FA, linked connectors and paired devices, and relays live traffic. That's simpler and much better for privacy.
+- Usage is grouped by provider account. A machine switch appears only when machines use different accounts for the same provider.
+- Devices are paired on each machine, since each connector is the authority.
+- Standby on limit: per window, "Tell the Maestro" (default) or "Interrupt agents".
+- Wire Y/n prompts appear in Needs you as "Agent prompt".
