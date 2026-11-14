@@ -12,6 +12,7 @@ const ProtocolVersion = 1
 const (
 	CapFeed       = "feedSnapshots"
 	CapChat       = "terminalChat"
+	CapThreads    = "chatThreadPreviews" // GET .../chat/threads exists
 	CapStream     = "terminalStreaming"
 	CapInputBytes = "terminalInputBytes"
 	CapFloors     = "floorStatus"
@@ -198,11 +199,42 @@ type ChatEntry struct {
 	TS         json.RawMessage `json:"ts,omitempty"` // number or string; Wire does not pin it down
 }
 
-// ChatSnapshot is the replacement tail of a terminal chat.
+// ChatThreadItem is one of a chat's seven thread slots (ids 0 to 6, one per colour).
+type ChatThreadItem struct {
+	ID          int    `json:"id"`
+	Color       string `json:"color"` // blue purple pink red orange yellow green (graphite is documented too)
+	HasMessages bool   `json:"hasMessages"`
+}
+
+// ChatThreads is the `threads` object of a chat snapshot. A host without it has a single
+// conversation per terminal and offers no thread controls.
+type ChatThreads struct {
+	ActiveSlot int              `json:"activeSlot"`
+	CanSelect  bool             `json:"canSelect"`
+	Items      []ChatThreadItem `json:"items"`
+}
+
+// ChatSnapshot is the replacement tail of a terminal chat. Entries are those of the thread that
+// is selected in Maestri (Threads.ActiveSlot).
 type ChatSnapshot struct {
-	TerminalID  string      `json:"terminalId"`
-	Enabled     bool        `json:"enabled"`
-	Status      string      `json:"status"` // idle | working | needsAttention | notRunning | unloaded
-	Entries     []ChatEntry `json:"entries"`
-	UnreadCount int         `json:"unreadCount,omitempty"`
+	TerminalID     string       `json:"terminalId"`
+	ConversationID string       `json:"conversationId,omitempty"`
+	Enabled        bool         `json:"enabled"`
+	Status         string       `json:"status"` // idle | working | needsAttention | notRunning | unloaded
+	Entries        []ChatEntry  `json:"entries"`
+	UnreadCount    int          `json:"unreadCount,omitempty"`
+	Threads        *ChatThreads `json:"threads,omitempty"`
+}
+
+// ChatThreadPreview is the newest entries of one thread that is not selected in Maestri.
+type ChatThreadPreview struct {
+	ID             int         `json:"id"`
+	ConversationID string      `json:"conversationId,omitempty"`
+	Entries        []ChatEntry `json:"entries"`
+}
+
+// ChatThreadPreviews is GET /api/terminals/{id}/chat/threads: every thread other than the
+// selected one that holds messages (a missing slot is empty).
+type ChatThreadPreviews struct {
+	Threads []ChatThreadPreview `json:"threads"`
 }

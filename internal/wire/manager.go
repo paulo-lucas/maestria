@@ -588,6 +588,26 @@ func (m *Manager) Chat(wsID string) (ChatView, error) {
 	return v, nil
 }
 
+// ChatThreads returns the newest entries of the Maestro chat's threads that are not selected in
+// Maestri, with the guest token. It changes nothing in the app: no thread switch, nothing marked
+// read. It fails with ErrNoCapability on a host without chatThreadPreviews.
+func (m *Manager) ChatThreads(ctx context.Context, wsID string) (ChatThreadPreviews, error) {
+	cv, err := m.Chat(wsID)
+	if err != nil {
+		return ChatThreadPreviews{}, err
+	}
+	m.mu.RLock()
+	guest, has := m.guest, m.st.Has(CapThreads)
+	m.mu.RUnlock()
+	if !has || guest == nil {
+		return ChatThreadPreviews{}, ErrNoCapability
+	}
+	if cv.Terminal.ID == "" {
+		return ChatThreadPreviews{}, ErrUnknownTerminal
+	}
+	return guest.ChatThreads(ctx, cv.Terminal.ID)
+}
+
 // PromptHash identifies a Y/n prompt text, so an answer is only applied to the prompt the human saw.
 func PromptHash(prompt string) string {
 	sum := sha256.Sum256([]byte(strings.Join(strings.Fields(prompt), " ")))
