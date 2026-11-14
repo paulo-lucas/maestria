@@ -4,7 +4,7 @@
       <header class="page-head">
         <div class="page-head__title">
           <h1>Connectors</h1>
-          <p class="page-head__sub">One per machine. Each one reads its own Maestri and enforces its own rules.</p>
+          <p class="page-head__sub">One per machine. Each one mirrors its own Maestri live and enforces its own rules.</p>
         </div>
         <div class="page-head__actions"><a class="btn btn--primary" href="connector-link.html"><svg class="icon" aria-hidden="true"><use href="#i-plug"/></svg>Link a machine</a></div>
       </header>
@@ -20,7 +20,7 @@
                 <button class="menu__item" type="button">Rename</button>
                 <a class="menu__item" href="security.html">Policies</a>
                 <div class="menu__sep"></div>
-                <button class="menu__item" type="button">Unlink this machine</button>
+                <button class="menu__item" type="button">Revoke this machine</button>
               </div>
             </details>
           </div>
@@ -41,14 +41,15 @@
       <section class="card panel" aria-labelledby="c-lp">
         <header class="panel__head">
           <h2 class="panel__title" id="c-lp"><svg class="icon" aria-hidden="true"><use href="#i-laptop"/></svg>Laptop</h2>
-          <span class="status status--badge" data-status="offline">Offline</span>
+          <span class="status status--badge" data-status="ok">Online</span>
           <div class="panel__aside">
             <details class="menu menu--end">
               <summary class="btn btn--ghost btn--icon btn--sm" aria-label="Connector actions"><svg class="icon" aria-hidden="true"><use href="#i-more"/></svg></summary>
               <div class="menu__panel">
                 <button class="menu__item" type="button">Rename</button>
+                <a class="menu__item" href="security.html">Policies</a>
                 <div class="menu__sep"></div>
-                <button class="menu__item" type="button">Unlink this machine</button>
+                <button class="menu__item" type="button">Revoke this machine</button>
               </div>
             </details>
           </div>
@@ -57,12 +58,29 @@
           <dl class="kv">
             <dt>Version</dt><dd>v2.0.1 <span class="status" data-status="warn">update to v2.0.3</span></dd>
             <dt>System</dt><dd>Windows 11 · x64</dd>
-            <dt>Last seen</dt><dd>2 hours ago <span class="subtle">· 12:04</span></dd>
-            <dt>Maestri Wire</dt><dd><span class="status" data-status="offline">Unknown while offline</span></dd>
+            <dt>Last seen</dt><dd>just now <span class="subtle">· connected 5 hours</span></dd>
+            <dt>Maestri Wire</dt><dd><span class="status" data-status="ok">Connected</span></dd>
             <dt>Workspaces</dt><dd><span class="ws" data-ws="rose">Quarry</span></dd>
+            <dt>Kill switch</dt><dd>Off</dd>
             <dt>Linked</dt><dd>Oct 19</dd>
           </dl>
         </div>
-        <div class="panel__foot">Quarry shows its last known state. Anything you send waits until this machine is back; nothing is queued for more than 1 hour.</div>
+      </section>
+
+      <section class="card panel" aria-labelledby="c-mm">
+        <header class="panel__head">
+          <h2 class="panel__title" id="c-mm"><svg class="icon" aria-hidden="true"><use href="#i-laptop"/></svg>Mac mini</h2>
+          <span class="status status--badge" data-status="offline">Offline</span>
+          <div class="panel__aside"><button class="btn btn--sm" type="button">Revoke</button></div>
+        </header>
+        <div class="panel__body">
+          <dl class="kv">
+            <dt>Last seen</dt><dd>Nov 10, 18:32 <span class="subtle">· 3 days ago</span></dd>
+            <dt>Last version</dt><dd>v2.0.1</dd>
+            <dt>System</dt><dd>macOS 15 · arm64</dd>
+            <dt>Linked</dt><dd>Sep 28</dd>
+          </dl>
+        </div>
+        <div class="panel__foot">Its workspaces are hidden while it is offline and come back when it reconnects. Not using it anymore? Revoke it.</div>
       </section>
     </div>

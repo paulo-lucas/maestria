@@ -52,7 +52,7 @@
           <div class="setting">
             <p class="setting__desc">These are set on each machine, not here, so a compromised website can't loosen them. To change them, run this on the machine:</p>
             <div class="code-inline"><code>maestria policy edit</code><button class="btn btn--ghost btn--icon btn--sm" type="button" data-copy aria-label="Copy command" title="Copy command"><svg class="icon" aria-hidden="true"><use href="#i-copy"/></svg></button></div>
-            <p class="field__hint">Showing Workstation. Laptop is offline; its last reported policy is the same.</p>
+            <p class="field__hint">Showing Workstation. Laptop reports the same policy.</p>
           </div>
         </div>
       </section>
@@ -75,7 +75,7 @@
           <div class="dialog__body" data-status="danger">
             <span class="dialog__icon"><svg class="icon icon--lg" aria-hidden="true"><use href="#i-power"/></svg></span>
             <h2 class="dialog__title" id="kill-d-title">Turn on the kill switch?</h2>
-            <p class="dialog__text">Workstation and Laptop will reject every command from Maestria. Laptop is offline and gets it as soon as it reconnects. To turn it off, run <code>maestria kill-switch off</code> on each machine.</p>
+            <p class="dialog__text">Workstation and Laptop reject every command from Maestria right away. Mac mini is offline and gets it as soon as it reconnects. To turn it off, run <code>maestria kill-switch off</code> on each machine.</p>
             <label class="check"><input type="checkbox" id="kill-confirm"> I understand this can't be undone from the web</label>
           </div>
           <div class="dialog__foot">

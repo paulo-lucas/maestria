@@ -1,4 +1,4 @@
-<!--page {"title": "Atlas · Chat (disconnected)", "scope": "atlas", "nav": "chat", "conn": "offline", "group": "Workspace", "order": 41, "icon": "i-offline", "label": "4b. Chat, disconnected", "desc": "Chat when the connector is offline: history stays readable, sending is disabled."}-->
+<!--page {"title": "Atlas · Chat (Maestro not running)", "scope": "atlas", "nav": "chat", "group": "Workspace", "order": 41, "icon": "i-terminal", "label": "4b. Chat, Maestro not running", "desc": "The machine is online but the Maestro's terminal is closed: history is live, sending is disabled."}-->
     <div class="page page--narrow chat-page">
 
       <header class="page-head">
@@ -6,7 +6,7 @@
           <span class="ws-eyebrow" data-ws="blue"><span class="swatch swatch--lg"></span>Atlas <span class="subtle">· Workstation</span></span>
           <h1>Chat</h1>
         </div>
-        <div class="page-head__actions"><span class="status" data-status="offline">Maestro unreachable</span></div>
+        <div class="page-head__actions"><span class="status" data-status="offline">Maestro not running</span></div>
       </header>
 
       <div class="chat">
@@ -21,21 +21,20 @@
             <p>Yes. It is in <strong>review</strong> and all 214 tests pass. Two things are left, both in <a href="workspace-tasks.html">Human tasks</a>.</p>
           </div>
         </div>
-        <div class="msg msg--system"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-offline"/></svg><span>Connector went offline at 14:02</span></div>
+        <div class="msg msg--system"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-terminal"/></svg><span>Maestro terminal closed at 14:02</span></div>
       </div>
 
       <div class="chat-dock">
         <div class="banner" data-status="warn">
-          <svg class="icon" aria-hidden="true"><use href="#i-offline"/></svg>
+          <svg class="icon" aria-hidden="true"><use href="#i-terminal"/></svg>
           <div class="banner__body">
-            <p class="banner__title">Can't reach the Maestro</p>
-            <p class="banner__text">The Workstation connector is offline. Messages can be sent again once it reconnects.</p>
+            <p class="banner__title">The Maestro isn't running</p>
+            <p class="banner__text">Its terminal in the Atlas workspace is closed. Open it in Maestri on Workstation to chat again.</p>
           </div>
-          <div class="banner__actions"><a class="btn btn--sm" href="connector.html">Details</a></div>
         </div>
         <form class="composer" action="#" aria-disabled="true">
           <label class="sr-only" for="msg">Message the Maestro</label>
-          <textarea id="msg" rows="1" placeholder="Connector offline" disabled></textarea>
+          <textarea id="msg" rows="1" placeholder="Maestro not running" disabled></textarea>
           <button class="btn btn--primary btn--icon" type="submit" aria-label="Send" disabled><svg class="icon" aria-hidden="true"><use href="#i-send"/></svg></button>
         </form>
       </div>

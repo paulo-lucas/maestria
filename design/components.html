@@ -7,8 +7,8 @@
   <title>Components · Maestria design</title>
   <link rel="stylesheet" href="tokens.css?v=4d4aebb6">
   <link rel="stylesheet" href="base.css?v=c9e4f4b3">
-  <link rel="stylesheet" href="components.css?v=26c911a2">
-  <link rel="stylesheet" href="shell.css?v=1177c8d0">
+  <link rel="stylesheet" href="components.css?v=0e04da2f">
+  <link rel="stylesheet" href="shell.css?v=e6988e38">
   <link rel="stylesheet" href="sheet.css?v=3851b952">
   <script src="assets/mock.js?v=a5131c49"></script>
 </head>
@@ -263,10 +263,10 @@
             <div class="ws-card__stats"><span><strong>3</strong>working</span><span data-status="needs"><strong>2</strong>need you</span></div>
             <div class="ws-card__meta">Workstation</div>
           </a>
-          <a class="ws-card is-offline" href="screens/workspace-activity.html" data-ws="rose">
-            <div class="ws-card__head"><span class="ws-card__name">Quarry</span><span class="status" data-status="offline">Offline</span></div>
-            <div class="ws-card__stats"><span class="is-zero"><strong>–</strong>working</span><span class="is-zero"><strong>0</strong>need you</span></div>
-            <div class="ws-card__meta">Laptop · last seen 2h ago</div>
+          <a class="ws-card" href="screens/workspace-activity.html" data-ws="rose">
+            <div class="ws-card__head"><span class="ws-card__name">Quarry</span><span class="status status--quiet" data-status="ok">Online</span></div>
+            <div class="ws-card__stats"><span><strong>1</strong>working</span><span class="is-zero"><strong>0</strong>need you</span></div>
+            <div class="ws-card__meta">Laptop</div>
           </a>
         </div>
       </div>
@@ -509,12 +509,12 @@ Install zod@3.23.8? (Y/n)</pre>
             <button class="btn btn--primary btn--icon" type="submit" aria-label="Send"><svg class="icon" aria-hidden="true"><use href="#i-send"/></svg></button>
           </form>
           <div class="banner" data-status="warn">
-            <svg class="icon" aria-hidden="true"><use href="#i-offline"/></svg>
-            <div class="banner__body"><p class="banner__title">Maestro unreachable</p><p class="banner__text">The connector is offline. Messages can't be sent until it is back.</p></div>
+            <svg class="icon" aria-hidden="true"><use href="#i-terminal"/></svg>
+            <div class="banner__body"><p class="banner__title">The Maestro isn't running</p><p class="banner__text">Its terminal is closed. Open it in Maestri to chat again.</p></div>
           </div>
           <form class="composer" action="#" aria-disabled="true">
             <label class="sr-only" for="c-msg2">Message the Maestro</label>
-            <textarea id="c-msg2" rows="1" placeholder="Connector offline" disabled></textarea>
+            <textarea id="c-msg2" rows="1" placeholder="Maestro not running" disabled></textarea>
             <button class="btn btn--primary btn--icon" type="submit" aria-label="Send" disabled><svg class="icon" aria-hidden="true"><use href="#i-send"/></svg></button>
           </form>
         </div>
@@ -528,9 +528,9 @@ Install zod@3.23.8? (Y/n)</pre>
     <h2 class="spec__title">Banners</h2>
     <div class="spec__panes">
       <div class="spec__pane theme-light" id="s-banners">
-        <div class="banner banner--global" data-status="danger">
+        <div class="banner banner--global" data-status="info">
           <svg class="icon" aria-hidden="true"><use href="#i-offline"/></svg>
-          <div class="banner__body"><span class="banner__title">Connector offline.</span> <span class="banner__text">Showing data from 14:02. Actions are paused.</span></div>
+          <div class="banner__body"><span class="banner__title">Laptop went offline.</span> <span class="banner__text">Quarry is hidden until it reconnects.</span></div>
           <div class="banner__actions"><a class="btn btn--sm" href="screens/connector.html">Details</a></div>
         </div>
         <div class="banner" data-status="info">
@@ -616,7 +616,7 @@ Install zod@3.23.8? (Y/n)</pre>
               <a class="nav__item" href="#"><svg class="icon" aria-hidden="true"><use href="#i-docs"/></svg> Docs</a>
             </div>
             <a class="nav__item" href="#" data-ws="violet"><span class="swatch"></span> Nimbus <span class="count">1</span></a>
-            <a class="nav__item is-offline" href="#" data-ws="rose"><span class="swatch"></span> Quarry <span class="nav__trail">Offline</span></a>
+            <a class="nav__item" href="#" data-ws="rose"><span class="swatch"></span> Quarry</a>
           </nav>
         </aside>
         <header class="topbar">

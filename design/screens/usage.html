@@ -7,8 +7,8 @@
   <title>Usage & standby · Maestria</title>
   <link rel="stylesheet" href="../tokens.css?v=4d4aebb6">
   <link rel="stylesheet" href="../base.css?v=c9e4f4b3">
-  <link rel="stylesheet" href="../components.css?v=26c911a2">
-  <link rel="stylesheet" href="../shell.css?v=1177c8d0">
+  <link rel="stylesheet" href="../components.css?v=0e04da2f">
+  <link rel="stylesheet" href="../shell.css?v=e6988e38">
   <script src="../assets/mock.js?v=a5131c49"></script>
 </head>
 <body>
@@ -73,7 +73,7 @@
       <a class="nav__item" href="workspace-activity.html" data-ws="violet"><span class="swatch"></span> Nimbus <span class="count">1</span></a>
       <a class="nav__item" href="workspace-activity.html" data-ws="teal"><span class="swatch"></span> Harbor <span class="count">1</span></a>
       <a class="nav__item" href="workspace-activity.html" data-ws="amber"><span class="swatch"></span> Juniper <span class="count">1</span></a>
-      <a class="nav__item is-offline" href="workspace-activity.html" data-ws="rose"><span class="swatch"></span> Quarry <span class="nav__trail">Offline</span></a>
+      <a class="nav__item" href="workspace-activity.html" data-ws="rose"><span class="swatch"></span> Quarry </a>
       <div class="nav__group">System</div>
       <a class="nav__item" href="usage.html" aria-current="page"><svg class="icon" aria-hidden="true"><use href="#i-gauge"/></svg> Usage &amp; standby</a>
       <a class="nav__item" href="connector.html"><svg class="icon" aria-hidden="true"><use href="#i-plug"/></svg> Connectors</a>
@@ -82,15 +82,9 @@
     <div class="sidebar__foot">
       <a class="conn-card" href="connector.html">
         <span class="dot" data-status="ok"></span>
-        <span class="conn-card__name">Workstation</span>
-        <span class="conn-card__ver">v2.0.3</span>
-        <span class="conn-card__meta">Connected · Wire OK</span>
-      </a>
-      <a class="conn-card" href="connector.html">
-        <span class="dot" data-status="offline"></span>
-        <span class="conn-card__name">Laptop</span>
-        <span class="conn-card__ver">v2.0.1</span>
-        <span class="conn-card__meta">Last seen 2h ago</span>
+        <span class="conn-card__name">2 machines online</span>
+        <span class="conn-card__ver"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-chevron-right"/></svg></span>
+        <span class="conn-card__meta">Mac mini offline · 3 days</span>
       </a>
       <div class="account-row">
         <span class="avatar avatar--sm" data-tone="slate">Y</span>
@@ -118,11 +112,11 @@
         <a class="menu__item" href="workspace-activity.html" data-ws="violet"><span class="swatch swatch--lg"></span> Nimbus <span class="count">1</span></a>
         <a class="menu__item" href="workspace-activity.html" data-ws="teal"><span class="swatch swatch--lg"></span> Harbor <span class="count">1</span></a>
         <a class="menu__item" href="workspace-activity.html" data-ws="amber"><span class="swatch swatch--lg"></span> Juniper <span class="count">1</span></a>
-        <a class="menu__item" href="workspace-activity.html" data-ws="rose"><span class="swatch swatch--lg"></span> Quarry <span class="status" data-status="offline">Offline</span></a>
+        <a class="menu__item" href="workspace-activity.html" data-ws="rose"><span class="swatch swatch--lg"></span> Quarry </a>
       </div>
     </details>
     <div class="topbar__end">
-      <a class="conn-dot" href="connector.html" aria-label="Connectors: 1 online, 1 offline" title="Connectors: 1 online, 1 offline">
+      <a class="conn-dot" href="connector.html" aria-label="Machines: 2 online, 1 offline" title="Machines: 2 online, 1 offline">
         <svg class="icon" aria-hidden="true"><use href="#i-plug"/></svg>
       </a>
       <button class="btn btn--ghost btn--icon theme-toggle" type="button" data-theme-toggle aria-label="Theme: system" title="Theme: system">
@@ -139,24 +133,15 @@
       <header class="page-head">
         <div class="page-head__title">
           <h1>Usage &amp; standby</h1>
-          <p class="page-head__sub">The standby guard pauses work before a provider limit is hit and wakes the Maestro when the window resets. It runs on your machine, so it keeps working even if this site is down.</p>
+          <p class="page-head__sub">One card per provider account. The standby guard pauses work before a limit is hit and wakes the Maestro when the window resets. It runs on your machines, so it keeps working even if this site is down.</p>
         </div>
       </header>
-
-      <div class="field">
-        <span class="field__label" id="machine-label">Machine</span>
-        <div class="segmented" role="radiogroup" aria-labelledby="machine-label">
-          <label><input type="radio" name="machine" checked><span><span class="dot" data-status="ok"></span>Workstation</span></label>
-          <label><input type="radio" name="machine"><span><span class="dot" data-status="offline"></span>Laptop</span></label>
-        </div>
-        <p class="field__hint">Each connector reads usage on its own machine and enforces its own standby rules.</p>
-      </div>
 
       <div class="banner" data-status="warn">
         <svg class="icon" aria-hidden="true"><use href="#i-pause"/></svg>
         <div class="banner__body">
           <p class="banner__title">Standby: Gemini paused at 93%</p>
-          <p class="banner__text">Agents on Gemini were told to pause at 14:31. The Maestro wakes at 15:20, when the 5-hour window resets.</p>
+          <p class="banner__text">The Maestros using Gemini were told to pause at 14:31. They wake at 15:20, when the 5-hour window resets.</p>
         </div>
         <div class="banner__actions"><button class="btn btn--sm" type="button">Resume now</button></div>
       </div>
@@ -164,7 +149,10 @@
       <div class="section">
         <section class="card panel" aria-labelledby="p-claude">
           <header class="panel__head">
-            <h2 class="panel__title" id="p-claude">Claude</h2>
+            <div class="panel__title-group">
+              <h2 class="panel__title" id="p-claude">Claude</h2>
+              <span class="panel__sub">Max plan · Workstation, Laptop</span>
+            </div>
             <span class="status status--badge" data-status="ok">Armed</span>
           </header>
             <div class="setting">
@@ -211,12 +199,15 @@
                 <label class="check"><input type="checkbox" checked> Wake the Maestro on reset</label>
               </div>
             </div>
-          <div class="panel__foot btn-row btn-row--end"><span class="spacer-auto">Applied by the Workstation connector</span><button class="btn btn--primary btn--sm" type="button">Save</button></div>
+          <div class="panel__foot btn-row btn-row--end"><span class="spacer-auto">Applied on Workstation and Laptop</span><button class="btn btn--primary btn--sm" type="button">Save</button></div>
         </section>
 
         <section class="card panel" aria-labelledby="p-gemini">
           <header class="panel__head">
-            <h2 class="panel__title" id="p-gemini">Gemini</h2>
+            <div class="panel__title-group">
+              <h2 class="panel__title" id="p-gemini">Gemini</h2>
+              <span class="panel__sub">Pro plan · Workstation</span>
+            </div>
             <span class="status status--badge" data-status="warn">Paused</span>
           </header>
             <div class="setting">
@@ -263,17 +254,27 @@
                 <label class="check"><input type="checkbox" checked> Wake the Maestro on reset</label>
               </div>
             </div>
-          <div class="panel__foot btn-row btn-row--end"><span class="spacer-auto">Applied by the Workstation connector</span><button class="btn btn--primary btn--sm" type="button">Save</button></div>
+          <div class="panel__foot btn-row btn-row--end"><span class="spacer-auto">Applied on Workstation</span><button class="btn btn--primary btn--sm" type="button">Save</button></div>
         </section>
 
         <section class="card panel" aria-labelledby="p-codex">
           <header class="panel__head">
-            <h2 class="panel__title" id="p-codex">Codex</h2>
+            <div class="panel__title-group">
+              <h2 class="panel__title" id="p-codex">Codex</h2>
+              <span class="panel__sub">2 accounts</span>
+            </div>
             <span class="status status--badge" data-status="idle">Off</span>
           </header>
+          <div class="panel__tools panel__tools--pad">
+            <div class="segmented" role="radiogroup" aria-label="Codex account">
+              <label><input type="radio" name="codex-acct" checked><span>Workstation · Work</span></label>
+              <label><input type="radio" name="codex-acct"><span>Laptop · Personal</span></label>
+            </div>
+            <p class="field__hint">These machines use different Codex accounts, so each has its own quota.</p>
+          </div>
             <div class="setting">
               <div class="gauge gauge--lg">
-                <div class="gauge__row"><span class="gauge__label">Weekly</span><span class="gauge__value">18%</span></div>
+                <div class="gauge__row"><span class="gauge__label">Weekly · Work account</span><span class="gauge__value">18%</span></div>
                 <div class="gauge__track"><progress class="gauge__bar" max="100" value="18">18%</progress></div>
                 <div class="gauge__foot"><span>Resets Sun 21:00</span></div>
               </div>
@@ -293,7 +294,7 @@
                 <label class="check"><input type="checkbox" disabled> Wake the Maestro on reset</label>
               </div>
             </div>
-          <div class="panel__foot btn-row btn-row--end"><span class="spacer-auto">Applied by the Workstation connector</span><button class="btn btn--primary btn--sm" type="button">Save</button></div>
+          <div class="panel__foot btn-row btn-row--end"><span class="spacer-auto">Applied on Workstation</span><button class="btn btn--primary btn--sm" type="button">Save</button></div>
         </section>
 
         <details class="disclosure">

@@ -7,8 +7,8 @@
   <title>Overview · Maestria</title>
   <link rel="stylesheet" href="../tokens.css?v=4d4aebb6">
   <link rel="stylesheet" href="../base.css?v=c9e4f4b3">
-  <link rel="stylesheet" href="../components.css?v=26c911a2">
-  <link rel="stylesheet" href="../shell.css?v=1177c8d0">
+  <link rel="stylesheet" href="../components.css?v=0e04da2f">
+  <link rel="stylesheet" href="../shell.css?v=e6988e38">
   <script src="../assets/mock.js?v=a5131c49"></script>
 </head>
 <body>
@@ -73,7 +73,7 @@
       <a class="nav__item" href="workspace-activity.html" data-ws="violet"><span class="swatch"></span> Nimbus <span class="count">1</span></a>
       <a class="nav__item" href="workspace-activity.html" data-ws="teal"><span class="swatch"></span> Harbor <span class="count">1</span></a>
       <a class="nav__item" href="workspace-activity.html" data-ws="amber"><span class="swatch"></span> Juniper <span class="count">1</span></a>
-      <a class="nav__item is-offline" href="workspace-activity.html" data-ws="rose"><span class="swatch"></span> Quarry <span class="nav__trail">Offline</span></a>
+      <a class="nav__item" href="workspace-activity.html" data-ws="rose"><span class="swatch"></span> Quarry </a>
       <div class="nav__group">System</div>
       <a class="nav__item" href="usage.html"><svg class="icon" aria-hidden="true"><use href="#i-gauge"/></svg> Usage &amp; standby</a>
       <a class="nav__item" href="connector.html"><svg class="icon" aria-hidden="true"><use href="#i-plug"/></svg> Connectors</a>
@@ -82,15 +82,9 @@
     <div class="sidebar__foot">
       <a class="conn-card" href="connector.html">
         <span class="dot" data-status="ok"></span>
-        <span class="conn-card__name">Workstation</span>
-        <span class="conn-card__ver">v2.0.3</span>
-        <span class="conn-card__meta">Connected · Wire OK</span>
-      </a>
-      <a class="conn-card" href="connector.html">
-        <span class="dot" data-status="offline"></span>
-        <span class="conn-card__name">Laptop</span>
-        <span class="conn-card__ver">v2.0.1</span>
-        <span class="conn-card__meta">Last seen 2h ago</span>
+        <span class="conn-card__name">2 machines online</span>
+        <span class="conn-card__ver"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-chevron-right"/></svg></span>
+        <span class="conn-card__meta">Mac mini offline · 3 days</span>
       </a>
       <div class="account-row">
         <span class="avatar avatar--sm" data-tone="slate">Y</span>
@@ -118,11 +112,11 @@
         <a class="menu__item" href="workspace-activity.html" data-ws="violet"><span class="swatch swatch--lg"></span> Nimbus <span class="count">1</span></a>
         <a class="menu__item" href="workspace-activity.html" data-ws="teal"><span class="swatch swatch--lg"></span> Harbor <span class="count">1</span></a>
         <a class="menu__item" href="workspace-activity.html" data-ws="amber"><span class="swatch swatch--lg"></span> Juniper <span class="count">1</span></a>
-        <a class="menu__item" href="workspace-activity.html" data-ws="rose"><span class="swatch swatch--lg"></span> Quarry <span class="status" data-status="offline">Offline</span></a>
+        <a class="menu__item" href="workspace-activity.html" data-ws="rose"><span class="swatch swatch--lg"></span> Quarry </a>
       </div>
     </details>
     <div class="topbar__end">
-      <a class="conn-dot" href="connector.html" aria-label="Connectors: 1 online, 1 offline" title="Connectors: 1 online, 1 offline">
+      <a class="conn-dot" href="connector.html" aria-label="Machines: 2 online, 1 offline" title="Machines: 2 online, 1 offline">
         <svg class="icon" aria-hidden="true"><use href="#i-plug"/></svg>
       </a>
       <button class="btn btn--ghost btn--icon theme-toggle" type="button" data-theme-toggle aria-label="Theme: system" title="Theme: system">
@@ -139,7 +133,7 @@
       <header class="page-head">
         <div class="page-head__title">
           <h1>Overview</h1>
-          <p class="page-head__sub">5 workspaces · 8 agents working · updated <time datetime="2026-11-13T14:02">just now</time></p>
+          <p class="page-head__sub">5 workspaces on 2 machines · 9 agents working · updated <time datetime="2026-11-13T14:02">just now</time></p>
         </div>
       </header>
 
@@ -179,13 +173,13 @@
             </div>
             <div class="ws-card__meta">Workstation</div>
           </a>
-          <a class="ws-card is-offline" href="workspace-activity.html" data-ws="rose">
-            <div class="ws-card__head"><span class="ws-card__name">Quarry</span><span class="status" data-status="offline">Offline</span></div>
+          <a class="ws-card" href="workspace-activity.html" data-ws="rose">
+            <div class="ws-card__head"><span class="ws-card__name">Quarry</span><span class="status status--quiet" data-status="ok">Online</span></div>
             <div class="ws-card__stats">
-              <span class="is-zero"><strong>–</strong>working</span>
+              <span><strong>1</strong>working</span>
               <span class="is-zero"><strong>0</strong>need you</span>
             </div>
-            <div class="ws-card__meta">Laptop · last seen 2h ago</div>
+            <div class="ws-card__meta">Laptop</div>
           </a>
         </div>
       </section>
@@ -293,7 +287,7 @@
             <header class="panel__head">
               <h2 class="panel__title" id="agents-title">
                 <svg class="icon" aria-hidden="true"><use href="#i-activity"/></svg>
-                Agents at work <span class="count">8</span>
+                Agents at work <span class="count">9</span>
               </h2>
               <div class="panel__aside"><span class="status" data-status="needs">1 waiting</span><span class="status" data-status="blocked">1 blocked</span></div>
             </header>
@@ -338,6 +332,11 @@
                 <span class="agent-line__top"><span class="agent-line__name">Kesh</span><span class="ws" data-ws="amber">Juniper</span><span class="floor-name truncate">docs-refresh</span></span>
                 <span class="agent-line__brief truncate">Rewriting the quickstart guide</span>
               </a></li>
+              <li><a class="agent-line" href="workspace-activity.html">
+                <span class="dot" data-status="working"></span>
+                <span class="agent-line__top"><span class="agent-line__name">Sable</span><span class="ws" data-ws="rose">Quarry</span><span class="floor-name truncate">schema-v3</span></span>
+                <span class="agent-line__brief truncate">Migrating the CSV importer to the new schema</span>
+              </a></li>
             </ul>
           </section>
 
@@ -378,11 +377,16 @@
                 </div>
               </div>
               <div class="usage-provider">
-                <div class="usage-provider__head"><span class="usage-provider__name">Codex</span></div>
+                <div class="usage-provider__head"><span class="usage-provider__name">Codex</span><span class="subtle">2 accounts</span></div>
                 <div class="gauge">
-                  <div class="gauge__row"><span class="gauge__label">Weekly</span><span class="gauge__value">18%</span></div>
+                  <div class="gauge__row"><span class="gauge__label">Weekly · Work account</span><span class="gauge__value">18%</span></div>
                   <div class="gauge__track"><progress class="gauge__bar" max="100" value="18">18%</progress></div>
-                  <div class="gauge__foot"><span>Resets Sun 21:00</span></div>
+                  <div class="gauge__foot"><span>Resets Sun 21:00</span><span>Workstation</span></div>
+                </div>
+                <div class="gauge">
+                  <div class="gauge__row"><span class="gauge__label">Weekly · Personal account</span><span class="gauge__value">52%</span></div>
+                  <div class="gauge__track"><progress class="gauge__bar" max="100" value="52">52%</progress></div>
+                  <div class="gauge__foot"><span>Resets Fri 08:00</span><span>Laptop</span></div>
                 </div>
               </div>
             </div>

@@ -1,27 +1,18 @@
-<!--page {"title": "Usage & standby", "scope": "all", "nav": "usage", "group": "All workspaces", "order": 70, "icon": "i-gauge", "label": "7. Usage & standby", "desc": "Gauges per provider and window, standby guard settings and the current standby state."}-->
+<!--page {"title": "Usage & standby", "scope": "all", "nav": "usage", "group": "All workspaces", "order": 70, "icon": "i-gauge", "label": "7. Usage & standby", "desc": "Gauges per provider account, standby guard settings and the current standby state."}-->
     <div class="page page--narrow">
 
       <header class="page-head">
         <div class="page-head__title">
           <h1>Usage &amp; standby</h1>
-          <p class="page-head__sub">The standby guard pauses work before a provider limit is hit and wakes the Maestro when the window resets. It runs on your machine, so it keeps working even if this site is down.</p>
+          <p class="page-head__sub">One card per provider account. The standby guard pauses work before a limit is hit and wakes the Maestro when the window resets. It runs on your machines, so it keeps working even if this site is down.</p>
         </div>
       </header>
-
-      <div class="field">
-        <span class="field__label" id="machine-label">Machine</span>
-        <div class="segmented" role="radiogroup" aria-labelledby="machine-label">
-          <label><input type="radio" name="machine" checked><span><span class="dot" data-status="ok"></span>Workstation</span></label>
-          <label><input type="radio" name="machine"><span><span class="dot" data-status="offline"></span>Laptop</span></label>
-        </div>
-        <p class="field__hint">Each connector reads usage on its own machine and enforces its own standby rules.</p>
-      </div>
 
       <div class="banner" data-status="warn">
         <svg class="icon" aria-hidden="true"><use href="#i-pause"/></svg>
         <div class="banner__body">
           <p class="banner__title">Standby: Gemini paused at 93%</p>
-          <p class="banner__text">Agents on Gemini were told to pause at 14:31. The Maestro wakes at 15:20, when the 5-hour window resets.</p>
+          <p class="banner__text">The Maestros using Gemini were told to pause at 14:31. They wake at 15:20, when the 5-hour window resets.</p>
         </div>
         <div class="banner__actions"><button class="btn btn--sm" type="button">Resume now</button></div>
       </div>
@@ -29,7 +20,10 @@
       <div class="section">
         <section class="card panel" aria-labelledby="p-claude">
           <header class="panel__head">
-            <h2 class="panel__title" id="p-claude">Claude</h2>
+            <div class="panel__title-group">
+              <h2 class="panel__title" id="p-claude">Claude</h2>
+              <span class="panel__sub">Max plan · Workstation, Laptop</span>
+            </div>
             <span class="status status--badge" data-status="ok">Armed</span>
           </header>
             <div class="setting">
@@ -76,12 +70,15 @@
                 <label class="check"><input type="checkbox" checked> Wake the Maestro on reset</label>
               </div>
             </div>
-          <div class="panel__foot btn-row btn-row--end"><span class="spacer-auto">Applied by the Workstation connector</span><button class="btn btn--primary btn--sm" type="button">Save</button></div>
+          <div class="panel__foot btn-row btn-row--end"><span class="spacer-auto">Applied on Workstation and Laptop</span><button class="btn btn--primary btn--sm" type="button">Save</button></div>
         </section>
 
         <section class="card panel" aria-labelledby="p-gemini">
           <header class="panel__head">
-            <h2 class="panel__title" id="p-gemini">Gemini</h2>
+            <div class="panel__title-group">
+              <h2 class="panel__title" id="p-gemini">Gemini</h2>
+              <span class="panel__sub">Pro plan · Workstation</span>
+            </div>
             <span class="status status--badge" data-status="warn">Paused</span>
           </header>
             <div class="setting">
@@ -128,17 +125,27 @@
                 <label class="check"><input type="checkbox" checked> Wake the Maestro on reset</label>
               </div>
             </div>
-          <div class="panel__foot btn-row btn-row--end"><span class="spacer-auto">Applied by the Workstation connector</span><button class="btn btn--primary btn--sm" type="button">Save</button></div>
+          <div class="panel__foot btn-row btn-row--end"><span class="spacer-auto">Applied on Workstation</span><button class="btn btn--primary btn--sm" type="button">Save</button></div>
         </section>
 
         <section class="card panel" aria-labelledby="p-codex">
           <header class="panel__head">
-            <h2 class="panel__title" id="p-codex">Codex</h2>
+            <div class="panel__title-group">
+              <h2 class="panel__title" id="p-codex">Codex</h2>
+              <span class="panel__sub">2 accounts</span>
+            </div>
             <span class="status status--badge" data-status="idle">Off</span>
           </header>
+          <div class="panel__tools panel__tools--pad">
+            <div class="segmented" role="radiogroup" aria-label="Codex account">
+              <label><input type="radio" name="codex-acct" checked><span>Workstation · Work</span></label>
+              <label><input type="radio" name="codex-acct"><span>Laptop · Personal</span></label>
+            </div>
+            <p class="field__hint">These machines use different Codex accounts, so each has its own quota.</p>
+          </div>
             <div class="setting">
               <div class="gauge gauge--lg">
-                <div class="gauge__row"><span class="gauge__label">Weekly</span><span class="gauge__value">18%</span></div>
+                <div class="gauge__row"><span class="gauge__label">Weekly · Work account</span><span class="gauge__value">18%</span></div>
                 <div class="gauge__track"><progress class="gauge__bar" max="100" value="18">18%</progress></div>
                 <div class="gauge__foot"><span>Resets Sun 21:00</span></div>
               </div>
@@ -158,7 +165,7 @@
                 <label class="check"><input type="checkbox" disabled> Wake the Maestro on reset</label>
               </div>
             </div>
-          <div class="panel__foot btn-row btn-row--end"><span class="spacer-auto">Applied by the Workstation connector</span><button class="btn btn--primary btn--sm" type="button">Save</button></div>
+          <div class="panel__foot btn-row btn-row--end"><span class="spacer-auto">Applied on Workstation</span><button class="btn btn--primary btn--sm" type="button">Save</button></div>
         </section>
 
         <details class="disclosure">

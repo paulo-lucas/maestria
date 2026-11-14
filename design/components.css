@@ -289,9 +289,6 @@ a.ws:hover { box-shadow: inset 0 0 0 1px var(--tone-line); }
 .ws-card__stats [data-status] strong { color: var(--tone-ink); }
 .ws-card__stats .is-zero strong { color: var(--text-3); }
 .ws-card__meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-3); font-size: var(--fs-xs); }
-.ws-card.is-offline { background: var(--surface-2); box-shadow: none; }
-.ws-card.is-offline::before { background: var(--line-strong); }
-.ws-card.is-offline .ws-card__name { color: var(--text-2); }
 
 /* ---------- Gauges and progress ---------- */
 
@@ -1063,10 +1060,9 @@ a.agent-line:hover { background: var(--surface-2); }
 .tree a[aria-current="page"] { background: var(--surface-3); color: var(--text); font-weight: var(--fw-medium); }
 .tree .icon { width: 16px; height: 16px; color: var(--text-3); }
 
-/* ---------- Stale data (connector offline) ---------- */
+/* ---------- Read-only (kill switch on): live data, actions disabled ---------- */
 
-.is-stale { opacity: 0.6; }
-.is-stale .btn, .is-stale .chip, .is-stale .input { pointer-events: none; }
+.is-readonly .btn, .is-readonly .chip, .is-readonly .input, .is-readonly .textarea { opacity: 0.45; pointer-events: none; }
 .input-suffix .select { width: 96px; }
 .spacer-auto { margin-right: auto; }
 .segmented .dot { width: 7px; height: 7px; }
@@ -1085,3 +1081,11 @@ a.agent-line:hover { background: var(--surface-2); }
   .table--stack td[data-label]::before { content: attr(data-label) ": "; }
 }
 p.status { white-space: normal; }
+.panel__title-group { display: grid; gap: 1px; min-width: 0; }
+.panel__sub { color: var(--text-3); font-size: var(--fs-xs); }
+.panel__tools--pad { display: grid; gap: var(--space-2); padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--line); }
+.usage-provider__head .subtle { margin-left: auto; font-size: var(--fs-xs); }
+.card > .empty + .list { border-top: 1px solid var(--line); }
+.input:disabled, .select:disabled, .textarea:disabled { opacity: 0.55; cursor: not-allowed; }
+.segmented input:disabled + span { opacity: 0.55; cursor: not-allowed; }
+.check:has(input:disabled) { opacity: 0.55; cursor: not-allowed; }

@@ -7,8 +7,8 @@
   <title>Approve this browser · Maestria</title>
   <link rel="stylesheet" href="../tokens.css?v=4d4aebb6">
   <link rel="stylesheet" href="../base.css?v=c9e4f4b3">
-  <link rel="stylesheet" href="../components.css?v=26c911a2">
-  <link rel="stylesheet" href="../shell.css?v=1177c8d0">
+  <link rel="stylesheet" href="../components.css?v=0e04da2f">
+  <link rel="stylesheet" href="../shell.css?v=e6988e38">
   <script src="../assets/mock.js?v=a5131c49"></script>
 </head>
 <body>
@@ -85,8 +85,14 @@
       </li>
       <li class="device">
         <span class="device__icon"><svg class="icon" aria-hidden="true"><use href="#i-laptop"/></svg></span>
-        <span class="device__name">Laptop <span class="status" data-status="offline">Offline</span></span>
-        <span class="device__meta">You can approve it later, when it is back.</span>
+        <span class="device__name">Laptop</span>
+        <span class="device__meta">Waiting for approval…</span>
+        <span class="spinner"></span>
+      </li>
+      <li class="device">
+        <span class="device__icon"><svg class="icon" aria-hidden="true"><use href="#i-laptop"/></svg></span>
+        <span class="device__name">Mac mini <span class="status" data-status="offline">Offline</span></span>
+        <span class="device__meta">Approve it later, when it is back.</span>
       </li>
     </ul>
     <p class="auth-card__alt">The code expires in <span class="num">4:52</span>. <a href="auth-login.html">Cancel</a></p>

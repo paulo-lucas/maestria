@@ -33,11 +33,31 @@ const WORKSPACES = [
   { id: 'nimbus', name: 'Nimbus', color: 'violet', needs: 1 },
   { id: 'harbor', name: 'Harbor', color: 'teal', needs: 1 },
   { id: 'juniper', name: 'Juniper', color: 'amber', needs: 1 },
-  { id: 'quarry', name: 'Quarry', color: 'rose', needs: 0, offline: true },
+  { id: 'quarry', name: 'Quarry', color: 'rose', needs: 0, machine: 'laptop' },
 ];
-const TOTAL_NEEDS_ALL = WORKSPACES.reduce((n, w) => n + w.needs, 0);
+
+/*
+ * The panel is a live mirror: a workspace exists only while its machine is online.
+ * "conn" picks the machine state of a page:
+ *   default     Workstation + Laptop online, Mac mini offline
+ *   laptop-off  Laptop went offline too (Quarry disappears)
+ *   none        no machine online: no workspaces, no data
+ *   wire-off    Workstation online but Maestri Wire is off
+ */
+const MACHINES = {
+  default: { dot: 'ok', name: '2 machines online', meta: 'Mac mini offline · 3 days', label: 'Machines: 2 online, 1 offline' },
+  'laptop-off': { dot: 'ok', name: '1 machine online', meta: 'Laptop offline · 14:20', label: 'Machines: 1 online, 2 offline' },
+  none: { dot: 'offline', name: 'No machine online', meta: 'Last seen 14:02', label: 'No machine online', alert: true },
+  'wire-off': { dot: 'warn', name: '2 machines online', meta: 'Workstation: Wire off', label: 'Machines: 2 online, Wire off on Workstation' },
+};
+const machinesFor = (m) => MACHINES[m.conn || 'default'];
+
 // Pages can zero every count ("clearNeeds") or hide workspaces ("noWorkspaces").
-const wsFor = (m) => (m.noWorkspaces ? [] : m.clearNeeds ? WORKSPACES.map((w) => ({ ...w, needs: 0 })) : WORKSPACES);
+const wsFor = (m) => {
+  if (m.noWorkspaces || m.conn === 'none') return [];
+  const live = WORKSPACES.filter((w) => !(m.conn === 'laptop-off' && w.machine === 'laptop'));
+  return m.clearNeeds ? live.map((w) => ({ ...w, needs: 0 })) : live;
+};
 const needsFor = (m) => wsFor(m).reduce((n, w) => n + w.needs, 0);
 
 const WS_NAV = [
@@ -70,22 +90,20 @@ function sidebar(m) {
   const g = (id) => GLOBAL_NAV.find((n) => n.id === id);
   const item = (n) => `<a class="nav__item" href="${n.href}"${current(m.nav === n.id)}>${icon(n.icon)} ${n.label}${n.count && needs ? ` <span class="count" data-status="needs" title="Needs you">${needs}</span>` : ''}</a>`;
   const wsItems = ws.map((w) => {
-    const trail = w.offline ? '<span class="nav__trail">Offline</span>' : w.needs ? `<span class="count">${w.needs}</span>` : '';
-    let html = `<a class="nav__item${w.offline ? ' is-offline' : ''}" href="workspace-activity.html" data-ws="${w.color}"><span class="swatch"></span> ${w.name} ${trail}</a>`;
+    const trail = w.needs ? `<span class="count">${w.needs}</span>` : '';
+    let html = `<a class="nav__item" href="workspace-activity.html" data-ws="${w.color}"><span class="swatch"></span> ${w.name} ${trail}</a>`;
     if (m.scope === w.id) {
       html += `\n      <div class="nav__sub">\n${WS_NAV.map((n) => `        <a class="nav__item" href="${n.href}"${current(m.nav === n.id)}>${icon(n.icon)} ${n.label}${n.count && w.needs ? ` <span class="count" data-status="needs">${w.needs}</span>` : ''}</a>`).join('\n')}\n      </div>`;
     }
     return '      ' + html;
   }).join('\n');
-  const offline = m.conn === 'offline';
-  const connMeta = offline ? 'Offline · last seen 14:02' : m.conn === 'wire-off' ? 'Connected · Wire off' : 'Connected · Wire OK';
-  const connDot = offline ? 'offline' : m.conn === 'wire-off' ? 'warn' : 'ok';
+  const mc = machinesFor(m);
   return `<aside class="sidebar" aria-label="Main">
     <a class="brand" href="overview.html">${BRAND_MARK} Maestria</a>
     <nav class="nav">
       ${item(g('overview'))}
       <div class="nav__group">Workspaces</div>
-${wsItems || '      <p class="nav__empty">No workspaces yet</p>'}
+${wsItems || `      <p class="nav__empty">${m.conn === 'none' ? 'Shown while a machine is online' : 'No workspaces yet'}</p>`}
       <div class="nav__group">System</div>
       ${item(g('usage'))}
       ${item(g('connectors'))}
@@ -93,17 +111,11 @@ ${wsItems || '      <p class="nav__empty">No workspaces yet</p>'}
     </nav>
     <div class="sidebar__foot">
       <a class="conn-card" href="connector.html">
-        <span class="dot" data-status="${connDot}"></span>
-        <span class="conn-card__name">Workstation</span>
-        <span class="conn-card__ver">v2.0.3</span>
-        <span class="conn-card__meta">${connMeta}</span>
+        <span class="dot" data-status="${mc.dot}"></span>
+        <span class="conn-card__name">${mc.name}</span>
+        <span class="conn-card__ver">${icon('i-chevron-right', 'icon--sm')}</span>
+        <span class="conn-card__meta">${mc.meta}</span>
       </a>
-      ${m.noWorkspaces ? '' : `<a class="conn-card" href="connector.html">
-        <span class="dot" data-status="offline"></span>
-        <span class="conn-card__name">Laptop</span>
-        <span class="conn-card__ver">v2.0.1</span>
-        <span class="conn-card__meta">Last seen 2h ago</span>
-      </a>`}
       <div class="account-row">
         <span class="avatar avatar--sm" data-tone="slate">Y</span>
         <span class="account-row__name truncate">Your account</span>
@@ -120,9 +132,8 @@ function topbar(m) {
   const summary = ws
     ? `<span class="swatch swatch--lg" data-ws="${ws.color}"></span><span class="truncate">${ws.name}</span>`
     : `${icon('i-overview', 'scope__all-icon')}<span class="truncate">All workspaces</span>`;
-  const items = ws_.map((w) => `        <a class="menu__item" href="workspace-activity.html" data-ws="${w.color}"${current(m.scope === w.id)}><span class="swatch swatch--lg"></span> ${w.name} ${w.offline ? '<span class="status" data-status="offline">Offline</span>' : w.needs ? `<span class="count">${w.needs}</span>` : ''}</a>`).join('\n');
-  const offline = m.conn === 'offline';
-  const connLabel = offline ? 'Connectors: all offline' : 'Connectors: 1 online, 1 offline';
+  const items = ws_.map((w) => `        <a class="menu__item" href="workspace-activity.html" data-ws="${w.color}"${current(m.scope === w.id)}><span class="swatch swatch--lg"></span> ${w.name} ${w.needs ? `<span class="count">${w.needs}</span>` : ''}</a>`).join('\n');
+  const mc = machinesFor(m);
   return `<header class="topbar">
     <a class="brand" href="overview.html" aria-label="Maestria overview">${BRAND_MARK}</a>
     <details class="menu scope">
@@ -136,8 +147,8 @@ function topbar(m) {
       </div>
     </details>
     <div class="topbar__end">
-      <a class="conn-dot" href="connector.html" aria-label="${connLabel}" title="${connLabel}">
-        ${icon('i-plug')}${offline ? '<span class="dot" data-status="danger"></span>' : ''}
+      <a class="conn-dot" href="connector.html" aria-label="${mc.label}" title="${mc.label}">
+        ${icon('i-plug')}${mc.alert ? '<span class="dot" data-status="danger"></span>' : ''}
       </a>
       ${themeToggle()}
     </div>

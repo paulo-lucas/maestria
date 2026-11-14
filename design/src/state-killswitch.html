@@ -1,10 +1,10 @@
-<!--page {"title": "Overview (kill switch on)", "scope": "all", "nav": "overview", "group": "Empty & error states", "order": 114, "icon": "i-power", "label": "11e. Kill switch on", "desc": "Read-only mode after the kill switch: monitoring works, every action is disabled."}-->
+<!--page {"title": "Overview (kill switch on)", "scope": "all", "nav": "overview", "group": "Empty & error states", "order": 115, "icon": "i-power", "label": "11f. Kill switch on", "desc": "Read-only mode after the kill switch: live monitoring works, every action is disabled."}-->
     <div class="page">
 
       <header class="page-head">
         <div class="page-head__title">
           <h1>Overview</h1>
-          <p class="page-head__sub">5 workspaces · 8 agents working · read-only</p>
+          <p class="page-head__sub">5 workspaces on 2 machines · 9 agents working · read-only</p>
         </div>
       </header>
 
@@ -52,13 +52,13 @@
             </div>
             <div class="ws-card__meta">Workstation</div>
           </a>
-          <a class="ws-card is-offline" href="workspace-activity.html" data-ws="rose">
-            <div class="ws-card__head"><span class="ws-card__name">Quarry</span><span class="status" data-status="offline">Offline</span></div>
+          <a class="ws-card" href="workspace-activity.html" data-ws="rose">
+            <div class="ws-card__head"><span class="ws-card__name">Quarry</span><span class="status status--quiet" data-status="ok">Online</span></div>
             <div class="ws-card__stats">
-              <span class="is-zero"><strong>–</strong>working</span>
+              <span><strong>1</strong>working</span>
               <span class="is-zero"><strong>0</strong>need you</span>
             </div>
-            <div class="ws-card__meta">Laptop · last seen 2h ago</div>
+            <div class="ws-card__meta">Laptop</div>
           </a>
         </div>
       </section>
@@ -83,7 +83,7 @@
               <button class="chip" type="button" aria-pressed="false" data-value="juniper" data-ws="amber"><span class="swatch"></span>Juniper <span class="count">1</span></button>
             </div>
           </div>
-          <ul class="list is-stale" id="needs-list">
+          <ul class="list is-readonly" id="needs-list">
             <li class="task" data-key="atlas" data-status="needs">
               <div class="task__meta">
                 <span class="ws" data-ws="blue">Atlas</span>
@@ -166,7 +166,7 @@
             <header class="panel__head">
               <h2 class="panel__title" id="agents-title">
                 <svg class="icon" aria-hidden="true"><use href="#i-activity"/></svg>
-                Agents at work <span class="count">8</span>
+                Agents at work <span class="count">9</span>
               </h2>
               <div class="panel__aside"><span class="status" data-status="needs">1 waiting</span><span class="status" data-status="blocked">1 blocked</span></div>
             </header>
@@ -211,6 +211,11 @@
                 <span class="agent-line__top"><span class="agent-line__name">Kesh</span><span class="ws" data-ws="amber">Juniper</span><span class="floor-name truncate">docs-refresh</span></span>
                 <span class="agent-line__brief truncate">Rewriting the quickstart guide</span>
               </a></li>
+              <li><a class="agent-line" href="workspace-activity.html">
+                <span class="dot" data-status="working"></span>
+                <span class="agent-line__top"><span class="agent-line__name">Sable</span><span class="ws" data-ws="rose">Quarry</span><span class="floor-name truncate">schema-v3</span></span>
+                <span class="agent-line__brief truncate">Migrating the CSV importer to the new schema</span>
+              </a></li>
             </ul>
           </section>
 
@@ -251,11 +256,16 @@
                 </div>
               </div>
               <div class="usage-provider">
-                <div class="usage-provider__head"><span class="usage-provider__name">Codex</span></div>
+                <div class="usage-provider__head"><span class="usage-provider__name">Codex</span><span class="subtle">2 accounts</span></div>
                 <div class="gauge">
-                  <div class="gauge__row"><span class="gauge__label">Weekly</span><span class="gauge__value">18%</span></div>
+                  <div class="gauge__row"><span class="gauge__label">Weekly · Work account</span><span class="gauge__value">18%</span></div>
                   <div class="gauge__track"><progress class="gauge__bar" max="100" value="18">18%</progress></div>
-                  <div class="gauge__foot"><span>Resets Sun 21:00</span></div>
+                  <div class="gauge__foot"><span>Resets Sun 21:00</span><span>Workstation</span></div>
+                </div>
+                <div class="gauge">
+                  <div class="gauge__row"><span class="gauge__label">Weekly · Personal account</span><span class="gauge__value">52%</span></div>
+                  <div class="gauge__track"><progress class="gauge__bar" max="100" value="52">52%</progress></div>
+                  <div class="gauge__foot"><span>Resets Fri 08:00</span><span>Laptop</span></div>
                 </div>
               </div>
             </div>

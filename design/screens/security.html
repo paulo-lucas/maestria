@@ -7,8 +7,8 @@
   <title>Devices & security · Maestria</title>
   <link rel="stylesheet" href="../tokens.css?v=4d4aebb6">
   <link rel="stylesheet" href="../base.css?v=c9e4f4b3">
-  <link rel="stylesheet" href="../components.css?v=26c911a2">
-  <link rel="stylesheet" href="../shell.css?v=1177c8d0">
+  <link rel="stylesheet" href="../components.css?v=0e04da2f">
+  <link rel="stylesheet" href="../shell.css?v=e6988e38">
   <script src="../assets/mock.js?v=a5131c49"></script>
 </head>
 <body>
@@ -73,7 +73,7 @@
       <a class="nav__item" href="workspace-activity.html" data-ws="violet"><span class="swatch"></span> Nimbus <span class="count">1</span></a>
       <a class="nav__item" href="workspace-activity.html" data-ws="teal"><span class="swatch"></span> Harbor <span class="count">1</span></a>
       <a class="nav__item" href="workspace-activity.html" data-ws="amber"><span class="swatch"></span> Juniper <span class="count">1</span></a>
-      <a class="nav__item is-offline" href="workspace-activity.html" data-ws="rose"><span class="swatch"></span> Quarry <span class="nav__trail">Offline</span></a>
+      <a class="nav__item" href="workspace-activity.html" data-ws="rose"><span class="swatch"></span> Quarry </a>
       <div class="nav__group">System</div>
       <a class="nav__item" href="usage.html"><svg class="icon" aria-hidden="true"><use href="#i-gauge"/></svg> Usage &amp; standby</a>
       <a class="nav__item" href="connector.html"><svg class="icon" aria-hidden="true"><use href="#i-plug"/></svg> Connectors</a>
@@ -82,15 +82,9 @@
     <div class="sidebar__foot">
       <a class="conn-card" href="connector.html">
         <span class="dot" data-status="ok"></span>
-        <span class="conn-card__name">Workstation</span>
-        <span class="conn-card__ver">v2.0.3</span>
-        <span class="conn-card__meta">Connected · Wire OK</span>
-      </a>
-      <a class="conn-card" href="connector.html">
-        <span class="dot" data-status="offline"></span>
-        <span class="conn-card__name">Laptop</span>
-        <span class="conn-card__ver">v2.0.1</span>
-        <span class="conn-card__meta">Last seen 2h ago</span>
+        <span class="conn-card__name">2 machines online</span>
+        <span class="conn-card__ver"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-chevron-right"/></svg></span>
+        <span class="conn-card__meta">Mac mini offline · 3 days</span>
       </a>
       <div class="account-row">
         <span class="avatar avatar--sm" data-tone="slate">Y</span>
@@ -118,11 +112,11 @@
         <a class="menu__item" href="workspace-activity.html" data-ws="violet"><span class="swatch swatch--lg"></span> Nimbus <span class="count">1</span></a>
         <a class="menu__item" href="workspace-activity.html" data-ws="teal"><span class="swatch swatch--lg"></span> Harbor <span class="count">1</span></a>
         <a class="menu__item" href="workspace-activity.html" data-ws="amber"><span class="swatch swatch--lg"></span> Juniper <span class="count">1</span></a>
-        <a class="menu__item" href="workspace-activity.html" data-ws="rose"><span class="swatch swatch--lg"></span> Quarry <span class="status" data-status="offline">Offline</span></a>
+        <a class="menu__item" href="workspace-activity.html" data-ws="rose"><span class="swatch swatch--lg"></span> Quarry </a>
       </div>
     </details>
     <div class="topbar__end">
-      <a class="conn-dot" href="connector.html" aria-label="Connectors: 1 online, 1 offline" title="Connectors: 1 online, 1 offline">
+      <a class="conn-dot" href="connector.html" aria-label="Machines: 2 online, 1 offline" title="Machines: 2 online, 1 offline">
         <svg class="icon" aria-hidden="true"><use href="#i-plug"/></svg>
       </a>
       <button class="btn btn--ghost btn--icon theme-toggle" type="button" data-theme-toggle aria-label="Theme: system" title="Theme: system">
@@ -187,7 +181,7 @@
           <div class="setting">
             <p class="setting__desc">These are set on each machine, not here, so a compromised website can't loosen them. To change them, run this on the machine:</p>
             <div class="code-inline"><code>maestria policy edit</code><button class="btn btn--ghost btn--icon btn--sm" type="button" data-copy aria-label="Copy command" title="Copy command"><svg class="icon" aria-hidden="true"><use href="#i-copy"/></svg></button></div>
-            <p class="field__hint">Showing Workstation. Laptop is offline; its last reported policy is the same.</p>
+            <p class="field__hint">Showing Workstation. Laptop reports the same policy.</p>
           </div>
         </div>
       </section>
@@ -210,7 +204,7 @@
           <div class="dialog__body" data-status="danger">
             <span class="dialog__icon"><svg class="icon icon--lg" aria-hidden="true"><use href="#i-power"/></svg></span>
             <h2 class="dialog__title" id="kill-d-title">Turn on the kill switch?</h2>
-            <p class="dialog__text">Workstation and Laptop will reject every command from Maestria. Laptop is offline and gets it as soon as it reconnects. To turn it off, run <code>maestria kill-switch off</code> on each machine.</p>
+            <p class="dialog__text">Workstation and Laptop reject every command from Maestria right away. Mac mini is offline and gets it as soon as it reconnects. To turn it off, run <code>maestria kill-switch off</code> on each machine.</p>
             <label class="check"><input type="checkbox" id="kill-confirm"> I understand this can't be undone from the web</label>
           </div>
           <div class="dialog__foot">
