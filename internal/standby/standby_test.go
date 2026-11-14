@@ -109,12 +109,24 @@ func TestEvaluateStandbyActionsHysteresisResetAndManualResume(t *testing.T) {
 		t.Fatalf("expected wake on reset: %+v err=%v", tr, err)
 	}
 
-	// 7. Manual resume clears active guard immediately.
+	// 7. Manual resume clears active guard immediately and stays suppressed for the current window.
 	if _, err := Evaluate(db, cfg, auditLog, wsList, makeSnap(96, nextReset), resetAt.Add(2*time.Minute), nil); err != nil {
 		t.Fatal(err)
 	}
 	tr, err = ResumeNow(db, auditLog, wsList, "", resetAt.Add(3*time.Minute), "127.0.0.1", nil)
 	if err != nil || tr.Summary.Active || len(tr.Events) != 2 {
 		t.Fatalf("manual resume failed: %+v err=%v", tr, err)
+	}
+	tr, err = Evaluate(db, cfg, auditLog, wsList, makeSnap(96, nextReset), resetAt.Add(4*time.Minute), nil)
+	if err != nil || tr.Summary.Active || len(tr.Events) != 0 {
+		t.Fatalf("expected manual resume to suppress immediate re-standby while window unchanged: %+v err=%v", tr, err)
+	}
+	// Dropping below threshold re-arms the guard, so crossing again triggers standby.
+	if _, err := Evaluate(db, cfg, auditLog, wsList, makeSnap(50, nextReset), resetAt.Add(5*time.Minute), nil); err != nil {
+		t.Fatal(err)
+	}
+	tr, err = Evaluate(db, cfg, auditLog, wsList, makeSnap(94, nextReset), resetAt.Add(6*time.Minute), nil)
+	if err != nil || !tr.Summary.Active || len(tr.Events) != 2 {
+		t.Fatalf("expected standby to re-arm after dropping below threshold: %+v err=%v", tr, err)
 	}
 }

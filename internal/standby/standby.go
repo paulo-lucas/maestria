@@ -53,8 +53,15 @@ type Transition struct {
 // CLINotifier optionally dispatches standby/resume notices when notifyViaCli is enabled.
 type CLINotifier func(ev events.Event)
 
+type suppressedGuard struct {
+	ResetAt   *int64 `json:"resetAt,omitempty"`
+	Threshold int    `json:"threshold"`
+	ResumedAt int64  `json:"resumedAt"`
+}
+
 type persistedState struct {
-	Active map[string]ActiveGuard `json:"active"`
+	Active     map[string]ActiveGuard     `json:"active"`
+	Suppressed map[string]suppressedGuard `json:"suppressed,omitempty"`
 }
 
 // Current returns the persisted standby summary.
@@ -104,6 +111,17 @@ func Evaluate(
 			seenAccount[gk] = g
 
 			th, act := usage.ResolveWindowRule(cfg.Standby, g.Provider, g.Key, w.ID)
+			if sup, ok := st.Suppressed[gk]; ok {
+				resetCleared := sup.ResetAt != nil && *sup.ResetAt > 0 &&
+					(nowMs >= *sup.ResetAt || (w.ResetAt != nil && *w.ResetAt > *sup.ResetAt))
+				thresholdCleared := th == 0 || w.UsedPercent < float64(th) || th != sup.Threshold
+				if resetCleared || thresholdCleared {
+					delete(st.Suppressed, gk)
+					changed = true
+				} else {
+					continue
+				}
+			}
 			cur, isActive := st.Active[gk]
 
 			if th > 0 && w.UsedPercent >= float64(th) {
@@ -258,6 +276,11 @@ func ResumeNow(
 	var emitted []events.Event
 	for _, g := range targets {
 		delete(st.Active, g.GuardKey)
+		st.Suppressed[g.GuardKey] = suppressedGuard{
+			ResetAt:   cloneInt64Ptr(g.ResetAt),
+			Threshold: g.Threshold,
+			ResumedAt: nowMs,
+		}
 		evs, err := emitProviderEvent(db, wsList, g.Provider, events.KindResume, map[string]any{
 			"provider": g.Provider,
 			"account":  g.AccountLabel,
@@ -355,13 +378,19 @@ func loadState(db *sql.DB) (persistedState, error) {
 	if err != nil {
 		return persistedState{}, err
 	}
-	st := persistedState{Active: map[string]ActiveGuard{}}
+	st := persistedState{
+		Active:     map[string]ActiveGuard{},
+		Suppressed: map[string]suppressedGuard{},
+	}
 	if ok && raw != "" {
 		if err := json.Unmarshal([]byte(raw), &st); err != nil {
 			return persistedState{}, err
 		}
 		if st.Active == nil {
 			st.Active = map[string]ActiveGuard{}
+		}
+		if st.Suppressed == nil {
+			st.Suppressed = map[string]suppressedGuard{}
 		}
 	}
 	return st, nil
