@@ -209,6 +209,7 @@
       const curChat = document.getElementById('chat-log');
       const prevKeys = chatKeys(curChat);
       const prevScrollY = window.scrollY;
+      const prevChatScroll = chatScroller() ? chatScroller().scrollTop : 0;
 
       const swap = (sel) => {
         const cur = document.querySelector(sel);
@@ -236,9 +237,13 @@
         if (newChat) {
           // Reading older messages: keep the place and count what arrived below.
           chatUnseen += countNewKeys(prevKeys, chatKeys(newChat));
+          newChat.scrollTop = prevChatScroll;
+        } else {
+          window.scrollTo(0, prevScrollY);
         }
-        window.scrollTo(0, prevScrollY);
       }
+      const localLog = document.querySelector('.chat-page > .chat-local');
+      if (localLog && !curChat) localLog.scrollTop = localLog.scrollHeight;
       syncChatJump();
     } catch {
       // Transient error; next SSE event will retry.
@@ -258,8 +263,16 @@
   let chatUnseen = 0;
   const CHAT_BOTTOM_SLACK = 48;
 
+  // The message list scrolls on its own (header and composer stay put), so all of this works on
+  // the #chat-log element, not the window.
+  function chatScroller() {
+    return document.getElementById('chat-log');
+  }
+
   function chatAtBottom() {
-    return window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - CHAT_BOTTOM_SLACK;
+    const el = chatScroller();
+    if (!el) return true;
+    return el.scrollTop + el.clientHeight >= el.scrollHeight - CHAT_BOTTOM_SLACK;
   }
 
   function chatKeys(log) {
@@ -275,7 +288,8 @@
   function scrollChatToLatest() {
     chatPinned = true;
     chatUnseen = 0;
-    window.scrollTo(0, document.documentElement.scrollHeight);
+    const el = chatScroller();
+    if (el) el.scrollTop = el.scrollHeight;
   }
 
   function syncChatJump() {
@@ -293,15 +307,16 @@
     }
   }
 
-  window.addEventListener('scroll', () => {
-    if (!document.getElementById('chat-log')) return;
+  // Scroll events don't bubble: listen in the capture phase so a swapped-in #chat-log is covered.
+  document.addEventListener('scroll', (e) => {
+    if (!e.target || e.target.id !== 'chat-log') return;
     const atBottom = chatAtBottom();
     if (atBottom !== chatPinned || (atBottom && chatUnseen)) {
       chatPinned = atBottom;
       if (atBottom) chatUnseen = 0;
       syncChatJump();
     }
-  }, { passive: true });
+  }, { passive: true, capture: true });
 
   document.addEventListener('click', (e) => {
     if (e.target.closest && e.target.closest('[data-chat-jump]')) {

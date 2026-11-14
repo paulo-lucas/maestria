@@ -307,11 +307,25 @@
 
 /* ---------- Chat page ---------- */
 
-.chat-page { display: grid; grid-template-rows: auto 1fr auto; gap: var(--space-4); min-height: calc(100dvh - var(--topbar-h) - var(--bottomnav-h) - 2 * var(--space-4) - env(safe-area-inset-bottom)); }
-.chat-page .chat { align-content: end; }
+/* The chat page fills the viewport between the top bar and the bottom nav: the header (title +
+   thread selector) and the composer stay put, and only the message list scrolls. */
+.chat-page {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  height: calc(100dvh - var(--topbar-h) - var(--space-4) - var(--bottomnav-h) - env(safe-area-inset-bottom));
+  overflow: hidden;
+}
+.chat-page > .chat,
+.chat-page > .chat-local {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 var(--space-1) var(--space-3) 0;
+}
+.chat-page .chat { align-content: safe end; } /* short chats sit at the bottom; long ones scroll from the top */
 .chat-dock {
-  position: sticky;
-  bottom: calc(var(--bottomnav-h) + env(safe-area-inset-bottom)); /* sits right on the nav: nothing shows between */
+  position: relative;
   display: grid;
   gap: var(--space-2);
   padding: var(--space-2) 0 var(--space-3);
@@ -446,7 +460,7 @@ a.thread:hover { background: var(--surface-2); color: var(--text); }
   .qr-row { grid-template-columns: auto minmax(0, 1fr); justify-items: start; align-items: center; }
 }
 @media (min-width: 1024px) {
-  .chat-page { min-height: calc(100dvh - var(--space-6)); }
-  .chat-dock { bottom: 0; padding-bottom: var(--space-5); }
+  .chat-page { height: calc(100dvh - var(--space-6)); }
+  .chat-dock { padding-bottom: var(--space-5); }
   .main:has(.chat-page) { padding-bottom: 0; }
 }
