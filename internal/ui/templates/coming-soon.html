@@ -1,0 +1,24 @@
+{{define "page"}}{{template "app" .}}{{end}}
+{{define "content"}}
+    <div class="page page--narrow">
+      {{if .CurrentWS}}
+      <header class="page-head">
+        <div class="page-head__title">
+          <span class="ws-eyebrow" data-ws="{{.CurrentWS.Tone}}"><span class="swatch swatch--lg"></span>{{.CurrentWS.Name}}{{if .CurrentWS.Machine}} <span class="subtle">· {{.CurrentWS.Machine}}</span>{{end}}</span>
+          <h1>{{.ComingSoonTitle}}</h1>
+        </div>
+      </header>
+      {{end}}
+      <div class="card empty">
+        <span class="empty__icon">{{icon .ComingSoonIcon}}</span>
+        <p class="empty__title">{{.ComingSoonTitle}} · Coming soon</p>
+        <p class="empty__text">{{.ComingSoonText}}</p>
+        {{if .CurrentWS}}
+        <div class="btn-row">
+          <a class="btn btn--primary btn--sm" href="/workspaces/{{.CurrentWS.ID}}/tasks">Go to Human tasks</a>
+          <a class="btn btn--sm" href="/workspaces/{{.CurrentWS.ID}}/chat">Open Chat</a>
+        </div>
+        {{end}}
+      </div>
+    </div>
+{{end}}

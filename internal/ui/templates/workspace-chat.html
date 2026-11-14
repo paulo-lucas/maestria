@@ -1,0 +1,46 @@
+{{define "page"}}{{template "app" .}}{{end}}
+{{define "content"}}
+    <div class="page page--narrow chat-page" data-live-root="workspace-chat">
+
+      <header class="page-head">
+        <div class="page-head__title">
+          <span class="ws-eyebrow" data-ws="{{.CurrentWS.Tone}}"><span class="swatch swatch--lg"></span>{{.CurrentWS.Name}}{{if .CurrentWS.Machine}} <span class="subtle">· {{.CurrentWS.Machine}}</span>{{end}}</span>
+          <h1>Chat</h1>
+        </div>
+      </header>
+
+      <div class="chat" aria-live="polite" id="chat-log">
+        {{if .ChatMessages}}
+          {{range .ChatMessages}}
+            {{if .DayLabel}}<div class="msg msg--system"><span>{{.DayLabel}}</span></div>{{end}}
+            {{if eq .Author "human"}}
+            <div class="msg msg--you" data-msg-id="{{.ID}}">
+              <div class="msg__body prose">{{.BodyHTML}}</div>
+              <time datetime="{{.TimeISO}}">{{.TimeLabel}}</time>
+            </div>
+            {{else}}
+            <div class="msg msg--maestro" data-msg-id="{{.ID}}">
+              <div class="msg__head"><span class="avatar avatar--sm avatar--maestro">M</span>Maestro<time datetime="{{.TimeISO}}">{{.TimeLabel}}</time></div>
+              <div class="msg__body prose">{{.BodyHTML}}</div>
+            </div>
+            {{end}}
+          {{end}}
+        {{else}}
+        <div class="empty empty--compact">
+          <span class="empty__icon">{{icon "i-chat"}}</span>
+          <p class="empty__title">No messages yet</p>
+          <p class="empty__text">Send a note to {{.CurrentWS.Name}}'s Maestro below or have agents post with <code>maestria say</code>.</p>
+        </div>
+        {{end}}
+      </div>
+
+      <div class="chat-dock">
+        <form class="composer" data-chat-form data-ws-id="{{.CurrentWS.ID}}">
+          <label class="sr-only" for="msg">Message the Maestro</label>
+          <textarea id="msg" data-draft-key="chat:{{.CurrentWS.ID}}" rows="1" placeholder="Message the Maestro"></textarea>
+          <button class="btn btn--primary btn--icon" type="submit" aria-label="Send">{{icon "i-send"}}</button>
+        </form>
+        <p class="chat-dock__hint">Saved locally and delivered to agents listening with <code>maestria wait</code>.</p>
+      </div>
+    </div>
+{{end}}

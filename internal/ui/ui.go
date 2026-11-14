@@ -35,10 +35,14 @@ type UI struct {
 
 // Pages that can be rendered.
 const (
-	PageLogin    = "login"
-	PageTwoFA    = "2fa"
-	PageOverview = "overview"
-	PageSecurity = "security"
+	PageLogin      = "login"
+	PageTwoFA      = "2fa"
+	PageOverview   = "overview"
+	PageTasks      = "workspace-tasks"
+	PageChat       = "workspace-chat"
+	PageUsage      = "usage"
+	PageSecurity   = "security"
+	PageComingSoon = "coming-soon"
 )
 
 // New loads the embedded assets and parses the templates.
@@ -84,12 +88,52 @@ func New() (*UI, error) {
 			return template.HTML(`<svg class="` + template.HTMLEscapeString(cls) + `" aria-hidden="true"><use href="#` + template.HTMLEscapeString(id) + `"/></svg>`)
 		},
 		"sprite": func() template.HTML { return u.icons },
+		"plural": func(n int, one, many string) string {
+			if n == 1 {
+				return one
+			}
+			return many
+		},
+		"markClass": func(step int) string {
+			if step >= 50 && step <= 100 && step%5 == 0 {
+				return fmt.Sprintf("mark-%d", step)
+			}
+			return ""
+		},
+		"taskIcon": func(kind string) string {
+			switch kind {
+			case "approve":
+				return "i-approve"
+			case "choice":
+				return "i-choice"
+			case "input":
+				return "i-question"
+			case "notice":
+				return "i-bell"
+			default:
+				return "i-inbox"
+			}
+		},
+		"taskKindLabel": func(kind string) string {
+			switch kind {
+			case "approve":
+				return "Approval"
+			case "choice":
+				return "Choice"
+			case "input":
+				return "Question"
+			case "notice":
+				return "Update"
+			default:
+				return "Task"
+			}
+		},
 	}
 	base, err := template.New("layout").Funcs(funcs).ParseFS(files, "templates/layout.html")
 	if err != nil {
 		return nil, err
 	}
-	for _, name := range []string{PageLogin, PageTwoFA, PageOverview, PageSecurity} {
+	for _, name := range []string{PageLogin, PageTwoFA, PageOverview, PageTasks, PageChat, PageUsage, PageSecurity, PageComingSoon} {
 		t, err := template.Must(base.Clone()).ParseFS(files, "templates/"+name+".html")
 		if err != nil {
 			return nil, err
@@ -165,18 +209,140 @@ type AuditRow struct {
 	IP     string
 }
 
+// WorkspaceNav represents a workspace entry in the shell navigation and overview strip.
+type WorkspaceNav struct {
+	ID             string
+	Name           string
+	Tone           string
+	Initials       string
+	Machine        string
+	NeedsCount     int
+	UpdatesCount   int
+	PostponedCount int
+	TotalOpenCount int
+	Selected       bool
+}
+
+// TaskView represents a human task (open, postponed, update, or history) in templates.
+type TaskView struct {
+	ID            int64
+	WorkspaceID   string
+	WorkspaceName string
+	WorkspaceTone string
+	Kind          string
+	KindLabel     string
+	KindIcon      string
+	FloorName     string
+	By            string
+	Title         string
+	BodyHTML      template.HTML // sanitized via bluemonday before passing into TaskView
+	Placeholder   string
+	Options       []string
+	Status        string
+	Response      string
+	Comment       string
+	StatusTone    string
+	StatusLabel   string
+	PostponeLabel string
+	CreatedRel    string
+	CreatedISO    string
+	ResolvedLabel string
+}
+
+// ChatMessageView renders one workspace chat entry.
+type ChatMessageView struct {
+	ID        int64
+	Author    string
+	BodyHTML  template.HTML // sanitized via bluemonday before passing into ChatMessageView
+	TimeLabel string
+	TimeISO   string
+	DayLabel  string
+}
+
+// ThresholdOption represents one dropdown option for a quota window threshold.
+type ThresholdOption struct {
+	Value    int
+	Label    string
+	Selected bool
+}
+
+// UsageWindowView represents one quota meter and its standby controls.
+type UsageWindowView struct {
+	AccountKey     string
+	ID             string
+	Label          string
+	UsedPct        int
+	ResetLabel     string
+	Threshold      int
+	ThresholdValue int
+	MarkClass      string
+	Action         string
+	Armed          bool
+	Tripped        bool
+	WakeOnReset    bool
+	StatusTone     string
+	FootRight      string
+	SwitchID       string
+	SelectID       string
+	RadioName      string
+	ThresholdOpts  []ThresholdOption
+}
+
+// UsageAccountView represents one provider account card.
+type UsageAccountView struct {
+	Key           string
+	Provider      string
+	ProviderLabel string
+	AccountLabel  string
+	Plan          string
+	Subline       string
+	State         string
+	Error         string
+	Stale         bool
+	StatusTone    string
+	StatusLabel   string
+	StatusBadge   bool
+	Windows       []UsageWindowView
+}
+
+// HiddenProviderView lists a provider hidden from the overview after errors without fresh data.
+type HiddenProviderView struct {
+	Key           string
+	Provider      string
+	ProviderLabel string
+	State         string
+	Error         string
+}
+
+// StandbyBannerView describes an active standby banner across the usage page.
+type StandbyBannerView struct {
+	Active   bool
+	GuardKey string
+	Title    string
+	Text     string
+}
+
 // Data is the template data for every page.
 type Data struct {
 	Title  string
 	CSRF   string
 	Nav    string
+	Scope  string
 	Banner *Banner
 
 	// Auth pages.
 	Error  string // error under the main field
 	Locked bool   // hide the form (kill switch)
 
-	// App pages.
+	// App shell & navigation.
+	Workspaces []WorkspaceNav
+	CurrentWS  *WorkspaceNav
+	TotalNeeds int
+	SubTitle   string
+	NowISO     string
+	NowLabel   string
+
+	// Security page.
 	Listen            string
 	SessionExpires    string
 	IdleMinutes       int
@@ -187,4 +353,29 @@ type Data struct {
 	TunnelStop        bool
 	TunnelStopCommand string
 	Audit             []AuditRow
+
+	// Tasks / Overview pages.
+	NeedsItems     []TaskView
+	PostponedItems []TaskView
+	UpdatesItems   []TaskView
+	HistoryItems   []TaskView
+
+	// Chat page.
+	ChatMessages []ChatMessageView
+
+	// Usage & standby page + overview card.
+	UsageAvailable    bool
+	UsageIssueTitle   string
+	UsageIssueMessage string
+	UsageAccounts     []UsageAccountView
+	UsageHidden       []HiddenProviderView
+	UsageHiddenCount  int
+	StandbyBanner     *StandbyBannerView
+	StandbyActive     bool
+	WakeOnReset       bool
+
+	// Coming-soon placeholder page.
+	ComingSoonTitle string
+	ComingSoonText  string
+	ComingSoonIcon  string
 }

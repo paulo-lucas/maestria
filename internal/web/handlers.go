@@ -204,18 +204,16 @@ func (s *Server) appData(r *http.Request, title, nav string) *ui.Data {
 	sess := sessionFrom(r)
 	left, _ := auth.RemainingRecoveryCodes(s.DB)
 	n, _ := s.Sessions.Count()
-	return &ui.Data{
-		Title: title, Nav: nav, CSRF: sess.CSRFToken,
+	d := &ui.Data{
+		Title: title, Nav: nav, Scope: "all", CSRF: sess.CSRFToken,
 		Listen:         fmt.Sprintf("127.0.0.1:%d", s.Config.Port),
 		SessionExpires: sess.ExpiresAt.Local().Format("Jan 2, 15:04"),
 		IdleMinutes:    s.Config.Session.IdleMinutes, AbsoluteHours: s.Config.Session.AbsoluteHours,
 		SessionCount: n, RecoveryLeft: left,
 		TunnelStop: len(s.Config.Tunnel.StopCommand) > 0,
 	}
-}
-
-func (s *Server) getOverview(w http.ResponseWriter, r *http.Request) {
-	s.render(w, ui.PageOverview, s.appData(r, "Overview", "overview"))
+	s.populateShell(d, "all")
+	return d
 }
 
 var eventLabels = map[string]struct{ status, label string }{

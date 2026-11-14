@@ -1,0 +1,93 @@
+{{define "page"}}{{template "app" .}}{{end}}
+{{define "content"}}
+    <div class="page page--narrow" data-live-root="usage">
+
+      <header class="page-head">
+        <div class="page-head__title">
+          <h1>Usage &amp; standby</h1>
+          <p class="page-head__sub">One card per provider account. The standby guard pauses work before a limit is hit and wakes the Maestro when the window resets. It runs on this machine, so it keeps working even when the UI tab is closed.</p>
+        </div>
+      </header>
+
+      {{if .StandbyBanner}}
+      <div class="banner" data-status="warn">
+        {{icon "i-pause"}}
+        <div class="banner__body">
+          <p class="banner__title">{{.StandbyBanner.Title}}</p>
+          <p class="banner__text">{{.StandbyBanner.Text}}</p>
+        </div>
+        <div class="banner__actions"><button class="btn btn--sm" type="button" data-action="resume-standby" data-guard-key="{{.StandbyBanner.GuardKey}}">Resume now</button></div>
+      </div>
+      {{end}}
+
+      <div class="section">
+        {{if .UsageAvailable}}
+          {{range .UsageAccounts}}
+          <section class="card panel" aria-labelledby="p-{{.Key}}" data-usage-card data-account-key="{{.Key}}" data-provider="{{.Provider}}">
+            <header class="panel__head">
+              <div class="panel__title-group">
+                <h2 class="panel__title" id="p-{{.Key}}">{{.ProviderLabel}}</h2>
+                {{if .Subline}}<span class="panel__sub">{{.Subline}}</span>{{end}}
+              </div>
+              <span class="status status--badge" data-status="{{.StatusTone}}">{{.StatusLabel}}</span>
+            </header>
+            {{range .Windows}}
+            <div class="setting" data-window-setting data-account-key="{{.AccountKey}}" data-window-id="{{.ID}}">
+              <div class="gauge gauge--lg"{{if .StatusTone}} data-status="{{.StatusTone}}"{{end}}>
+                <div class="gauge__row"><span class="gauge__label">{{.Label}}</span><span class="gauge__value">{{.UsedPct}}%</span></div>
+                <div class="gauge__track"><progress class="gauge__bar" max="100" value="{{.UsedPct}}">{{.UsedPct}}%</progress>{{if and .Armed .MarkClass}}<span class="gauge__mark {{.MarkClass}}" title="Standby at {{.Threshold}}%"></span>{{end}}</div>
+                <div class="gauge__foot"><span>{{if .ResetLabel}}{{.ResetLabel}}{{else}}&nbsp;{{end}}</span>{{if .FootRight}}<span>{{.FootRight}}</span>{{end}}</div>
+              </div>
+              <div class="setting__controls">
+                <div class="switch-row">
+                  <label class="field__label" for="{{.SwitchID}}">Standby guard</label>
+                  <input class="switch" id="{{.SwitchID}}" type="checkbox" role="switch"{{if .Armed}} checked{{end}} data-sb-toggle>
+                </div>
+                <div class="input-suffix">
+                  <label class="field__label" for="{{.SelectID}}">Pause at</label>
+                  <select class="select" id="{{.SelectID}}"{{if not .Armed}} disabled{{end}} data-sb-threshold>
+                    {{range .ThresholdOpts}}
+                    <option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>
+                    {{end}}
+                  </select>
+                </div>
+                <div class="segmented" role="radiogroup" aria-label="When the limit is hit">
+                  <label><input type="radio" name="{{.RadioName}}" value="tell"{{if ne .Action "interrupt"}} checked{{end}}{{if not .Armed}} disabled{{end}} data-sb-action><span>Tell the Maestro</span></label>
+                  <label><input type="radio" name="{{.RadioName}}" value="interrupt"{{if eq .Action "interrupt"}} checked{{end}}{{if not .Armed}} disabled{{end}} data-sb-action><span>Interrupt agents</span></label>
+                </div>
+                <label class="check"><input type="checkbox"{{if $.WakeOnReset}} checked{{end}}{{if not .Armed}} disabled{{end}} data-sb-wake> Wake the Maestro on reset</label>
+              </div>
+            </div>
+            {{end}}
+            <div class="panel__foot btn-row btn-row--end"><span class="spacer-auto" data-sb-status></span><button class="btn btn--primary btn--sm" type="button" data-action="save-standby">Save</button></div>
+          </section>
+          {{end}}
+
+          {{if .UsageHidden}}
+          <details class="disclosure" data-disclosure-id="hidden-providers">
+            <summary>{{icon "i-chevron-right"}}Hidden providers <span class="count">{{len .UsageHidden}}</span></summary>
+            <div class="card">
+              {{range .UsageHidden}}
+              <div class="setting">
+                <div class="setting__head">
+                  <div class="setting__text">
+                    <span class="setting__title">{{.ProviderLabel}}</span>
+                    <span class="setting__desc">No recent data: {{if .Error}}{{.Error}}{{else}}{{.State}}{{end}}. Hidden from the overview until it reports again.</span>
+                  </div>
+                  <span class="status" data-status="danger">Error</span>
+                </div>
+              </div>
+              {{end}}
+            </div>
+          </details>
+          {{end}}
+        {{else}}
+        <div class="card empty">
+          <span class="empty__icon">{{icon "i-gauge"}}</span>
+          <p class="empty__title">{{if .UsageIssueTitle}}{{.UsageIssueTitle}}{{else}}Usage data unavailable{{end}}</p>
+          <p class="empty__text">{{if .UsageIssueMessage}}{{.UsageIssueMessage}}{{else}}Check Maestri's usage directory in Settings.{{end}}</p>
+        </div>
+        {{end}}
+      </div>
+    </div>
+{{end}}

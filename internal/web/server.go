@@ -131,6 +131,12 @@ func (s *Server) routes() {
 	m.HandleFunc("POST /kill-switch", s.postKillSwitch)
 
 	m.HandleFunc("GET /{$}", s.getOverview)
+	m.HandleFunc("GET /workspaces/{id}/tasks", s.getWorkspaceTasks)
+	m.HandleFunc("GET /workspaces/{id}/chat", s.getWorkspaceChat)
+	m.HandleFunc("GET /workspaces/{id}/activity", s.getWorkspaceComingSoon("activity", "Activity", "i-activity", "Live agent activity per workspace arrives with Wire."))
+	m.HandleFunc("GET /workspaces/{id}/floors", s.getWorkspaceComingSoon("floors", "Floors", "i-floors", "Worktree floor tracking arrives with Wire."))
+	m.HandleFunc("GET /workspaces/{id}/docs", s.getWorkspaceComingSoon("docs", "Docs", "i-docs", "Shared workspace specs and docs browsing arrives with Wire."))
+	m.HandleFunc("GET /usage", s.getUsage)
 	m.HandleFunc("GET /security", s.getSecurity)
 
 	m.HandleFunc("GET /api/session", s.apiSession)

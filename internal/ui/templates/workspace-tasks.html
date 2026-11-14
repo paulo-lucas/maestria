@@ -1,0 +1,194 @@
+{{define "page"}}{{template "app" .}}{{end}}
+{{define "content"}}
+    <div class="page page--narrow" data-live-root="workspace-tasks">
+
+      <header class="page-head">
+        <div class="page-head__title">
+          <span class="ws-eyebrow" data-ws="{{.CurrentWS.Tone}}"><span class="swatch swatch--lg"></span>{{.CurrentWS.Name}}{{if .CurrentWS.Machine}} <span class="subtle">· {{.CurrentWS.Machine}}</span>{{end}}</span>
+          <h1>Human tasks</h1>
+          <p class="page-head__sub">Decisions the Maestro is waiting on, and what it wants you to know.</p>
+        </div>
+      </header>
+
+      <!-- Needs you -->
+      <section class="section" aria-labelledby="needs-title">
+        <div class="section__head">
+          <h2 class="section__title" id="needs-title">Needs you</h2>
+          <span class="count" data-status="needs">{{len .NeedsItems}}</span>
+          <div class="panel__aside">Newest first</div>
+        </div>
+        {{if .NeedsItems}}
+        <ul class="card list">
+          {{range .NeedsItems}}
+          <li class="task" data-item-id="{{.ID}}" data-ws-id="{{.WorkspaceID}}" data-status="needs">
+            <div class="task__meta">
+              <span class="task__kind">{{icon .KindIcon}}{{.KindLabel}}</span>
+              {{if .FloorName}}<span class="floor-name">{{icon "i-branch"}}<span class="truncate">{{.FloorName}}</span></span>{{end}}
+              {{if .By}}<span class="subtle">by {{.By}}</span>{{end}}
+              <time datetime="{{.CreatedISO}}">{{.CreatedRel}}</time>
+            </div>
+            <h3 class="task__title">{{.Title}}</h3>
+            {{if .BodyHTML}}<div class="task__body prose">{{.BodyHTML}}</div>{{end}}
+            {{if eq .Kind "approve"}}
+            <label class="sr-only" for="c-{{.ID}}">Comment</label>
+            <textarea class="textarea" id="c-{{.ID}}" data-draft-key="comment:{{.WorkspaceID}}:{{.ID}}" rows="2" placeholder="Optional comment for the Maestro…"></textarea>
+            <div class="task__actions">
+              <button class="btn btn--primary btn--sm" type="button" data-action="respond" data-value="approve">{{icon "i-check"}}Approve</button>
+              <button class="btn btn--sm" type="button" data-action="respond" data-value="reject">{{icon "i-x"}}Reject</button>
+              <details class="menu menu--end">
+                <summary class="btn btn--ghost btn--sm">{{icon "i-clock"}}Later{{icon "i-chevron-down"}}</summary>
+                <div class="menu__panel">
+                  <button class="menu__item" type="button" data-action="postpone" data-preset="1h">In 1 hour</button>
+                  <button class="menu__item" type="button" data-action="postpone" data-preset="evening">This evening, 18:00</button>
+                  <button class="menu__item" type="button" data-action="postpone" data-preset="tomorrow">Tomorrow, 09:00</button>
+                </div>
+              </details>
+            </div>
+            {{else if eq .Kind "choice"}}
+            <div class="choice-list">
+              {{range .Options}}
+              <button class="btn btn--sm" type="button" data-action="respond" data-value="{{.}}">{{.}}</button>
+              {{end}}
+            </div>
+            <div class="task__actions">
+              <details class="menu">
+                <summary class="btn btn--ghost btn--sm">{{icon "i-clock"}}Later{{icon "i-chevron-down"}}</summary>
+                <div class="menu__panel">
+                  <button class="menu__item" type="button" data-action="postpone" data-preset="1h">In 1 hour</button>
+                  <button class="menu__item" type="button" data-action="postpone" data-preset="evening">This evening, 18:00</button>
+                  <button class="menu__item" type="button" data-action="postpone" data-preset="tomorrow">Tomorrow, 09:00</button>
+                </div>
+              </details>
+            </div>
+            {{else if eq .Kind "input"}}
+            <form class="inline-form" data-action="respond-input">
+              <label class="sr-only" for="a-{{.ID}}">Answer</label>
+              <input class="input" id="a-{{.ID}}" type="text" data-draft-key="input:{{.WorkspaceID}}:{{.ID}}" placeholder="{{if .Placeholder}}{{.Placeholder}}{{else}}Type your answer…{{end}}" autocomplete="off">
+              <button class="btn btn--primary" type="submit">Send</button>
+            </form>
+            <div class="task__actions">
+              <details class="menu">
+                <summary class="btn btn--ghost btn--sm">{{icon "i-clock"}}Later{{icon "i-chevron-down"}}</summary>
+                <div class="menu__panel">
+                  <button class="menu__item" type="button" data-action="postpone" data-preset="1h">In 1 hour</button>
+                  <button class="menu__item" type="button" data-action="postpone" data-preset="evening">This evening, 18:00</button>
+                  <button class="menu__item" type="button" data-action="postpone" data-preset="tomorrow">Tomorrow, 09:00</button>
+                </div>
+              </details>
+            </div>
+            {{end}}
+          </li>
+          {{end}}
+        </ul>
+        {{else}}
+        <div class="card empty empty--compact">
+          <span class="empty__icon">{{icon "i-check"}}</span>
+          <p class="empty__title">All caught up</p>
+          <p class="empty__text">Nothing is waiting on your answer in {{.CurrentWS.Name}}.</p>
+        </div>
+        {{end}}
+
+        {{if .PostponedItems}}
+        <details class="disclosure" data-disclosure-id="postponed:{{.CurrentWS.ID}}">
+          <summary>{{icon "i-chevron-right"}}Postponed <span class="count">{{len .PostponedItems}}</span></summary>
+          <ul class="card list">
+            {{range .PostponedItems}}
+            <li class="task" data-item-id="{{.ID}}" data-ws-id="{{.WorkspaceID}}">
+              <div class="task__meta">
+                <span class="task__kind">{{icon .KindIcon}}{{.KindLabel}}</span>
+                {{if .PostponeLabel}}<span>{{.PostponeLabel}}</span>{{end}}
+                <time datetime="{{.CreatedISO}}">{{.CreatedRel}}</time>
+              </div>
+              <h3 class="task__title">{{.Title}}</h3>
+              {{if .BodyHTML}}<div class="task__body prose">{{.BodyHTML}}</div>{{end}}
+              {{if eq .Kind "approve"}}
+              <div class="task__actions">
+                <button class="btn btn--primary btn--sm" type="button" data-action="respond" data-value="approve">{{icon "i-check"}}Approve</button>
+                <button class="btn btn--sm" type="button" data-action="respond" data-value="reject">{{icon "i-x"}}Reject</button>
+                <button class="btn btn--ghost btn--sm" type="button" data-action="postpone" data-preset="clear">Bring back</button>
+              </div>
+              {{else if eq .Kind "choice"}}
+              <div class="choice-list">
+                {{range .Options}}
+                <button class="btn btn--sm" type="button" data-action="respond" data-value="{{.}}">{{.}}</button>
+                {{end}}
+              </div>
+              <div class="task__actions">
+                <button class="btn btn--ghost btn--sm" type="button" data-action="postpone" data-preset="clear">Bring back</button>
+              </div>
+              {{else if eq .Kind "input"}}
+              <form class="inline-form" data-action="respond-input">
+                <label class="sr-only" for="pa-{{.ID}}">Answer</label>
+                <input class="input" id="pa-{{.ID}}" type="text" data-draft-key="input:{{.WorkspaceID}}:{{.ID}}" placeholder="{{if .Placeholder}}{{.Placeholder}}{{else}}Type your answer…{{end}}" autocomplete="off">
+                <button class="btn btn--primary" type="submit">Send</button>
+              </form>
+              <div class="task__actions">
+                <button class="btn btn--ghost btn--sm" type="button" data-action="postpone" data-preset="clear">Bring back</button>
+              </div>
+              {{end}}
+            </li>
+            {{end}}
+          </ul>
+        </details>
+        {{end}}
+      </section>
+
+      <!-- Updates -->
+      <section class="section" aria-labelledby="updates-title">
+        <div class="section__head">
+          <h2 class="section__title" id="updates-title">Updates</h2>
+          <span class="count">{{len .UpdatesItems}}</span>
+          {{if .UpdatesItems}}
+          <div class="panel__aside"><button class="btn btn--ghost btn--sm" type="button" data-action="dismiss-all" data-ws-id="{{.CurrentWS.ID}}">Mark all as read</button></div>
+          {{end}}
+        </div>
+        {{if .UpdatesItems}}
+        <ul class="card list">
+          {{range .UpdatesItems}}
+          <li class="task" data-item-id="{{.ID}}" data-ws-id="{{.WorkspaceID}}">
+            <div class="task__meta">
+              <span class="task__kind">{{icon "i-bell"}}Update</span>
+              {{if .FloorName}}<span class="floor-name">{{icon "i-branch"}}<span class="truncate">{{.FloorName}}</span></span>{{end}}
+              {{if .By}}<span class="subtle">by {{.By}}</span>{{end}}
+              <time datetime="{{.CreatedISO}}">{{.CreatedRel}}</time>
+            </div>
+            <h3 class="task__title">{{.Title}}</h3>
+            {{if .BodyHTML}}<div class="task__body prose">{{.BodyHTML}}</div>{{end}}
+            <div class="task__actions"><button class="btn btn--sm" type="button" data-action="dismiss">{{icon "i-check"}}Got it</button></div>
+          </li>
+          {{end}}
+        </ul>
+        {{else}}
+        <div class="card empty empty--compact">
+          <p class="empty__title">No unread updates</p>
+          <p class="empty__text">Status notices from agents will appear here.</p>
+        </div>
+        {{end}}
+      </section>
+
+      <!-- History -->
+      <section class="section" aria-labelledby="history-title">
+        <details class="disclosure" data-disclosure-id="history:{{.CurrentWS.ID}}">
+          <summary>{{icon "i-chevron-right"}}<span id="history-title">History</span> <span class="count">{{len .HistoryItems}}</span></summary>
+          {{if .HistoryItems}}
+          <ul class="card list">
+            {{range .HistoryItems}}
+            <li class="task">
+              <div class="task__meta">
+                <span class="task__kind">{{icon .KindIcon}}{{.KindLabel}}</span>
+                <time datetime="{{.CreatedISO}}">{{.CreatedRel}}</time>
+              </div>
+              <h3 class="task__title">{{.Title}}</h3>
+              <p class="task__response"><span class="status{{if eq .StatusTone "idle"}} status--quiet{{end}}" data-status="{{.StatusTone}}">{{.StatusLabel}}</span>{{if .Response}} · “{{.Response}}”{{end}}{{if .Comment}} · “{{.Comment}}”{{end}}{{if .ResolvedLabel}} · {{.ResolvedLabel}}{{end}}</p>
+            </li>
+            {{end}}
+          </ul>
+          {{else}}
+          <div class="card empty empty--compact">
+            <p class="empty__text">No resolved tasks yet.</p>
+          </div>
+          {{end}}
+        </details>
+      </section>
+    </div>
+{{end}}

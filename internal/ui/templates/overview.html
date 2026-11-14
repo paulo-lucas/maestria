@@ -1,24 +1,205 @@
 {{define "page"}}{{template "app" .}}{{end}}
 {{define "content"}}
-    <div class="page">
+    <div class="page" data-live-root="overview">
 
       <header class="page-head">
         <div class="page-head__title">
           <h1>Overview</h1>
-          <p class="page-head__sub">Local mode · listening on {{.Listen}}</p>
+          <p class="page-head__sub">{{.SubTitle}} · updated <time datetime="{{.NowISO}}">{{.NowLabel}}</time></p>
         </div>
       </header>
 
-      {{template "banner" .Banner}}
-
+      <!-- Workspaces -->
       <section class="section" aria-labelledby="ws-title">
         <h2 class="sr-only" id="ws-title">Workspaces</h2>
-        <div class="card empty">
-          <span class="empty__icon">{{icon "i-overview" "icon--lg"}}</span>
-          <p class="empty__title">No workspaces yet</p>
-          <p class="empty__text">Your Maestri workspaces, their tasks and their agents will show up here. This build only has the secure foundation: login, sessions and the kill switch.</p>
-          <div class="btn-row"><a class="btn btn--sm" href="/security">Open security</a></div>
+        {{if .Workspaces}}
+        <div class="ws-strip">
+          {{range .Workspaces}}
+          <a class="ws-card" href="/workspaces/{{.ID}}/tasks" data-ws="{{.Tone}}">
+            <div class="ws-card__head"><span class="ws-card__name">{{.Name}}</span><span class="status status--quiet" data-status="ok">Online</span></div>
+            <div class="ws-card__stats">
+              <span{{if eq .NeedsCount 0}} class="is-zero"{{else}} data-status="needs"{{end}}><strong>{{.NeedsCount}}</strong>{{plural .NeedsCount "needs you" "need you"}}</span>
+              <span{{if eq .UpdatesCount 0}} class="is-zero"{{end}}><strong>{{.UpdatesCount}}</strong>{{plural .UpdatesCount "update" "updates"}}</span>
+            </div>
+            <div class="ws-card__meta">{{if .Machine}}{{.Machine}}{{else}}This machine{{end}}</div>
+          </a>
+          {{end}}
         </div>
+        {{else}}
+        <div class="card empty empty--compact">
+          <span class="empty__icon">{{icon "i-folder"}}</span>
+          <p class="empty__title">No workspaces registered yet</p>
+          <p class="empty__text">Run <code>maestria init</code> inside a Maestri workspace or <code>maestria workspace add &lt;name&gt; &lt;path&gt;</code> on this machine.</p>
+        </div>
+        {{end}}
       </section>
+
+      <div class="overview-cols">
+
+        <!-- Needs you -->
+        <section class="card panel" aria-labelledby="needs-title">
+          <header class="panel__head">
+            <h2 class="panel__title" id="needs-title">
+              {{icon "i-inbox"}}
+              Needs you <span class="count" data-status="needs">{{.TotalNeeds}}</span>
+            </h2>
+            <div class="panel__aside">Newest first</div>
+          </header>
+          {{if .NeedsItems}}
+          <div class="panel__tools">
+            <div class="chip-row" data-filter="needs-list" role="group" aria-label="Filter by workspace">
+              <button class="chip" type="button" aria-pressed="true" data-value="all">All <span class="count">{{.TotalNeeds}}</span></button>
+              {{range .Workspaces}}
+                {{if .NeedsCount}}
+                <button class="chip" type="button" aria-pressed="false" data-value="{{.ID}}" data-ws="{{.Tone}}"><span class="swatch"></span>{{.Name}} <span class="count">{{.NeedsCount}}</span></button>
+                {{end}}
+              {{end}}
+            </div>
+          </div>
+          <ul class="list" id="needs-list">
+            {{range .NeedsItems}}
+            <li class="task" data-key="{{.WorkspaceID}}" data-item-id="{{.ID}}" data-ws-id="{{.WorkspaceID}}" data-status="needs">
+              <div class="task__meta">
+                <span class="ws" data-ws="{{.WorkspaceTone}}">{{.WorkspaceName}}</span>
+                <span class="task__kind">{{icon .KindIcon}}{{.KindLabel}}</span>
+                {{if .FloorName}}<span class="floor-name">{{icon "i-branch"}}<span class="truncate">{{.FloorName}}</span></span>{{end}}
+                <time datetime="{{.CreatedISO}}">{{.CreatedRel}}</time>
+              </div>
+              <h3 class="task__title">{{.Title}}</h3>
+              {{if .BodyHTML}}<div class="task__body prose">{{.BodyHTML}}</div>{{end}}
+              {{if eq .Kind "approve"}}
+              <div class="task__actions">
+                <button class="btn btn--primary btn--sm" type="button" data-action="respond" data-value="approve">{{icon "i-check"}}Approve</button>
+                <button class="btn btn--sm" type="button" data-action="respond" data-value="reject">{{icon "i-x"}}Reject</button>
+                <details class="menu menu--end">
+                  <summary class="btn btn--ghost btn--sm">{{icon "i-clock"}}Later{{icon "i-chevron-down"}}</summary>
+                  <div class="menu__panel">
+                    <button class="menu__item" type="button" data-action="postpone" data-preset="1h">In 1 hour</button>
+                    <button class="menu__item" type="button" data-action="postpone" data-preset="evening">This evening, 18:00</button>
+                    <button class="menu__item" type="button" data-action="postpone" data-preset="tomorrow">Tomorrow, 09:00</button>
+                  </div>
+                </details>
+                <span class="spacer"></span>
+                <a class="btn btn--ghost btn--sm" href="/workspaces/{{.WorkspaceID}}/tasks">Details</a>
+              </div>
+              {{else if eq .Kind "choice"}}
+              <div class="choice-list">
+                {{range .Options}}
+                <button class="btn btn--sm" type="button" data-action="respond" data-value="{{.}}">{{.}}</button>
+                {{end}}
+              </div>
+              <div class="task__actions">
+                <details class="menu">
+                  <summary class="btn btn--ghost btn--sm">{{icon "i-clock"}}Later{{icon "i-chevron-down"}}</summary>
+                  <div class="menu__panel">
+                    <button class="menu__item" type="button" data-action="postpone" data-preset="1h">In 1 hour</button>
+                    <button class="menu__item" type="button" data-action="postpone" data-preset="evening">This evening, 18:00</button>
+                    <button class="menu__item" type="button" data-action="postpone" data-preset="tomorrow">Tomorrow, 09:00</button>
+                  </div>
+                </details>
+              </div>
+              {{else if eq .Kind "input"}}
+              <form class="inline-form" data-action="respond-input">
+                <label class="sr-only" for="ov-in-{{.WorkspaceID}}-{{.ID}}">Answer</label>
+                <input class="input" id="ov-in-{{.WorkspaceID}}-{{.ID}}" type="text" data-draft-key="input:{{.WorkspaceID}}:{{.ID}}" placeholder="{{if .Placeholder}}{{.Placeholder}}{{else}}Type your answer…{{end}}" autocomplete="off">
+                <button class="btn btn--primary" type="submit">Send</button>
+              </form>
+              <div class="task__actions">
+                <details class="menu">
+                  <summary class="btn btn--ghost btn--sm">{{icon "i-clock"}}Later{{icon "i-chevron-down"}}</summary>
+                  <div class="menu__panel">
+                    <button class="menu__item" type="button" data-action="postpone" data-preset="1h">In 1 hour</button>
+                    <button class="menu__item" type="button" data-action="postpone" data-preset="evening">This evening, 18:00</button>
+                    <button class="menu__item" type="button" data-action="postpone" data-preset="tomorrow">Tomorrow, 09:00</button>
+                  </div>
+                </details>
+              </div>
+              {{end}}
+            </li>
+            {{end}}
+          </ul>
+          {{else}}
+          <div class="empty empty--compact">
+            <span class="empty__icon">{{icon "i-check"}}</span>
+            <p class="empty__title">Nothing needs you right now</p>
+            <p class="empty__text">Approvals, choices, and questions from your Maestros will appear here live.</p>
+          </div>
+          {{end}}
+        </section>
+
+        <div class="overview-side">
+
+          <!-- Agents at work (coming soon until Wire) -->
+          <section class="card panel span-all" aria-labelledby="agents-title">
+            <header class="panel__head">
+              <h2 class="panel__title" id="agents-title">
+                {{icon "i-activity"}}
+                Agents at work
+              </h2>
+              <div class="panel__aside">Coming soon</div>
+            </header>
+            <div class="empty empty--compact">
+              <p class="empty__title">Live agent stream comes with Wire</p>
+              <p class="empty__text">Agent activity across your workspaces will appear here once Wire is connected.</p>
+            </div>
+          </section>
+
+          <!-- Usage -->
+          <section class="card panel" aria-labelledby="usage-title">
+            <header class="panel__head">
+              <h2 class="panel__title" id="usage-title">
+                {{icon "i-gauge"}}
+                Usage
+              </h2>
+              <div class="panel__aside"><a href="/usage">Standby settings</a></div>
+            </header>
+            {{if .UsageAvailable}}
+            <div class="panel__body usage-list">
+              {{range .UsageAccounts}}
+              <div class="usage-provider">
+                <div class="usage-provider__head">
+                  <span class="usage-provider__name">{{.ProviderLabel}}</span>
+                  {{if .StatusLabel}}
+                  <span class="status{{if .StatusBadge}} status--badge{{end}}" data-status="{{.StatusTone}}">{{.StatusLabel}}</span>
+                  {{end}}
+                </div>
+                {{range .Windows}}
+                <div class="gauge"{{if .StatusTone}} data-status="{{.StatusTone}}"{{end}}>
+                  <div class="gauge__row"><span class="gauge__label">{{.Label}}</span><span class="gauge__value">{{.UsedPct}}%</span></div>
+                  <div class="gauge__track"><progress class="gauge__bar" max="100" value="{{.UsedPct}}">{{.UsedPct}}%</progress>{{if and .Armed .MarkClass}}<span class="gauge__mark {{.MarkClass}}" title="Standby at {{.Threshold}}%"></span>{{end}}</div>
+                  <div class="gauge__foot"><span>{{if .ResetLabel}}{{.ResetLabel}}{{else}}&nbsp;{{end}}</span>{{if .FootRight}}<span>{{.FootRight}}</span>{{end}}</div>
+                </div>
+                {{end}}
+              </div>
+              {{end}}
+            </div>
+            {{if .UsageHiddenCount}}
+            <div class="panel__foot">{{.UsageHiddenCount}} {{plural .UsageHiddenCount "provider" "providers"}} hidden: no data (error)</div>
+            {{end}}
+            {{else}}
+            <div class="empty empty--compact">
+              <p class="empty__title">{{if .UsageIssueTitle}}{{.UsageIssueTitle}}{{else}}Usage data unavailable{{end}}</p>
+              <p class="empty__text">{{if .UsageIssueMessage}}{{.UsageIssueMessage}}{{else}}Check Maestri's usage directory in Settings.{{end}}</p>
+            </div>
+            {{end}}
+          </section>
+
+          <!-- Active floors (coming soon until Wire) -->
+          <section class="card panel" aria-labelledby="floors-title">
+            <header class="panel__head">
+              <h2 class="panel__title" id="floors-title">
+                {{icon "i-floors"}}
+                Active floors
+              </h2>
+              <div class="panel__aside">Coming soon</div>
+            </header>
+            <div class="empty empty--compact">
+              <p class="empty__title">Floor status comes with Wire</p>
+              <p class="empty__text">Active workspace floors and progress will appear here in the next milestone.</p>
+            </div>
+          </section>
+
+        </div>
+      </div>
     </div>
 {{end}}
