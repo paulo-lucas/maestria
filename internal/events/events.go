@@ -42,8 +42,13 @@ type WaitOptions struct {
 	Now          func() int64
 }
 
+// Execer is satisfied by *sql.DB and *sql.Tx.
+type Execer interface {
+	Exec(query string, args ...any) (sql.Result, error)
+}
+
 // Append writes a new event for workspaceID and returns the persisted row.
-func Append(db *sql.DB, workspaceID, kind string, payload any, nowMs int64) (Event, error) {
+func Append(ex Execer, workspaceID, kind string, payload any, nowMs int64) (Event, error) {
 	if nowMs <= 0 {
 		nowMs = time.Now().UnixMilli()
 	}
@@ -51,7 +56,7 @@ func Append(db *sql.DB, workspaceID, kind string, payload any, nowMs int64) (Eve
 	if err != nil {
 		return Event{}, fmt.Errorf("events: marshal payload: %w", err)
 	}
-	res, err := db.Exec(
+	res, err := ex.Exec(
 		"INSERT INTO events (workspace_id, kind, payload, created_at) VALUES (?, ?, ?, ?)",
 		workspaceID, kind, string(raw), nowMs,
 	)
