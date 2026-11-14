@@ -195,12 +195,38 @@ func TestLifecycleDarwin(t *testing.T) {
 	if err != nil || !st.Installed || !st.Loaded || !st.Running || !st.Server.Reachable {
 		t.Fatalf("unexpected status: %+v err=%v", st, err)
 	}
+	before := len(calls)
 	if err := Restart(ctx, opts); err != nil {
 		t.Fatal(err)
+	}
+	// A loaded job restarts with one atomic kickstart -k, never bootout followed by bootstrap
+	// (that races launchd's teardown: "Bootstrap failed: 5: Input/output error").
+	restartCalls := calls[before:]
+	if len(restartCalls) != 1 || strings.Join(restartCalls[0], " ") != "launchctl kickstart -k gui/501/"+LaunchdLabel {
+		t.Fatalf("restart calls = %v", restartCalls)
 	}
 	stopped, err := Stop(ctx, opts)
 	if err != nil || !stopped {
 		t.Fatalf("stop: %v %v", stopped, err)
+	}
+	// Restarting a job that is not loaded falls back to bootstrap.
+	before = len(calls)
+	failKick := opts
+	failKick.Runner = func(c context.Context, argv []string) CmdResult {
+		if argv[1] == "kickstart" {
+			calls = append(calls, append([]string(nil), argv...))
+			return CmdResult{OK: false, Code: 113, Stderr: "Could not find service"}
+		}
+		return opts.Runner(c, argv)
+	}
+	if err := Restart(ctx, failKick); err != nil {
+		t.Fatal(err)
+	}
+	if got := calls[before:]; len(got) != 2 || got[1][1] != "bootstrap" {
+		t.Fatalf("fallback calls = %v", got)
+	}
+	if _, err := Stop(ctx, opts); err != nil {
+		t.Fatal(err)
 	}
 
 	// Write a fake log line and verify ReadLogs returns it.

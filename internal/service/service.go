@@ -779,7 +779,12 @@ func Restart(ctx context.Context, opts Options) error {
 	case "darwin":
 		domain := fmt.Sprintf("gui/%d", c.uid)
 		target := domain + "/" + LaunchdLabel
-		_ = c.runner(ctx, []string{"launchctl", "bootout", target})
+		// kickstart -k kills and restarts a loaded job in one step. A bootout followed right away
+		// by bootstrap races launchd's teardown and fails with "5: Input/output error".
+		if kick := c.runner(ctx, []string{"launchctl", "kickstart", "-k", target}); kick.OK {
+			return nil
+		}
+		// Not loaded (e.g. after a bootout): load it, which starts it (RunAtLoad).
 		if boot := c.runner(ctx, []string{"launchctl", "bootstrap", domain, unit}); !boot.OK {
 			return serviceErrorf("launchctl bootstrap failed: %s", firstErr(boot.Stderr, "unknown error"))
 		}
