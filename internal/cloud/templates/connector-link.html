@@ -1,0 +1,56 @@
+{{define "page"}}{{template "app" .}}{{end}}
+{{define "content"}}
+    <div class="page page--narrow" data-view="link">
+
+      <header class="page-head">
+        <div class="page-head__title">
+          <h1>Link a machine</h1>
+          <p class="page-head__sub">The connector runs next to Maestri on your machine. It opens an outbound connection to Maestria: no open port, no tunnel.</p>
+        </div>
+      </header>
+
+      <ol class="card checklist">
+        <li class="is-done">
+          <span class="checklist__title">Install the connector</span>
+          <span class="checklist__text">One binary for macOS, Windows and Linux. Skip this if <code>maestria</code> is already installed.</span>
+          <div class="btn-row">
+            <a class="btn btn--sm" href="https://github.com/maestria-dev/maestria/releases">{{icon "i-laptop"}}Downloads</a>
+            <a class="btn btn--ghost btn--sm" href="https://github.com/maestria-dev/maestria#build-from-source">Build from source</a>
+          </div>
+        </li>
+        <li aria-current="step">
+          <span class="checklist__title">Run this on the machine</span>
+          <span class="checklist__text" id="link-expiry">The code works once and expires in <span class="num" data-countdown>10:00</span>.</span>
+          <div class="code-display" aria-label="Link code" id="link-code" data-cloud="{{.PublicURL}}">––––-––––</div>
+          <div class="code-inline"><code id="link-command">maestria connect --link ––––-––––{{if .PublicURL}} --cloud {{.PublicURL}}{{end}}</code><button class="btn btn--ghost btn--icon btn--sm" type="button" data-copy aria-label="Copy command" title="Copy command">{{icon "i-copy"}}</button></div>
+        </li>
+        <li>
+          <span class="checklist__title">Confirm on the machine</span>
+          <span class="checklist__text">The connector shows the account it is joining. Type <kbd>y</kbd> to link it. Give the machine a name, like "Workstation".</span>
+          <p class="status status--quiet" id="link-status"><span class="spinner"></span>Waiting for the connector…</p>
+        </li>
+      </ol>
+
+      <details class="disclosure">
+        <summary>{{icon "i-chevron-right"}}Got a code from the CLI instead?</summary>
+        <div class="card card--pad">
+          <form class="field" id="claim-form" action="/api/link/claim" method="post">
+            <label class="field__label" for="cli-code">Code shown by <code>maestria connect</code></label>
+            <div class="inline-form">
+              <input class="input mono" id="cli-code" type="text" autocomplete="off" placeholder="XXXX-XXXX" maxlength="12">
+              <button class="btn btn--primary" type="submit">Link</button>
+            </div>
+            <p class="field__hint" id="claim-hint">You'll still confirm on the machine.</p>
+          </form>
+        </div>
+      </details>
+
+      <div class="banner" data-status="info">
+        {{icon "i-shield"}}
+        <div class="banner__body">
+          <p class="banner__title">Your machine stays in charge</p>
+          <p class="banner__text">The connector only runs a short allowlist of actions, checks every command against a device you approved on the machine itself, keeps its own audit log, and has a kill switch that only works locally. Chats, docs and agent previews pass through here encrypted and are never stored.</p>
+        </div>
+      </div>
+    </div>
+{{end}}

@@ -1,0 +1,18 @@
+{{define "page"}}{{template "auth" .}}{{end}}
+{{define "content"}}
+  <section class="card auth-card" aria-labelledby="t">
+    <div class="auth-card__head">
+      <h1 id="t">Reset your password</h1>
+      <p>We'll email you a link. You will still need your authenticator app or a recovery code.</p>
+    </div>
+    <form method="post" action="/reset">
+      <input type="hidden" name="_csrf" value="{{.CSRF}}">
+      <div class="field">
+        <label class="field__label" for="email">Email</label>
+        <input class="input" id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required>
+      </div>
+      <button class="btn btn--primary btn--block" type="submit">Send reset link</button>
+    </form>
+    <p class="auth-card__alt"><a href="/login">Back to log in</a></p>
+  </section>
+{{end}}

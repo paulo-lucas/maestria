@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -74,6 +75,19 @@ type Tunnel struct {
 	StatusCommand []string `json:"statusCommand"`
 }
 
+// Relay is the connector's policy for relayed (hosted-mode) requests. It is set on the machine,
+// never from the web, so a compromised website cannot loosen it.
+type Relay struct {
+	// Enabled lets `maestria connect` serve relayed requests at all.
+	Enabled bool `json:"enabled"`
+	// ApprovalAbsoluteDays is how long a device stays approved, then it must be approved again.
+	ApprovalAbsoluteDays int `json:"approvalAbsoluteDays"`
+	// IdleDays is how long a device may stay unused before it must be approved again.
+	IdleDays int `json:"idleDays"`
+	// RatePerMinute limits relayed requests per device (writes count double).
+	RatePerMinute int `json:"ratePerMinute"`
+}
+
 // Config is the validated configuration.
 type Config struct {
 	ConfigDir           string
@@ -88,6 +102,9 @@ type Config struct {
 	Usage               Usage
 	Standby             Standby
 	Tunnel              Tunnel
+	Relay               Relay
+	// Cloud is the hosted Maestria URL for `maestria connect` (the --cloud flag overrides it).
+	Cloud string
 }
 
 // Error is a configuration error with a message meant for the user.
@@ -200,6 +217,7 @@ func Defaults(configDir string, env Env) (*Config, error) {
 			WakeOnReset:        true,
 		},
 		Tunnel: Tunnel{StopCommand: []string{}, StartCommand: []string{}, StatusCommand: []string{}},
+		Relay:  Relay{Enabled: true, ApprovalAbsoluteDays: 30, IdleDays: 7, RatePerMinute: 120},
 	}, nil
 }
 
@@ -211,7 +229,7 @@ var (
 	knownTopKey = map[string]bool{
 		"maestriDir": true, "port": true, "cookieSecure": true, "allowedHosts": true,
 		"trustCfConnectingIp": true, "session": true, "login": true, "cloudflareAccess": true,
-		"usage": true, "standby": true, "tunnel": true,
+		"usage": true, "standby": true, "tunnel": true, "relay": true, "cloud": true,
 	}
 )
 
@@ -406,6 +424,39 @@ func Parse(data []byte, configDir string, env Env) (*Config, error) {
 		} {
 			if v, ok := o[key]; ok {
 				if *dst, err = argvField(v, "tunnel."+key); err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+	if raw, ok := top["cloud"]; ok && !isNull(raw) {
+		var u string
+		if json.Unmarshal(raw, &u) != nil || !validCloudURL(u) {
+			return nil, errorf("config: \"cloud\" must be an https URL like https://maestria.example (http is only allowed for localhost)")
+		}
+		cfg.Cloud = strings.TrimRight(u, "/")
+	}
+	if raw, ok := top["relay"]; ok {
+		o, err := decodeObj(raw, "relay")
+		if err != nil {
+			return nil, err
+		}
+		if v, ok := o["enabled"]; ok {
+			if cfg.Relay.Enabled, err = boolField(v, "relay.enabled"); err != nil {
+				return nil, err
+			}
+		}
+		for _, f := range []struct {
+			key    string
+			dst    *int
+			lo, hi int
+		}{
+			{"approvalAbsoluteDays", &cfg.Relay.ApprovalAbsoluteDays, 1, 365},
+			{"idleDays", &cfg.Relay.IdleDays, 1, 365},
+			{"ratePerMinute", &cfg.Relay.RatePerMinute, 1, 6000},
+		} {
+			if v, ok := o[f.key]; ok {
+				if *f.dst, err = intField(v, "relay."+f.key, f.lo, f.hi); err != nil {
 					return nil, err
 				}
 			}
@@ -652,3 +703,19 @@ func InspectMaestriDir(dir string) MaestriDirStatus {
 	}
 	return st
 }
+
+// validCloudURL accepts an https URL, or http for a loopback host (development).
+func validCloudURL(s string) bool {
+	u, err := url.Parse(strings.TrimSpace(s))
+	if err != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+		return false
+	}
+	if u.Scheme == "https" {
+		return true
+	}
+	h := strings.ToLower(u.Hostname())
+	return u.Scheme == "http" && (h == "localhost" || h == "127.0.0.1" || h == "::1")
+}
+
+// ValidCloudURL reports whether s is an acceptable cloud URL (https, or http on loopback).
+func ValidCloudURL(s string) bool { return validCloudURL(s) }

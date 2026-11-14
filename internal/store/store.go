@@ -167,6 +167,33 @@ var migrations = []string{
 		PRIMARY KEY (workspace_id, agent)
 	);
 	`,
+	// 6: hosted mode. Devices (browsers) approved on this machine, and pairings waiting for the
+	// local approval. The connector is the authority: the cloud only mirrors the public keys.
+	`
+	CREATE TABLE IF NOT EXISTS devices (
+		id           TEXT PRIMARY KEY,   -- hex(sha256(spki))[:32]
+		spki         TEXT NOT NULL,      -- SPKI DER, base64url
+		label        TEXT NOT NULL,
+		state        TEXT NOT NULL CHECK (state IN ('active','revoked','expired')),
+		approved_at  INTEGER NOT NULL,   -- epoch ms
+		last_used_at INTEGER NOT NULL,
+		revoked_at   INTEGER
+	);
+	CREATE TABLE IF NOT EXISTS device_pairings (
+		pair_id        TEXT PRIMARY KEY,
+		commit_hash    TEXT NOT NULL,    -- base64url sha256 sent before the key
+		label          TEXT NOT NULL,
+		ua             TEXT NOT NULL,
+		r              TEXT NOT NULL,    -- connector random, base64url
+		spki           TEXT,
+		nonce          TEXT,
+		code           TEXT,             -- 6 digits, set once revealed and verified
+		state          TEXT NOT NULL CHECK (state IN ('pending','revealed','approved','rejected','expired','mismatch')),
+		reported_state TEXT NOT NULL DEFAULT '',
+		created_at     INTEGER NOT NULL,
+		expires_at     INTEGER NOT NULL
+	);
+	`,
 }
 
 // Open opens (creating if needed) the v2 database in configDir and migrates it.
@@ -186,7 +213,11 @@ func Open(configDir string) (*sql.DB, error) {
 }
 
 // OpenPath opens a database at an explicit path and migrates it.
-func OpenPath(path string) (*sql.DB, error) {
+func OpenPath(path string) (*sql.DB, error) { return OpenWith(path, migrations) }
+
+// OpenWith opens a database at an explicit path and applies the given ordered, append-only
+// migrations. The hosted server uses it with its own list.
+func OpenWith(path string, migs []string) (*sql.DB, error) {
 	q := url.Values{}
 	q.Add("_pragma", "busy_timeout(5000)")
 	q.Add("_pragma", "journal_mode(WAL)")
@@ -206,7 +237,7 @@ func OpenPath(path string) (*sql.DB, error) {
 		db.Close()
 		return nil, fmt.Errorf("store: open %s: %w", path, err)
 	}
-	if err := Migrate(db); err != nil {
+	if err := MigrateWith(db, migs); err != nil {
 		db.Close()
 		return nil, err
 	}
@@ -214,7 +245,10 @@ func OpenPath(path string) (*sql.DB, error) {
 }
 
 // Migrate applies pending migrations, each in its own transaction.
-func Migrate(db *sql.DB) error {
+func Migrate(db *sql.DB) error { return MigrateWith(db, migrations) }
+
+// MigrateWith applies the given migrations (PRAGMA user_version records how many ran).
+func MigrateWith(db *sql.DB, migrations []string) error {
 	ctx := context.Background()
 	var version int
 	if err := db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {

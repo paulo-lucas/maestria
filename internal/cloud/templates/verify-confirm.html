@@ -1,0 +1,19 @@
+{{define "page"}}{{template "auth" .}}{{end}}
+{{define "content"}}
+  <section class="card auth-card" aria-labelledby="t">
+    <ol class="steps" aria-label="Sign-up steps"><li class="is-done"><span class="step__n">✓</span><span class="step__label">Account</span></li><li aria-current="step"><span class="step__n">2</span><span class="step__label">Verify email</span></li><li><span class="step__n">3</span><span class="step__label">Two-factor</span></li></ol>
+    <div class="auth-card__head">
+      <h1 id="t">Confirm your email</h1>
+      <p>For <strong>{{.Email}}</strong>. Enter your password to verify it is you and continue.</p>
+    </div>
+    <form method="post" action="/verify/{{.Token}}">
+      <input type="hidden" name="_csrf" value="{{.CSRF}}">
+      <div class="field">
+        <label class="field__label" for="pw">Password</label>
+        <input class="input" id="pw" name="password" type="password" autocomplete="current-password" required{{if .Error}} aria-invalid="true"{{end}}>
+        {{if .Error}}<p class="field__error" role="alert">{{.Error}}</p>{{end}}
+      </div>
+      <button class="btn btn--primary btn--block" type="submit">Verify and continue</button>
+    </form>
+  </section>
+{{end}}

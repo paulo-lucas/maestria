@@ -138,7 +138,12 @@
     });
   }
 
+  // In hosted mode the page sets window.MaestriaHost: it signs requests for a machine and builds
+  // the page from several machines. Local mode never sets it and nothing below changes.
+  const host = window.MaestriaHost || null;
+
   async function api(url, opts = {}) {
+    if (host) return host.api(url, opts);
     const headers = {
       'X-CSRF-Token': csrf,
       'Accept': 'application/json',
@@ -173,22 +178,31 @@
     pendingRefresh = false;
 
     try {
-      const res = await fetch(location.href, {
-        credentials: 'same-origin',
-        headers: { 'X-Requested-With': 'maestria-live' },
-      });
-      if (!res.ok) {
-        if (res.status === 401 || res.redirected) {
-          location.href = res.url || '/login';
+      let html;
+      if (host) {
+        html = await host.page();
+        if (html == null) return;
+        if (!force && isUserBusy()) {
+          pendingRefresh = true;
+          return;
         }
-        return;
+      } else {
+        const res = await fetch(location.href, {
+          credentials: 'same-origin',
+          headers: { 'X-Requested-With': 'maestria-live' },
+        });
+        if (!res.ok) {
+          if (res.status === 401 || res.redirected) {
+            location.href = res.url || '/login';
+          }
+          return;
+        }
+        if (!force && isUserBusy()) {
+          pendingRefresh = true;
+          return;
+        }
+        html = await res.text();
       }
-      if (!force && isUserBusy()) {
-        pendingRefresh = true;
-        return;
-      }
-
-      const html = await res.text();
       const doc = new DOMParser().parseFromString(html, 'text/html');
       const openDisclosures = captureOpenDisclosures();
 
@@ -635,7 +649,9 @@
   applyAgentsFilter(document);
   syncDocsNavPicker(document);
 
-  if (typeof EventSource === 'function') {
+  window.MaestriaPanel = { refresh: scheduleRefresh, refreshNow, applyFilters: (root) => { applyOverviewFilter(root); applyAgentsFilter(root); restoreDrafts(root); } };
+
+  if (typeof EventSource === 'function' && !host) {
     const es = new EventSource('/api/stream');
     ['update', 'refresh', 'inbox', 'chat', 'standby', 'usage', 'workspaces', 'floors'].forEach((ev) => {
       es.addEventListener(ev, scheduleRefresh);

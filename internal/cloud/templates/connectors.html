@@ -1,0 +1,97 @@
+{{define "page"}}{{template "app" .}}{{end}}
+{{define "content"}}
+    <div class="page page--narrow" data-view="connectors">
+
+      <header class="page-head">
+        <div class="page-head__title">
+          <h1>Connectors</h1>
+          <p class="page-head__sub">One per machine. Each one mirrors its own Maestri live and enforces its own rules.</p>
+        </div>
+        <div class="page-head__actions"><a class="btn btn--primary" href="/connectors/link">{{icon "i-plug"}}Link a machine</a></div>
+      </header>
+
+      {{range .Connectors}}
+      <section class="card panel" aria-labelledby="c-{{.ID}}" data-connector="{{.ID}}">
+        <header class="panel__head">
+          <h2 class="panel__title" id="c-{{.ID}}">{{icon "i-laptop"}}<span data-conn-name>{{.Name}}</span></h2>
+          <span class="status status--badge" data-status="{{if .Online}}ok{{else}}offline{{end}}">{{if .Online}}Online{{else}}Offline{{end}}</span>
+          <div class="panel__aside">
+            {{if .Online}}
+            <details class="menu menu--end">
+              <summary class="btn btn--ghost btn--icon btn--sm" aria-label="Connector actions">{{icon "i-more"}}</summary>
+              <div class="menu__panel">
+                <button class="menu__item" type="button" data-action="rename-connector" data-id="{{.ID}}" data-name="{{.Name}}">Rename</button>
+                <a class="menu__item" href="/security">Policies</a>
+                <div class="menu__sep"></div>
+                <button class="menu__item" type="button" data-action="revoke-connector" data-id="{{.ID}}" data-name="{{.Name}}">Revoke this machine</button>
+              </div>
+            </details>
+            {{else}}
+            <button class="btn btn--sm" type="button" data-action="revoke-connector" data-id="{{.ID}}" data-name="{{.Name}}">Revoke</button>
+            {{end}}
+          </div>
+        </header>
+        <div class="panel__body">
+          <dl class="kv">
+            {{if .Online}}
+            <dt>Version</dt><dd>{{if .Version}}{{.Version}}{{else}}unknown{{end}}</dd>
+            <dt>System</dt><dd>{{.System}}</dd>
+            <dt>Last seen</dt><dd>just now <span class="subtle">· connected {{.Connected}}</span></dd>
+            <dt>Maestri Wire</dt><dd data-slot="wire"><span class="subtle">Checking…</span></dd>
+            <dt>Workspaces</dt><dd data-slot="workspaces"><span class="subtle">Loading…</span></dd>
+            <dt>Kill switch</dt><dd>{{if .KillSwitch}}<span class="status" data-status="danger">On</span> <span class="subtle">· only turned off on that machine</span>{{else}}Off{{end}}</dd>
+            <dt>Linked</dt><dd>{{.Linked}}</dd>
+            {{else}}
+            <dt>Last seen</dt><dd>{{.LastSeen}}</dd>
+            {{if .Version}}<dt>Last version</dt><dd>{{.Version}}</dd>{{end}}
+            {{if .System}}<dt>System</dt><dd>{{.System}}</dd>{{end}}
+            <dt>Linked</dt><dd>{{.Linked}}</dd>
+            {{end}}
+          </dl>
+        </div>
+        {{if not .Online}}<div class="panel__foot">Its workspaces are hidden while it is offline and come back when it reconnects. Not using it anymore? Revoke it.</div>{{end}}
+      </section>
+      {{else}}
+      <div class="card">
+        <div class="empty">
+          <span class="empty__icon">{{icon "i-plug" "icon--lg"}}</span>
+          <p class="empty__title">No machine linked yet</p>
+          <p class="empty__text">Link the machine where Maestri runs. It opens an outbound connection: no open port, no tunnel.</p>
+          <a class="btn btn--primary btn--sm" href="/connectors/link">Link a machine</a>
+        </div>
+      </div>
+      {{end}}
+
+      <dialog class="dialog" id="rename-dialog" aria-labelledby="rename-title">
+        <form method="dialog" id="rename-form">
+          <div class="dialog__body">
+            <h2 class="dialog__title" id="rename-title">Rename this machine</h2>
+            <div class="field">
+              <label class="field__label" for="rename-input">Name</label>
+              <input class="input" id="rename-input" type="text" maxlength="60" autocomplete="off">
+              <p class="field__error" id="rename-error" hidden></p>
+            </div>
+          </div>
+          <div class="dialog__foot">
+            <button class="btn" type="button" data-close-dialog>Cancel</button>
+            <button class="btn btn--primary" type="submit">Save</button>
+          </div>
+        </form>
+      </dialog>
+
+      <dialog class="dialog" id="revoke-dialog" aria-labelledby="revoke-title">
+        <form method="dialog" id="revoke-form">
+          <div class="dialog__body" data-status="danger">
+            <span class="dialog__icon">{{icon "i-power" "icon--lg"}}</span>
+            <h2 class="dialog__title" id="revoke-title">Revoke <span id="revoke-name">this machine</span>?</h2>
+            <p class="dialog__text">It is disconnected now and cannot reconnect. To use it again, link it again with a new code. Nothing on the machine is deleted.</p>
+            <p class="field__error" id="revoke-error" hidden></p>
+          </div>
+          <div class="dialog__foot">
+            <button class="btn" type="button" data-close-dialog>Cancel</button>
+            <button class="btn btn--danger" type="submit">Revoke</button>
+          </div>
+        </form>
+      </dialog>
+    </div>
+{{end}}

@@ -1,0 +1,27 @@
+{{define "page"}}{{template "auth" .}}{{end}}
+{{define "content"}}
+  <section class="card auth-card auth-card--wide" aria-labelledby="t">
+    <ol class="steps" aria-label="Sign-up steps"><li class="is-done"><span class="step__n">✓</span><span class="step__label">Account</span></li><li class="is-done"><span class="step__n">✓</span><span class="step__label">Verify email</span></li><li aria-current="step"><span class="step__n">3</span><span class="step__label">Two-factor</span></li></ol>
+    <div class="auth-card__head">
+      <h1 id="t">Set up two-factor authentication</h1>
+      <p>Scan this code with an authenticator app (1Password, Bitwarden, Google Authenticator, Aegis…).</p>
+    </div>
+    <div class="qr-row">
+      <div class="qr"><svg viewBox="0 0 {{.QRSize}} {{.QRSize}}" role="img" aria-label="QR code for your authenticator app" shape-rendering="crispEdges"><path d="{{.QRPath}}"/></svg></div>
+      <div class="field">
+        <span class="field__label">Can't scan? Enter this key</span>
+        <div class="code-inline"><code>{{.Secret}}</code><button class="btn btn--ghost btn--icon btn--sm" type="button" data-copy aria-label="Copy key" title="Copy key">{{icon "i-copy"}}</button></div>
+        <p class="field__hint">Time-based (TOTP), 6 digits, 30 seconds.</p>
+      </div>
+    </div>
+    <form method="post" action="/signup/2fa">
+      <input type="hidden" name="_csrf" value="{{.CSRF}}">
+      <div class="field">
+        <label class="field__label" for="code">Code from the app</label>
+        <input class="input input--code" id="code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000" required{{if .Error}} aria-invalid="true"{{end}}>
+        {{if .Error}}<p class="field__error" role="alert">{{.Error}}</p>{{end}}
+      </div>
+      <button class="btn btn--primary btn--block" type="submit">Verify and continue</button>
+    </form>
+  </section>
+{{end}}

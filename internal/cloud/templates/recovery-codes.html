@@ -1,0 +1,18 @@
+{{define "page"}}{{template "auth" .}}{{end}}
+{{define "content"}}
+  <section class="card auth-card auth-card--wide" aria-labelledby="t">
+    <div class="auth-card__head">
+      <h1 id="t">Save your recovery codes</h1>
+      <p>If you lose your phone, each code lets you in once. They are shown only now. Keep them in your password manager.</p>
+    </div>
+    <ul class="recovery-codes" id="codes">
+      {{range .Codes}}<li>{{.}}</li>{{end}}
+    </ul>
+    <div class="btn-row">
+      <button class="btn" type="button" data-copy-list="codes" aria-label="Copy all codes">{{icon "i-copy"}}Copy</button>
+      <button class="btn" type="button" data-download-list="codes" data-filename="maestria-recovery-codes.txt">Download .txt</button>
+    </div>
+    <label class="check"><input type="checkbox" id="saved"> I saved these codes somewhere safe</label>
+    <a class="btn btn--primary btn--block" href="/connectors/link" data-requires-link="saved">Continue: link your machine</a>
+  </section>
+{{end}}

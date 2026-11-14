@@ -38,22 +38,24 @@ var defaultTargets = []target{
 }
 
 type releaseOpts struct {
-	OutDir           string
-	RepoRoot         string
-	Version          string
-	Commit           string
-	Date             string
-	Targets          []target
+	OutDir   string
+	RepoRoot string
+	Version  string
+	Commit   string
+	Date     string
+	Targets  []target
+	// Binaries limits the build to these cmd/ names (default: every binary found).
+	Binaries         []string
 	HomebrewTemplate string
 	HomebrewOut      string
 }
 
 type artifact struct {
-	Binary  string
-	Target  target
-	Name    string
-	Path    string
-	SHA256  string
+	Binary string
+	Target target
+	Name   string
+	Path   string
+	SHA256 string
 }
 
 func main() {
@@ -63,6 +65,7 @@ func main() {
 	commit := flag.String("commit", "", "git commit SHA (defaults to git rev-parse --short HEAD)")
 	date := flag.String("date", "", "build timestamp in RFC3339 UTC (defaults to current UTC time)")
 	targetsRaw := flag.String("targets", "", "comma-separated os/arch targets (defaults to all 5 release targets)")
+	binariesRaw := flag.String("binaries", "", "comma-separated cmd/ names to build (defaults to maestria and maestria-cloud)")
 	hbTemplate := flag.String("homebrew-template", "", "optional path to Homebrew formula template")
 	hbOut := flag.String("homebrew-out", "", "optional output path for rendered Homebrew formula")
 	flag.Parse()
@@ -78,12 +81,23 @@ func main() {
 		Commit:           *commit,
 		Date:             *date,
 		Targets:          targets,
+		Binaries:         splitList(*binariesRaw),
 		HomebrewTemplate: *hbTemplate,
 		HomebrewOut:      *hbOut,
 	}
 	if err := runRelease(opts, os.Stdout); err != nil {
 		fatal("%v", err)
 	}
+}
+
+func splitList(raw string) []string {
+	var out []string
+	for _, tok := range strings.Split(raw, ",") {
+		if tok = strings.TrimSpace(tok); tok != "" {
+			out = append(out, tok)
+		}
+	}
+	return out
 }
 
 func parseTargets(raw string) ([]target, error) {
@@ -146,6 +160,19 @@ func runRelease(opts releaseOpts, stdout io.Writer) error {
 	}
 
 	binaries := discoverBinaries(root)
+	if len(opts.Binaries) > 0 {
+		found := map[string]bool{}
+		for _, b := range binaries {
+			found[b] = true
+		}
+		binaries = nil
+		for _, want := range opts.Binaries {
+			if !found[want] {
+				return fmt.Errorf("binary %q not found under %s/cmd", want, root)
+			}
+			binaries = append(binaries, want)
+		}
+	}
 	if len(binaries) == 0 {
 		return fmt.Errorf("no binaries found under %s/cmd", root)
 	}

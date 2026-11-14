@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/maestria-dev/maestria/internal/auth"
+	"github.com/maestria-dev/maestria/internal/connect"
 	"github.com/maestria-dev/maestria/internal/service"
 )
 
@@ -21,7 +22,7 @@ func cmdService(args []string, env *Env) error {
 	case "help", "--help", "-h":
 		fmt.Fprintln(env.Stdout, serviceUsage)
 		fmt.Fprintln(env.Stdout, "\nOptions:")
-		fmt.Fprintln(env.Stdout, "  --mode serve|connect   Service mode for install (default: serve)")
+		fmt.Fprintln(env.Stdout, "  --mode serve|connect|both   Service mode for install (default: serve). both = local panel and hosted connection in one process")
 		fmt.Fprintln(env.Stdout, "  --lines N, -n N        Number of trailing log lines for logs (default: 100)")
 		fmt.Fprintln(env.Stdout, "  --path                 Print only log directory path for logs")
 		fmt.Fprintln(env.Stdout, "  --json                 Machine-readable JSON output")
@@ -66,7 +67,7 @@ func cmdServiceInstall(args []string, env *Env) error {
 		return usagef("%v", err)
 	}
 	if len(parsed.Pos) > 0 {
-		return usagef("Usage: maestria service install [--mode serve|connect] [--json]")
+		return usagef("Usage: maestria service install [--mode serve|connect|both] [--json]")
 	}
 	mode, err := service.ValidateMode(parsed.String("mode"))
 	if err != nil {
@@ -87,9 +88,14 @@ func cmdServiceInstall(args []string, env *Env) error {
 	}
 	fmt.Fprintf(env.Stdout, "Installed Maestria service (%s): %s\n", res.Mode, res.UnitPath)
 	fmt.Fprintf(env.Stdout, "Logs: %s\n", res.LogDir)
-	if res.Mode == service.ModeServe {
+	if res.Mode == service.ModeServe || res.Mode == service.ModeBoth {
 		if sec, err := auth.LoadSecrets(configDir(env)); err == nil && sec == nil {
 			fmt.Fprintln(env.Stdout, `Note: credentials are not configured yet. Run "maestria auth setup" before starting.`)
+		}
+	}
+	if res.Mode == service.ModeConnect || res.Mode == service.ModeBoth {
+		if l, err := connect.LoadLink(configDir(env)); err == nil && l == nil {
+			fmt.Fprintln(env.Stdout, `Note: this machine is not linked yet. Run "maestria connect --link CODE --cloud URL" once before starting.`)
 		}
 	}
 	fmt.Fprintln(env.Stdout, "Start now with: maestria service start")

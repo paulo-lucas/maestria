@@ -4,6 +4,7 @@ package cli
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -22,7 +23,10 @@ const help = `maestria: control panel for Maestri workspaces
 
 Usage:
   maestria init                      Run the interactive setup wizard
-  maestria serve                     Start the panel (127.0.0.1 only)
+  maestria serve [--connect]         Start the panel (127.0.0.1 only); also connects to the cloud when linked
+  maestria connect [--link CODE]     Link this machine to a hosted Maestria and stay connected (no local panel)
+  maestria connect status|unlink     Show the link, or revoke it
+  maestria devices pending|approve|reject|list|revoke   Approve browsers on this machine (hosted mode)
   maestria service <subcommand>      Manage background service (install|uninstall|start|stop|restart|status|logs)
   maestria post <kind> <body>        Post a human task or notice (notice|approve|input|choice)
   maestria inbox                     List inbox tasks
@@ -52,6 +56,8 @@ type Env struct {
 	Now    func() time.Time
 	// ReadSecret reads a line without echo. nil uses the terminal.
 	ReadSecret func(prompt string) (string, error)
+	// Ctx ends long-running commands (connect) when cancelled. nil uses SIGINT and SIGTERM.
+	Ctx context.Context
 	// IsTTY reports whether Stdin is an interactive terminal. nil checks Stdin.(*os.File).
 	IsTTY func() bool
 	// ServiceRunner, ServiceBinaryPath, and ServiceReachability allow tests to stub service operations.
@@ -132,6 +138,10 @@ func run(args []string, env *Env) error {
 		return cmdInit(rest, env)
 	case "serve":
 		return cmdServe(rest, env)
+	case "connect":
+		return cmdConnect(rest, env)
+	case "devices", "device":
+		return cmdDevices(rest, env)
 	case "service":
 		return cmdService(rest, env)
 	case "auth":

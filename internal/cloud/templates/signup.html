@@ -1,0 +1,29 @@
+{{define "page"}}{{template "auth" .}}{{end}}
+{{define "content"}}
+  <section class="card auth-card" aria-labelledby="t">
+    <ol class="steps" aria-label="Sign-up steps"><li aria-current="step"><span class="step__n">1</span><span class="step__label">Account</span></li><li><span class="step__n">2</span><span class="step__label">Verify email</span></li><li><span class="step__n">3</span><span class="step__label">Two-factor</span></li></ol>
+    <div class="auth-card__head">
+      <h1 id="t">Create your account</h1>
+      <p>One account sees every workspace on every machine you link.</p>
+    </div>
+    <form method="post" action="/signup">
+      <input type="hidden" name="_csrf" value="{{.CSRF}}">
+      <div class="field">
+        <label class="field__label" for="email">Email</label>
+        <input class="input" id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com" value="{{.Email}}" required>
+      </div>
+      <div class="field">
+        <label class="field__label" for="pw">Password</label>
+        <input class="input" id="pw" name="password" type="password" autocomplete="new-password" aria-describedby="pw-hint" minlength="12" required{{if .Error}} aria-invalid="true"{{end}}>
+        <p class="field__hint" id="pw-hint">At least 12 characters. A passphrase works well.</p>
+        {{if .Error}}<p class="field__error" role="alert">{{.Error}}</p>{{end}}
+      </div>
+      <button class="btn btn--primary btn--block" type="submit">Continue</button>
+    </form>
+    <div class="banner" data-status="info">
+      {{icon "i-lock"}}
+      <div class="banner__body"><p class="banner__text">Two-factor authentication is required. Chats, docs and agent previews pass through here encrypted and are never stored.</p></div>
+    </div>
+    <p class="auth-card__alt">Already have an account? <a href="/login">Log in</a></p>
+  </section>
+{{end}}

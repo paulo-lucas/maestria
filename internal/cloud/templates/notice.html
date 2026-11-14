@@ -1,0 +1,14 @@
+{{define "page"}}{{template "auth" .}}{{end}}
+{{define "content"}}
+  <section class="card auth-card" aria-labelledby="t">
+    <div class="auth-card__head">
+      <h1 id="t">{{.Heading}}</h1>
+      <p>{{.Info}}</p>
+    </div>
+    {{if .Error}}<div class="banner" data-status="danger" role="alert">{{icon "i-alert"}}<div class="banner__body"><p class="banner__text">{{.Error}}</p></div></div>{{end}}
+    <div class="btn-row">
+      {{if .PrimaryHref}}<a class="btn btn--primary" href="{{.PrimaryHref}}">{{.PrimaryLabel}}</a>{{end}}
+      {{if .SecondaryHref}}<a class="btn btn--ghost" href="{{.SecondaryHref}}">{{.SecondaryLabel}}</a>{{end}}
+    </div>
+  </section>
+{{end}}
