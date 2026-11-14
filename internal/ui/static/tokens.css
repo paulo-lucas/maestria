@@ -142,6 +142,8 @@
 [data-ws="pink"],   [data-tone="pink"]   { --tone-h: 350; --tone-c: 0.14; }
 [data-ws="violet"], [data-tone="violet"] { --tone-h: 300; --tone-c: 0.14; }
 [data-ws="slate"],  [data-tone="slate"]  { --tone-h: 255; --tone-c: 0.03; --tone-l: 0.55; }
+/* Not a workspace colour: a true red, for chat thread swatches (rose and pink sit too close). */
+[data-tone="red"] { --tone-h: 27; --tone-c: 0.19; }
 
 /* Status semantics. */
 [data-status="working"] { --tone-h: 255; --tone-c: 0.15; }

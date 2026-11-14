@@ -17,7 +17,7 @@ import (
 // threadTone maps a Maestri thread colour to a design tone (data-tone), so the swatches follow
 // the tokens and stay readable in light and dark.
 var threadTone = map[string]string{
-	"blue": "blue", "purple": "violet", "pink": "pink", "red": "rose",
+	"blue": "blue", "purple": "violet", "pink": "pink", "red": "red",
 	"orange": "orange", "yellow": "amber", "green": "green", "graphite": "slate",
 }
 

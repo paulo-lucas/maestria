@@ -71,7 +71,7 @@ func TestChatShowsOneSwatchPerThreadAndTheActiveOneByDefault(t *testing.T) {
 		t.Errorf("%d swatches, want 7", n)
 	}
 	// Tones come from the design tokens, not from inline colours.
-	for _, tone := range []string{`data-tone="blue"`, `data-tone="violet"`, `data-tone="rose"`, `data-tone="amber"`} {
+	for _, tone := range []string{`data-tone="blue"`, `data-tone="violet"`, `data-tone="red"`, `data-tone="amber"`} {
 		if !strings.Contains(page, tone) {
 			t.Errorf("missing %s", tone)
 		}
