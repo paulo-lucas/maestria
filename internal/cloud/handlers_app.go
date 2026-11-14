@@ -101,7 +101,7 @@ func (s *Server) shellData(r *http.Request, title, nav string) *pageData {
 		initial = strings.ToUpper(sess.User.Email[:1])
 	}
 	return &pageData{Title: title, Nav: nav, CSRF: sess.CSRFToken, Email: sess.User.Email, Initial: initial,
-		Scripts: []string{"hosted-keys.js", "hosted.js"}, PublicURL: s.cfg.PublicURL}
+		Scripts: []string{"hosted-keys.js", "hosted.js", "panel.js"}, PublicURL: s.cfg.PublicURL}
 }
 
 // getApp serves the app shell for every in-app route. Cloud-owned pages are rendered here;
@@ -117,7 +117,10 @@ func (s *Server) getApp(w http.ResponseWriter, r *http.Request) {
 	case path == "/security":
 		nav, title = "security", "Devices & security"
 	case path == "/pair":
-		nav, title = "security", "Approve this browser"
+		d := s.shellData(r, "Approve this browser", "security")
+		d.Scripts = []string{"hosted-keys.js", "pair.js"}
+		s.render(w, "pair", d)
+		return
 	case path == "/usage" || strings.HasSuffix(path, "/usage"):
 		nav, title = "usage", "Usage & standby"
 	case strings.HasPrefix(path, "/workspaces/") || strings.HasPrefix(path, "/c/"):

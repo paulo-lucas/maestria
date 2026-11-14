@@ -8,7 +8,7 @@ import (
 func TestAllowlist(t *testing.T) {
 	yes := [][2]string{
 		{"GET", "/api/workspaces"}, {"GET", "/api/workspaces/atlas/inbox"}, {"POST", "/api/workspaces/atlas/inbox/12/respond"},
-		{"POST", "/api/workspaces/atlas/chat"}, {"GET", "/api/stream"}, {"GET", "/workspaces/atlas/tasks"}, {"GET", "/usage"},
+		{"POST", "/api/workspaces/atlas/chat"}, {"GET", "/api/stream"}, {"GET", "/workspaces/atlas/tasks"}, {"GET", "/usage"}, {"GET", "/"},
 		{"POST", "/api/devices/abc/revoke"}, {"POST", "/api/kill-switch"}, {"POST", "/api/workspaces/a/agents/t1/approve"},
 	}
 	for _, c := range yes {
@@ -18,7 +18,7 @@ func TestAllowlist(t *testing.T) {
 	}
 	no := [][2]string{
 		{"POST", "/login"}, {"POST", "/login/2fa"}, {"POST", "/logout"}, {"POST", "/logout-all"}, {"POST", "/kill-switch"},
-		{"GET", "/api/session"}, {"GET", "/api/tunnel"}, {"POST", "/api/tunnel/on"}, {"GET", "/security"}, {"GET", "/"},
+		{"GET", "/api/session"}, {"GET", "/api/tunnel"}, {"POST", "/api/tunnel/on"}, {"GET", "/security"}, {"POST", "/"},
 		{"POST", "/api/devices/abc/approve"}, {"POST", "/api/devices"}, {"DELETE", "/api/devices/abc/revoke"},
 		{"GET", "/api/workspaces/a/inbox/extra"}, {"POST", "/api/workspaces//chat"}, {"GET", "/static/panel.js"},
 		{"PUT", "/api/workspaces"}, {"GET", "api/workspaces"}, {"GET", ""}, {"POST", "/api/workspaces"}, {"GET", "/api/workspaces/a/docs/asset"},

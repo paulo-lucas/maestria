@@ -30,6 +30,7 @@ var allowlist = []route{
 	r("GET", "/api/relay/info"),
 	r("GET", "/api/devices"),
 
+	r("GET", "/"),
 	r("GET", "/workspaces/*/tasks"),
 	r("GET", "/workspaces/*/chat"),
 	r("GET", "/workspaces/*/activity"),

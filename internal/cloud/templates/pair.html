@@ -1,0 +1,11 @@
+{{define "page"}}{{template "authapp" .}}{{end}}
+{{define "content"}}
+  <section class="card auth-card" aria-labelledby="t" id="pair-root">
+    <div class="auth-card__head">
+      <h1 id="t">Approve this browser on your machine</h1>
+      <p>Your machines only accept commands from devices they approved. This happens once per device.</p>
+    </div>
+    <div id="pair-body"><p class="status status--quiet"><span class="spinner"></span>Preparing this browser…</p></div>
+    <noscript><p>Approving a browser needs JavaScript: the key that signs your requests is created in the browser.</p></noscript>
+  </section>
+{{end}}

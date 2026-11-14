@@ -15,6 +15,21 @@
   {{end}}
 </head>{{end}}
 
+{{define "authapp"}}{{template "head" .}}
+<body data-csrf="{{.CSRF}}" data-page="{{.Nav}}" data-email="{{.Email}}" data-app="pair">
+{{sprite}}
+<main class="auth" id="main">
+  <a class="brand auth__brand" href="/">{{template "brandmark"}} Maestria</a>
+{{template "content" .}}
+  <footer class="auth__foot">
+    <span>Open source, MIT</span>
+    {{template "themetoggle" " btn--sm"}}
+  </footer>
+</main>
+</body>
+</html>
+{{end}}
+
 {{define "app"}}{{template "head" .}}
 <body data-csrf="{{.CSRF}}" data-page="{{.Nav}}" data-email="{{.Email}}" data-app="hosted">
 {{sprite}}
