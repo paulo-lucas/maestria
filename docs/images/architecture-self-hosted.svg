@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 470" width="1000" height="470" role="img" aria-labelledby="t d">
+  <title id="t">Maestria self-hosted mode</title>
+  <desc id="d">A browser or phone reaches the panel through an optional Cloudflare Tunnel. The connector on your machine serves the panel on 127.0.0.1 only and talks to Maestri Wire on localhost, which talks to Maestri. On the same machine the browser can open the panel directly.</desc>
+  <style>
+    text { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    .h { fill: #1f2328; font-size: 16px; font-weight: 600; }
+    .s { fill: #59636e; font-size: 13px; }
+    .k { fill: #59636e; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; font-weight: 600; }
+    .a { fill: #0b5cd5; font-size: 13px; font-weight: 600; }
+    .box { fill: #8b949e; fill-opacity: .10; stroke: #8b949e; stroke-width: 1.5; }
+    .opt { fill: #8b949e; fill-opacity: .05; stroke: #8b949e; stroke-width: 1.5; stroke-dasharray: 7 5; }
+    .hot { fill: #2f81f7; fill-opacity: .13; stroke: #2f81f7; stroke-width: 2; }
+    .zone { fill: none; stroke: #8b949e; stroke-width: 1.5; stroke-dasharray: 7 5; }
+    .ln { fill: none; stroke: #8b949e; stroke-width: 2; }
+    .lh { fill: none; stroke: #2f81f7; stroke-width: 2.5; }
+    .arr { fill: #8b949e; }
+    .arh { fill: #2f81f7; }
+    @media (prefers-color-scheme: dark) {
+      .h { fill: #e6edf3; }
+      .s, .k { fill: #9198a1; }
+      .a { fill: #79b8ff; }
+      .box { fill-opacity: .14; }
+      .hot { fill: #58a6ff; stroke: #58a6ff; fill-opacity: .16; }
+      .lh { stroke: #58a6ff; }
+      .arh { fill: #58a6ff; }
+    }
+  </style>
+  <defs>
+    <marker id="g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="arr"/></marker>
+    <marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="arh"/></marker>
+  </defs>
+
+  <!-- Browser / phone -->
+  <rect class="box" x="20" y="70" width="170" height="110" rx="14"/>
+  <text class="h" x="105" y="118" text-anchor="middle">Browser or phone</text>
+  <text class="s" x="105" y="140" text-anchor="middle">password + 2FA</text>
+  <text class="s" x="105" y="158" text-anchor="middle">to sign in</text>
+
+  <!-- Browser -> tunnel -->
+  <path class="ln" d="M192 125 H278" marker-end="url(#g)"/>
+  <text class="s" x="235" y="112" text-anchor="middle">HTTPS</text>
+
+  <!-- Cloudflare Tunnel (optional) -->
+  <rect class="opt" x="280" y="70" width="210" height="110" rx="14"/>
+  <text class="k" x="385" y="94" text-anchor="middle">Optional</text>
+  <text class="h" x="385" y="118" text-anchor="middle">Cloudflare Tunnel</text>
+  <text class="s" x="385" y="140" text-anchor="middle">maestria.example.com</text>
+  <text class="s" x="385" y="160" text-anchor="middle">Cloudflare Access can add a login</text>
+
+  <!-- Tunnel -> connector -->
+  <path class="ln" d="M492 125 H598" marker-end="url(#g)"/>
+  <text class="s" x="531" y="112" text-anchor="middle">cloudflared</text>
+
+  <!-- Your machine -->
+  <rect class="zone" x="570" y="30" width="410" height="410" rx="18"/>
+  <text class="k" x="590" y="56">Your machine</text>
+
+  <!-- Connector -->
+  <rect class="hot" x="600" y="70" width="350" height="110" rx="14"/>
+  <text class="h" x="775" y="102" text-anchor="middle">Connector + panel</text>
+  <text class="s" x="775" y="124" text-anchor="middle">serves the panel on 127.0.0.1:4777 only</text>
+  <text class="s" x="775" y="142" text-anchor="middle">holds your data, rules and audit log</text>
+  <text class="s" x="775" y="160" text-anchor="middle">kill switch can only be undone here</text>
+
+  <path class="ln" d="M775 182 V238" marker-end="url(#g)"/>
+  <text class="s" x="790" y="216">localhost</text>
+
+  <!-- Wire -->
+  <rect class="box" x="600" y="240" width="350" height="62" rx="14"/>
+  <text class="h" x="775" y="268" text-anchor="middle">Maestri Wire</text>
+  <text class="s" x="775" y="288" text-anchor="middle">pinned certificate, read and owner devices</text>
+
+  <path class="ln" d="M775 304 V348" marker-end="url(#g)"/>
+
+  <!-- Maestri -->
+  <rect class="box" x="600" y="350" width="350" height="70" rx="14"/>
+  <text class="h" x="775" y="380" text-anchor="middle">Maestri</text>
+  <text class="s" x="775" y="400" text-anchor="middle">agents, Maestro, floors</text>
+
+  <!-- Notes under the left side -->
+  <text class="k" x="20" y="262">At your desk</text>
+  <text class="s" x="20" y="286">Skip the tunnel: open http://127.0.0.1:4777</text>
+  <text class="s" x="20" y="306">on the same machine.</text>
+  <text class="k" x="20" y="348">Away from your desk</text>
+  <text class="s" x="20" y="372">Add a Cloudflare Tunnel. The tunnel dials out,</text>
+  <text class="s" x="20" y="392">so your machine still has no open port.</text>
+  <text class="a" x="20" y="432">Nothing but your own machine holds your data.</text>
+</svg>
