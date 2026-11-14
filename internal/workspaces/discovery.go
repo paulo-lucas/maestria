@@ -21,18 +21,67 @@ type rawAgent struct {
 }
 
 type rawManifestEntry struct {
-	ID              string     `json:"id"`
-	Name            string     `json:"name"`
-	Path            string     `json:"path"`
-	WorkspacePath   string     `json:"workspacePath"`
-	Dir             string     `json:"dir"`
-	Root            string     `json:"root"`
-	MaestroAgent    string     `json:"maestroAgent"`
-	Maestro         string     `json:"maestro"`
-	MaestroProvider string     `json:"maestroProvider"`
-	Provider        string     `json:"provider"`
-	Color           string     `json:"color"`
-	Agents          []rawAgent `json:"agents"`
+	ID               string            `json:"id"`
+	Name             string            `json:"name"`
+	Path             string            `json:"path"`
+	WorkspacePath    string            `json:"workspacePath"`
+	WorkingDirectory string            `json:"workingDirectory"`
+	Dir              string            `json:"dir"`
+	Root             string            `json:"root"`
+	MaestroAgent     string            `json:"maestroAgent"`
+	Maestro          string            `json:"maestro"`
+	MaestroProvider  string            `json:"maestroProvider"`
+	Provider         string            `json:"provider"`
+	Color            string            `json:"color"`
+	Agents           []rawAgent        `json:"agents"`
+	Payload          *rawManifestEntry `json:"payload"`
+}
+
+var roadmapCandidates = []string{
+	"docs/roadmap.md",
+	"docs/ROADMAP.md",
+	"ROADMAP.md",
+	"roadmap.md",
+}
+
+func detectRoadmap(wsPath string) string {
+	if wsPath == "" {
+		return ""
+	}
+	for _, rel := range roadmapCandidates {
+		full := filepath.Join(wsPath, filepath.FromSlash(rel))
+		if info, err := os.Stat(full); err == nil && info.Mode().IsRegular() {
+			return rel
+		}
+	}
+	return ""
+}
+
+func unwrapEntry(e rawManifestEntry) rawManifestEntry {
+	if e.Payload == nil {
+		return e
+	}
+	p := *e.Payload
+	if p.ID == "" {
+		p.ID = e.ID
+	}
+	return p
+}
+
+func readWorkspaceJSON(path, fallbackID string) (rawManifestEntry, bool) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return rawManifestEntry{}, false
+	}
+	var entry rawManifestEntry
+	if json.Unmarshal(raw, &entry) != nil {
+		return rawManifestEntry{}, false
+	}
+	entry = unwrapEntry(entry)
+	if entry.ID == "" {
+		entry.ID = fallbackID
+	}
+	return entry, true
 }
 
 // Discover reads Maestri's manifest.json and workspaces/*/workspace.json in strictly read-only mode.
@@ -48,7 +97,27 @@ func Discover(maestriDir, homeDir string) ([]Workspace, error) {
 
 	manifestPath := filepath.Join(maestriDir, "manifest.json")
 	if data, err := os.ReadFile(manifestPath); err == nil {
-		entries = append(entries, parseManifest(data)...)
+		for _, e := range parseManifest(data) {
+			e = unwrapEntry(e)
+			if strings.HasSuffix(strings.ToLower(strings.TrimSpace(e.Path)), ".json") {
+				wf := strings.TrimSpace(e.Path)
+				if !filepath.IsAbs(wf) {
+					wf = filepath.Join(maestriDir, filepath.FromSlash(wf))
+				}
+				if loaded, ok := readWorkspaceJSON(wf, e.ID); ok {
+					entries = append(entries, loaded)
+				}
+				continue
+			}
+			if firstNonEmpty(e.WorkingDirectory, e.Path, e.WorkspacePath, e.Dir, e.Root) == "" && e.ID != "" {
+				wf := filepath.Join(maestriDir, "workspaces", e.ID, "workspace.json")
+				if loaded, ok := readWorkspaceJSON(wf, e.ID); ok {
+					entries = append(entries, loaded)
+					continue
+				}
+			}
+			entries = append(entries, e)
+		}
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return nil, err
 	}
@@ -60,18 +129,9 @@ func Discover(maestriDir, homeDir string) ([]Workspace, error) {
 			if !de.IsDir() {
 				continue
 			}
-			raw, err := os.ReadFile(filepath.Join(wsDir, de.Name(), "workspace.json"))
-			if err != nil {
-				continue
+			if entry, ok := readWorkspaceJSON(filepath.Join(wsDir, de.Name(), "workspace.json"), de.Name()); ok {
+				entries = append(entries, entry)
 			}
-			var entry rawManifestEntry
-			if json.Unmarshal(raw, &entry) != nil {
-				continue
-			}
-			if entry.ID == "" {
-				entry.ID = de.Name()
-			}
-			entries = append(entries, entry)
 		}
 	}
 
@@ -134,7 +194,7 @@ func parseEntryCollection(raw json.RawMessage) []rawManifestEntry {
 }
 
 func convertDiscovered(e rawManifestEntry, homeDir string, idx int) (Workspace, bool) {
-	p := firstNonEmpty(e.Path, e.WorkspacePath, e.Dir, e.Root)
+	p := firstNonEmpty(e.WorkingDirectory, e.Path, e.WorkspacePath, e.Dir, e.Root)
 	if p != "" && homeDir != "" {
 		p = config.ExpandHome(p, homeDir)
 	}
@@ -173,6 +233,7 @@ func convertDiscovered(e rawManifestEntry, homeDir string, idx int) (Workspace, 
 		Path:            p,
 		MaestroAgent:    agent,
 		MaestroProvider: provider,
+		RoadmapPath:     detectRoadmap(p),
 		Color:           color,
 		Tone:            ColorTone(color),
 		Discovered:      true,
