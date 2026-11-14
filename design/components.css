@@ -745,8 +745,8 @@ a.agent-line:hover { background: var(--surface-2); }
 
 /* ---------- Chat ---------- */
 
-.chat { display: grid; gap: var(--space-5); }
-.msg { display: grid; gap: var(--space-2); max-width: 72ch; }
+.chat { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-5); }
+.msg { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-2); max-width: 72ch; min-width: 0; }
 .msg__head { display: flex; align-items: center; gap: var(--space-2); font-size: var(--fs-sm); font-weight: var(--fw-semibold); }
 .msg__head time { color: var(--text-3); font-size: var(--fs-xs); font-weight: var(--fw-regular); }
 .msg--maestro .msg__body { padding-left: 36px; }
@@ -1079,3 +1079,4 @@ a.agent-line:hover { background: var(--surface-2); }
   .table--stack td[data-label] { grid-column: 2; color: var(--text-3); font-size: var(--fs-xs); }
   .table--stack td[data-label]::before { content: attr(data-label) ": "; }
 }
+p.status { white-space: normal; }

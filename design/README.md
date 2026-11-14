@@ -12,7 +12,14 @@ Static, clickable mockups of the v2 panel. Open `index.html` in a browser (no se
 | `shell.css` | App shell (sidebar, top bar, bottom nav) and page layouts. Production. |
 | `sheet.css` | Only for the review pages (`index`, `components`, `preview`). |
 | `assets/icons.svg` | Icon sprite. Each page inlines a copy so `<use href="#i-...">` works from `file://`. |
-| `assets/mock.js` | Mock interactions only (theme toggle, filters, tabs, menus). Not production. |
+| `assets/mock.js` | Mock interactions only (theme toggle, filters, tabs, menus, dialogs). Not production. |
+| `src/*.html` | Page bodies with a JSON header (title, scope, active nav, index group). Edit these. |
+| `screens/*.html` | Generated pages: body wrapped in the shell (sidebar, top bar, bottom nav) or the auth layout. Don't edit by hand. |
+| `tools/build.mjs` | The generator. Also regenerates `index.html` and the screen list in `preview.html`. |
+
+## Editing
+
+Edit `src/<page>.html` (or the shell in `tools/build.mjs`), then run `node design/tools/build.mjs`. No dependencies.
 
 ## Conventions
 

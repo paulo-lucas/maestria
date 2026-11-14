@@ -29,7 +29,10 @@ const WORKSPACES = [
   { id: 'juniper', name: 'Juniper', color: 'amber', needs: 1 },
   { id: 'quarry', name: 'Quarry', color: 'rose', needs: 0, offline: true },
 ];
-const TOTAL_NEEDS = WORKSPACES.reduce((n, w) => n + w.needs, 0);
+const TOTAL_NEEDS_ALL = WORKSPACES.reduce((n, w) => n + w.needs, 0);
+// Pages can zero every count ("clearNeeds") or hide workspaces ("noWorkspaces").
+const wsFor = (m) => (m.noWorkspaces ? [] : m.clearNeeds ? WORKSPACES.map((w) => ({ ...w, needs: 0 })) : WORKSPACES);
+const needsFor = (m) => wsFor(m).reduce((n, w) => n + w.needs, 0);
 
 const WS_NAV = [
   { id: 'activity', label: 'Activity', short: 'Activity', icon: 'i-activity', href: 'workspace-activity.html' },
@@ -56,8 +59,8 @@ function themeToggle(extra = '') {
 }
 
 function sidebar(m) {
-  const ws = m.noWorkspaces ? [] : WORKSPACES;
-  const needs = m.noWorkspaces ? 0 : TOTAL_NEEDS;
+  const ws = wsFor(m);
+  const needs = needsFor(m);
   const g = (id) => GLOBAL_NAV.find((n) => n.id === id);
   const item = (n) => `<a class="nav__item" href="${n.href}"${current(m.nav === n.id)}>${icon(n.icon)} ${n.label}${n.count && needs ? ` <span class="count" data-status="needs" title="Needs you">${needs}</span>` : ''}</a>`;
   const wsItems = ws.map((w) => {
@@ -69,6 +72,8 @@ function sidebar(m) {
     return '      ' + html;
   }).join('\n');
   const offline = m.conn === 'offline';
+  const connMeta = offline ? 'Offline · last seen 14:02' : m.conn === 'wire-off' ? 'Connected · Wire off' : 'Connected · Wire OK';
+  const connDot = offline ? 'offline' : m.conn === 'wire-off' ? 'warn' : 'ok';
   return `<aside class="sidebar" aria-label="Main">
     <a class="brand" href="overview.html">${BRAND_MARK} Maestria</a>
     <nav class="nav">
@@ -82,10 +87,10 @@ ${wsItems || '      <p class="nav__empty">No workspaces yet</p>'}
     </nav>
     <div class="sidebar__foot">
       <a class="conn-card" href="connector.html">
-        <span class="dot" data-status="${offline ? 'offline' : 'ok'}"></span>
+        <span class="dot" data-status="${connDot}"></span>
         <span class="conn-card__name">Workstation</span>
         <span class="conn-card__ver">v2.0.3</span>
-        <span class="conn-card__meta">${offline ? 'Offline · last seen 14:02' : 'Connected · Wire OK'}</span>
+        <span class="conn-card__meta">${connMeta}</span>
       </a>
       ${m.noWorkspaces ? '' : `<a class="conn-card" href="connector.html">
         <span class="dot" data-status="offline"></span>
@@ -103,8 +108,9 @@ ${wsItems || '      <p class="nav__empty">No workspaces yet</p>'}
 }
 
 function topbar(m) {
-  const ws = WORKSPACES.find((w) => w.id === m.scope);
-  const ws_ = m.noWorkspaces ? [] : WORKSPACES;
+  const ws_ = wsFor(m);
+  const ws = ws_.find((w) => w.id === m.scope);
+  const total = needsFor(m);
   const summary = ws
     ? `<span class="swatch swatch--lg" data-ws="${ws.color}"></span><span class="truncate">${ws.name}</span>`
     : `${icon('i-overview', 'scope__all-icon')}<span class="truncate">All workspaces</span>`;
@@ -119,7 +125,7 @@ function topbar(m) {
         ${icon('i-chevron-down')}
       </summary>
       <div class="menu__panel">
-        <a class="menu__item" href="overview.html"${current(m.scope === 'all')}>${icon('i-overview')} All workspaces${TOTAL_NEEDS && !m.noWorkspaces ? ` <span class="count" data-status="needs">${TOTAL_NEEDS}</span>` : ''}</a>
+        <a class="menu__item" href="overview.html"${current(m.scope === 'all')}>${icon('i-overview')} All workspaces${total ? ` <span class="count" data-status="needs">${total}</span>` : ''}</a>
         ${items ? '<div class="menu__sep"></div>\n' + items : ''}
       </div>
     </details>
@@ -133,9 +139,9 @@ function topbar(m) {
 }
 
 function bottomnav(m) {
-  const ws = WORKSPACES.find((w) => w.id === m.scope);
+  const ws = wsFor(m).find((w) => w.id === m.scope);
   const items = ws ? WS_NAV : GLOBAL_NAV;
-  const count = ws ? ws.needs : m.noWorkspaces ? 0 : TOTAL_NEEDS;
+  const count = ws ? ws.needs : needsFor(m);
   return `<nav class="bottomnav" aria-label="${ws ? ws.name + ' sections' : 'Sections'}">
 ${items.map((n) => `    <a class="bottomnav__item" href="${n.href}"${current(m.nav === n.id)}>${icon(n.icon)}${n.short}${n.count && count ? `<span class="count" data-status="needs">${count}</span>` : ''}</a>`).join('\n')}
   </nav>`;

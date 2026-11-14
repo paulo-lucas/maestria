@@ -1,0 +1,28 @@
+<!--page {"title": "Atlas · Activity (Wire off)", "scope": "atlas", "nav": "activity", "conn": "wire-off", "group": "Empty & error states", "order": 112, "icon": "i-wire", "label": "11c. Maestri Wire disabled", "desc": "Connector online but Maestri Wire is off: no live agent data, how to turn it on."}-->
+    <div class="page page--narrow">
+
+      <header class="page-head">
+        <div class="page-head__title">
+          <span class="ws-eyebrow" data-ws="blue"><span class="swatch swatch--lg"></span>Atlas <span class="subtle">· Workstation</span></span>
+          <h1>Activity</h1>
+        </div>
+      </header>
+
+      <div class="banner" data-status="warn">
+        <svg class="icon" aria-hidden="true"><use href="#i-wire"/></svg>
+        <div class="banner__body">
+          <p class="banner__title">Maestri Wire is off on Workstation</p>
+          <p class="banner__text">The connector is online, but it can't see agents, floors or chat without Wire. Tasks the Maestro posts still arrive.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="empty">
+          <span class="empty__icon"><svg class="icon icon--lg" aria-hidden="true"><use href="#i-wire"/></svg></span>
+          <p class="empty__title">Turn on Maestri Wire</p>
+          <p class="empty__text">In Maestri, open <strong>Settings → Wire</strong> and turn it on, then pair it with the connector on that machine:</p>
+          <div class="code-inline"><code>maestria wire pair</code><button class="btn btn--ghost btn--icon btn--sm" type="button" data-copy aria-label="Copy command" title="Copy command"><svg class="icon" aria-hidden="true"><use href="#i-copy"/></svg></button></div>
+          <p class="empty__text">The connector picks it up by itself; this page updates when it does.</p>
+        </div>
+      </div>
+    </div>

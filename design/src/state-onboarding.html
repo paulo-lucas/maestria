@@ -1,0 +1,35 @@
+<!--page {"title": "Welcome", "scope": "all", "nav": "overview", "noWorkspaces": true, "group": "Empty & error states", "order": 110, "icon": "i-sparkle", "label": "11a. No workspaces yet", "desc": "Onboarding: account done, machine linked, add the first workspace with maestria init."}-->
+    <div class="page page--narrow">
+
+      <header class="page-head">
+        <div class="page-head__title">
+          <h1>Welcome to Maestria</h1>
+          <p class="page-head__sub">Two more steps and your Maestros show up here.</p>
+        </div>
+      </header>
+
+      <ol class="card checklist">
+        <li class="is-done">
+          <span class="checklist__title">Create your account</span>
+          <span class="checklist__text">Password and two-factor are set.</span>
+        </li>
+        <li class="is-done">
+          <span class="checklist__title">Link a machine</span>
+          <span class="checklist__text"><span class="status" data-status="ok">Workstation is online</span> · <a href="connector-link.html">Link another</a></span>
+        </li>
+        <li aria-current="step">
+          <span class="checklist__title">Add a workspace</span>
+          <span class="checklist__text">In Maestri, open a workspace and run this in its folder. It installs the Maestria skill, so the workspace's Maestro can post tasks and chat here.</span>
+          <div class="code-inline"><code>maestria init</code><button class="btn btn--ghost btn--icon btn--sm" type="button" data-copy aria-label="Copy command" title="Copy command"><svg class="icon" aria-hidden="true"><use href="#i-copy"/></svg></button></div>
+          <p class="status status--quiet"><span class="spinner"></span>Looking for workspaces on Workstation…</p>
+        </li>
+      </ol>
+
+      <div class="banner" data-status="info">
+        <svg class="icon" aria-hidden="true"><use href="#i-lock"/></svg>
+        <div class="banner__body">
+          <p class="banner__title">What leaves your machine</p>
+          <p class="banner__text">To show them here, the connector sends chats, project docs, agent briefs and the last lines of agent terminals. They travel encrypted and are stored encrypted at rest. Code, secrets and Maestri tokens never leave the machine. Prefer to keep everything local? Run <code>maestria serve</code> instead.</p>
+        </div>
+      </div>
+    </div>

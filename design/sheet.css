@@ -78,7 +78,7 @@
 
 /* Index */
 .index-grid { display: grid; gap: var(--space-3); grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
-.index-card { display: grid; gap: var(--space-1); padding: var(--space-4); color: var(--text); text-decoration: none; }
+.index-card { display: grid; align-content: start; gap: var(--space-1); padding: var(--space-4); color: var(--text); text-decoration: none; }
 .index-card:hover { border-color: var(--line-strong); text-decoration: none; }
 .index-card__title { display: flex; align-items: center; gap: var(--space-2); font-weight: var(--fw-semibold); }
 .index-card__title .count { margin-left: auto; }

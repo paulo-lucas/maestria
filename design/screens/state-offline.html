@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <title>Overview (offline) · Maestria</title>
+  <link rel="stylesheet" href="../tokens.css">
+  <link rel="stylesheet" href="../base.css">
+  <link rel="stylesheet" href="../components.css">
+  <link rel="stylesheet" href="../shell.css">
+  <script src="../assets/mock.js"></script>
+</head>
+<body>
+<!--icons:start (copy of assets/icons.svg)-->
+<svg xmlns="http://www.w3.org/2000/svg" class="sr-only" aria-hidden="true">
+  <symbol id="i-overview" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></symbol>
+  <symbol id="i-activity" viewBox="0 0 24 24"><path d="M3 12h3.5l2.5-7 5 14 2.5-7H21"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M3.5 13.5 6 5h12l2.5 8.5V19a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1z"/><path d="M3.5 13.5h5l1.5 2.5h4l1.5-2.5h5"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M5 4.5h14a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5H10l-5 4v-4a1.5 1.5 0 0 1-1.5-1.5V6A1.5 1.5 0 0 1 5 4.5z"/></symbol>
+  <symbol id="i-floors" viewBox="0 0 24 24"><path d="m12 3.5 8.5 4.5-8.5 4.5L3.5 8z"/><path d="m3.5 12 8.5 4.5 8.5-4.5"/><path d="m3.5 16 8.5 4.5 8.5-4.5"/></symbol>
+  <symbol id="i-docs" viewBox="0 0 24 24"><path d="M6.5 3.5h7.5l4 4v12a1 1 0 0 1-1 1H6.5a1 1 0 0 1-1-1v-15a1 1 0 0 1 1-1z"/><path d="M13.5 3.5V8h4.5"/><path d="M8.5 12.5h7M8.5 16h5"/></symbol>
+  <symbol id="i-gauge" viewBox="0 0 24 24"><path d="M3.5 17a8.5 8.5 0 1 1 17 0"/><path d="m12 17 4-5"/><path d="M3.5 17h2M18.5 17h2"/></symbol>
+  <symbol id="i-plug" viewBox="0 0 24 24"><path d="M9 3.5V8M15 3.5V8"/><path d="M6.5 8h11v3a5.5 5.5 0 0 1-11 0z"/><path d="M12 16.5v4"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.5 19.5 6v5.5c0 4.4-3.1 7.8-7.5 9-4.4-1.2-7.5-4.6-7.5-9V6z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3.5V12"/><path d="M6.6 6.8a7.5 7.5 0 1 0 10.8 0"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+  <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6.5 9.5 5.5 5.5 5.5-5.5"/></symbol>
+  <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9.5 6.5 5.5 5.5-5.5 5.5"/></symbol>
+  <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M4.5 12h15M13.5 6l6 6-6 6"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10z"/></symbol>
+  <symbol id="i-auto" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-terminal" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="m7.5 9.5 3 2.5-3 2.5M12.5 15h4"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M4.5 12 20 4.5 15.5 20l-3-6.5z"/><path d="m12.5 13.5 7.5-9"/></symbol>
+  <symbol id="i-question" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.6a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.4v.4"/><path d="M12 16.8v.2"/></symbol>
+  <symbol id="i-choice" viewBox="0 0 24 24"><path d="M10 6.5h10M10 12h10M10 17.5h10"/><circle cx="5.5" cy="6.5" r="1.5"/><circle cx="5.5" cy="12" r="1.5"/><circle cx="5.5" cy="17.5" r="1.5"/></symbol>
+  <symbol id="i-approve" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="m8.5 12.2 2.4 2.4 4.6-4.8"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 2H5z"/><path d="M10 21h4"/></symbol>
+  <symbol id="i-loop" viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 0 1 13-5.1L19.5 9"/><path d="M19.5 4v5h-5"/><path d="M19.5 12a7.5 7.5 0 0 1-13 5.1L4.5 15"/><path d="M4.5 20v-5h5"/></symbol>
+  <symbol id="i-branch" viewBox="0 0 24 24"><circle cx="6.5" cy="5.5" r="2"/><circle cx="6.5" cy="18.5" r="2"/><circle cx="17.5" cy="7.5" r="2"/><path d="M6.5 7.5v9"/><path d="M17.5 9.5c0 4-3 5.5-6.5 5.5H7"/></symbol>
+  <symbol id="i-merge" viewBox="0 0 24 24"><circle cx="6.5" cy="5.5" r="2"/><circle cx="6.5" cy="18.5" r="2"/><circle cx="17.5" cy="15.5" r="2"/><path d="M6.5 7.5v9"/><path d="M6.5 7.5c0 5 4 8 9 8"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.3 4.4 2.8 17.5A2 2 0 0 0 4.5 20.5h15a2 2 0 0 0 1.7-3L13.7 4.4a2 2 0 0 0-3.4 0z"/><path d="M12 9.5v4.5M12 17v.2"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.8v.2"/></symbol>
+  <symbol id="i-offline" viewBox="0 0 24 24"><path d="m3.5 3.5 17 17"/><path d="M8.7 8.7A4.5 4.5 0 0 0 7 17.5h10"/><path d="M11 6.1A5.5 5.5 0 0 1 17.4 10a3.8 3.8 0 0 1 2.4 6.2"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6.5" y="5" width="3.5" height="14" rx="1"/><rect x="14" y="5" width="3.5" height="14" rx="1"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5.5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="18.5" cy="12" r="1.2"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="4"/><path d="M4.5 20.5a7.5 7.5 0 0 1 15 0"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4.5"/><path d="m11.2 11.8 8.3-8.3M16 7l2.5 2.5M14 9l2 2"/></symbol>
+  <symbol id="i-device" viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M11 18.5h2"/></symbol>
+  <symbol id="i-laptop" viewBox="0 0 24 24"><rect x="4.5" y="5" width="15" height="10.5" rx="1.5"/><path d="M2.5 19h19"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5V6a1.5 1.5 0 0 0-1.5-1.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.4-4.4"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3.5 7a1.5 1.5 0 0 1 1.5-1.5h4.2l2 2.5H19a1.5 1.5 0 0 1 1.5 1.5v8A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5z"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M6.5 3.5h7.5l4 4v12a1 1 0 0 1-1 1H6.5a1 1 0 0 1-1-1v-15a1 1 0 0 1 1-1z"/><path d="M13.5 3.5V8h4.5"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></symbol>
+  <symbol id="i-wire" viewBox="0 0 24 24"><circle cx="5.5" cy="12" r="2"/><circle cx="18.5" cy="12" r="2"/><path d="M7.5 12h3M13.5 12h3"/><path d="M10.5 9.5v5M13.5 9.5v5"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4.5 7h9M17.5 7h2M4.5 17h3M11.5 17h8"/><circle cx="15.5" cy="7" r="2"/><circle cx="9.5" cy="17" r="2"/></symbol>
+  <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3.5c.5 4.3 2.2 6 6.5 6.5-4.3.5-6 2.2-6.5 6.5-.5-4.3-2.2-6-6.5-6.5 4.3-.5 6-2.2 6.5-6.5z"/><path d="M18.5 15.5c.2 1.6.9 2.3 2.5 2.5-1.6.2-2.3.9-2.5 2.5-.2-1.6-.9-2.3-2.5-2.5 1.6-.2 2.3-.9 2.5-2.5z"/></symbol>
+</svg>
+<!--icons:end-->
+<a class="skip-link" href="#main">Skip to content</a>
+
+<div class="app">
+  <aside class="sidebar" aria-label="Main">
+    <a class="brand" href="overview.html"><svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true"><rect class="brand__bg" width="24" height="24" rx="6"/><path class="brand__bars" d="M7 14.5v2.5M10.3 11v6M13.7 7.5V17M17 10v7"/></svg> Maestria</a>
+    <nav class="nav">
+      <a class="nav__item" href="overview.html" aria-current="page"><svg class="icon" aria-hidden="true"><use href="#i-overview"/></svg> Overview <span class="count" data-status="needs" title="Needs you">5</span></a>
+      <div class="nav__group">Workspaces</div>
+      <a class="nav__item" href="workspace-activity.html" data-ws="blue"><span class="swatch"></span> Atlas <span class="count">2</span></a>
+      <a class="nav__item" href="workspace-activity.html" data-ws="violet"><span class="swatch"></span> Nimbus <span class="count">1</span></a>
+      <a class="nav__item" href="workspace-activity.html" data-ws="teal"><span class="swatch"></span> Harbor <span class="count">1</span></a>
+      <a class="nav__item" href="workspace-activity.html" data-ws="amber"><span class="swatch"></span> Juniper <span class="count">1</span></a>
+      <a class="nav__item is-offline" href="workspace-activity.html" data-ws="rose"><span class="swatch"></span> Quarry <span class="nav__trail">Offline</span></a>
+      <div class="nav__group">System</div>
+      <a class="nav__item" href="usage.html"><svg class="icon" aria-hidden="true"><use href="#i-gauge"/></svg> Usage &amp; standby</a>
+      <a class="nav__item" href="connector.html"><svg class="icon" aria-hidden="true"><use href="#i-plug"/></svg> Connectors</a>
+      <a class="nav__item" href="security.html"><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg> Devices &amp; security</a>
+    </nav>
+    <div class="sidebar__foot">
+      <a class="conn-card" href="connector.html">
+        <span class="dot" data-status="offline"></span>
+        <span class="conn-card__name">Workstation</span>
+        <span class="conn-card__ver">v2.0.3</span>
+        <span class="conn-card__meta">Offline · last seen 14:02</span>
+      </a>
+      <a class="conn-card" href="connector.html">
+        <span class="dot" data-status="offline"></span>
+        <span class="conn-card__name">Laptop</span>
+        <span class="conn-card__ver">v2.0.1</span>
+        <span class="conn-card__meta">Last seen 2h ago</span>
+      </a>
+      <div class="account-row">
+        <span class="avatar avatar--sm" data-tone="slate">Y</span>
+        <span class="account-row__name truncate">Your account</span>
+        <button class="btn btn--ghost btn--icon theme-toggle btn--sm" type="button" data-theme-toggle aria-label="Theme: system" title="Theme: system">
+          <svg class="icon i-auto" aria-hidden="true"><use href="#i-auto"/></svg>
+          <svg class="icon i-light" aria-hidden="true"><use href="#i-sun"/></svg>
+          <svg class="icon i-dark" aria-hidden="true"><use href="#i-moon"/></svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <header class="topbar">
+    <a class="brand" href="overview.html" aria-label="Maestria overview"><svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true"><rect class="brand__bg" width="24" height="24" rx="6"/><path class="brand__bars" d="M7 14.5v2.5M10.3 11v6M13.7 7.5V17M17 10v7"/></svg></a>
+    <details class="menu scope">
+      <summary aria-label="Switch workspace">
+        <svg class="icon scope__all-icon" aria-hidden="true"><use href="#i-overview"/></svg><span class="truncate">All workspaces</span>
+        <svg class="icon" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+      </summary>
+      <div class="menu__panel">
+        <a class="menu__item" href="overview.html" aria-current="page"><svg class="icon" aria-hidden="true"><use href="#i-overview"/></svg> All workspaces <span class="count" data-status="needs">5</span></a>
+        <div class="menu__sep"></div>
+        <a class="menu__item" href="workspace-activity.html" data-ws="blue"><span class="swatch swatch--lg"></span> Atlas <span class="count">2</span></a>
+        <a class="menu__item" href="workspace-activity.html" data-ws="violet"><span class="swatch swatch--lg"></span> Nimbus <span class="count">1</span></a>
+        <a class="menu__item" href="workspace-activity.html" data-ws="teal"><span class="swatch swatch--lg"></span> Harbor <span class="count">1</span></a>
+        <a class="menu__item" href="workspace-activity.html" data-ws="amber"><span class="swatch swatch--lg"></span> Juniper <span class="count">1</span></a>
+        <a class="menu__item" href="workspace-activity.html" data-ws="rose"><span class="swatch swatch--lg"></span> Quarry <span class="status" data-status="offline">Offline</span></a>
+      </div>
+    </details>
+    <div class="topbar__end">
+      <a class="conn-dot" href="connector.html" aria-label="Connectors: all offline" title="Connectors: all offline">
+        <svg class="icon" aria-hidden="true"><use href="#i-plug"/></svg><span class="dot" data-status="danger"></span>
+      </a>
+      <button class="btn btn--ghost btn--icon theme-toggle" type="button" data-theme-toggle aria-label="Theme: system" title="Theme: system">
+          <svg class="icon i-auto" aria-hidden="true"><use href="#i-auto"/></svg>
+          <svg class="icon i-light" aria-hidden="true"><use href="#i-sun"/></svg>
+          <svg class="icon i-dark" aria-hidden="true"><use href="#i-moon"/></svg>
+        </button>
+    </div>
+  </header>
+
+  <main class="main" id="main">
+    <div class="page">
+
+      <header class="page-head">
+        <div class="page-head__title">
+          <h1>Overview</h1>
+          <p class="page-head__sub">Last update <time datetime="2026-11-13T14:02">14:02</time> · 38 minutes ago</p>
+        </div>
+      </header>
+
+      <div class="banner" data-status="danger">
+        <svg class="icon" aria-hidden="true"><use href="#i-offline"/></svg>
+        <div class="banner__body">
+          <p class="banner__title">All connectors are offline</p>
+          <p class="banner__text">Showing the last known state from 14:02. Approvals, answers and messages are disabled until a machine reconnects. Is it asleep, or did the network drop?</p>
+        </div>
+        <div class="banner__actions"><a class="btn btn--sm" href="connector.html">Connectors</a></div>
+      </div>
+
+      <!-- Workspaces -->
+      <section class="section" aria-labelledby="ws-title">
+        <h2 class="sr-only" id="ws-title">Workspaces</h2>
+        <div class="ws-strip is-stale">
+          <a class="ws-card" href="workspace-activity.html" data-ws="blue">
+            <div class="ws-card__head"><span class="ws-card__name">Atlas</span><span class="status" data-status="offline">Offline</span></div>
+            <div class="ws-card__stats">
+              <span><strong>3</strong>working</span>
+              <span data-status="needs"><strong>2</strong>need you</span>
+            </div>
+            <div class="ws-card__meta">Workstation</div>
+          </a>
+          <a class="ws-card" href="workspace-activity.html" data-ws="violet">
+            <div class="ws-card__head"><span class="ws-card__name">Nimbus</span><span class="status" data-status="offline">Offline</span></div>
+            <div class="ws-card__stats">
+              <span><strong>2</strong>working</span>
+              <span data-status="needs"><strong>1</strong>needs you</span>
+            </div>
+            <div class="ws-card__meta">Workstation</div>
+          </a>
+          <a class="ws-card" href="workspace-activity.html" data-ws="teal">
+            <div class="ws-card__head"><span class="ws-card__name">Harbor</span><span class="status" data-status="offline">Offline</span></div>
+            <div class="ws-card__stats">
+              <span><strong>2</strong>working</span>
+              <span data-status="needs"><strong>1</strong>needs you</span>
+            </div>
+            <div class="ws-card__meta">Workstation</div>
+          </a>
+          <a class="ws-card" href="workspace-activity.html" data-ws="amber">
+            <div class="ws-card__head"><span class="ws-card__name">Juniper</span><span class="status" data-status="offline">Offline</span></div>
+            <div class="ws-card__stats">
+              <span><strong>1</strong>working</span>
+              <span data-status="needs"><strong>1</strong>needs you</span>
+            </div>
+            <div class="ws-card__meta">Workstation</div>
+          </a>
+          <a class="ws-card is-offline" href="workspace-activity.html" data-ws="rose">
+            <div class="ws-card__head"><span class="ws-card__name">Quarry</span><span class="status" data-status="offline">Offline</span></div>
+            <div class="ws-card__stats">
+              <span class="is-zero"><strong>–</strong>working</span>
+              <span class="is-zero"><strong>0</strong>need you</span>
+            </div>
+            <div class="ws-card__meta">Laptop · last seen 2h ago</div>
+          </a>
+        </div>
+      </section>
+
+      <div class="overview-cols is-stale">
+
+        <!-- Needs you -->
+        <section class="card panel" aria-labelledby="needs-title">
+          <header class="panel__head">
+            <h2 class="panel__title" id="needs-title">
+              <svg class="icon" aria-hidden="true"><use href="#i-inbox"/></svg>
+              Needs you <span class="count" data-status="needs">5</span>
+            </h2>
+            <div class="panel__aside">Newest first</div>
+          </header>
+          <div class="panel__tools">
+            <div class="chip-row" data-filter="needs-list" role="group" aria-label="Filter by workspace">
+              <button class="chip" type="button" aria-pressed="true" data-value="all">All <span class="count">5</span></button>
+              <button class="chip" type="button" aria-pressed="false" data-value="atlas" data-ws="blue"><span class="swatch"></span>Atlas <span class="count">2</span></button>
+              <button class="chip" type="button" aria-pressed="false" data-value="nimbus" data-ws="violet"><span class="swatch"></span>Nimbus <span class="count">1</span></button>
+              <button class="chip" type="button" aria-pressed="false" data-value="harbor" data-ws="teal"><span class="swatch"></span>Harbor <span class="count">1</span></button>
+              <button class="chip" type="button" aria-pressed="false" data-value="juniper" data-ws="amber"><span class="swatch"></span>Juniper <span class="count">1</span></button>
+            </div>
+          </div>
+          <ul class="list" id="needs-list">
+            <li class="task" data-key="atlas" data-status="needs">
+              <div class="task__meta">
+                <span class="ws" data-ws="blue">Atlas</span>
+                <span class="task__kind"><svg class="icon" aria-hidden="true"><use href="#i-terminal"/></svg>Agent prompt</span>
+                <span class="floor-name"><svg class="icon" aria-hidden="true"><use href="#i-branch"/></svg><span class="truncate">billing-webhooks</span></span>
+                <time datetime="2026-11-13T14:00">2m</time>
+              </div>
+              <h3 class="task__title">Orin is waiting: allow <code>pnpm add zod@3.23.8</code>?</h3>
+              <div class="task__actions">
+                <button class="btn btn--primary btn--sm" type="button" data-resolve="Approved"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>Approve</button>
+                <button class="btn btn--sm" type="button" data-resolve="Rejected"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>Reject</button>
+                <span class="spacer"></span>
+                <a class="btn btn--ghost btn--sm" href="workspace-activity.html">See terminal</a>
+              </div>
+            </li>
+            <li class="task" data-key="atlas" data-status="needs">
+              <div class="task__meta">
+                <span class="ws" data-ws="blue">Atlas</span>
+                <span class="task__kind"><svg class="icon" aria-hidden="true"><use href="#i-approve"/></svg>Approval</span>
+                <span class="floor-name"><svg class="icon" aria-hidden="true"><use href="#i-branch"/></svg><span class="truncate">billing-webhooks</span></span>
+                <time datetime="2026-11-13T13:54">8m</time>
+              </div>
+              <h3 class="task__title">Land billing-webhooks into main?</h3>
+              <p class="task__body">All 214 tests pass. The diff touches 9 files under <code>src/billing</code> and adds a retry queue for failed webhook deliveries.</p>
+              <div class="task__actions">
+                <button class="btn btn--primary btn--sm" type="button" data-resolve="Approved"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>Approve</button>
+                <button class="btn btn--sm" type="button" data-resolve="Rejected"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>Reject</button>
+                <button class="btn btn--ghost btn--sm" type="button" data-resolve="Postponed"><svg class="icon" aria-hidden="true"><use href="#i-clock"/></svg>Later</button>
+              </div>
+            </li>
+            <li class="task" data-key="nimbus">
+              <div class="task__meta">
+                <span class="ws" data-ws="violet">Nimbus</span>
+                <span class="task__kind"><svg class="icon" aria-hidden="true"><use href="#i-choice"/></svg>Choice</span>
+                <time datetime="2026-11-13T13:49">13m</time>
+              </div>
+              <h3 class="task__title">Which date format should exports use?</h3>
+              <div class="choice-list">
+                <button class="btn btn--sm" type="button" data-resolve="Chose ISO 8601">ISO 8601</button>
+                <button class="btn btn--sm" type="button" data-resolve="Chose the user's locale">User's locale</button>
+                <button class="btn btn--sm" type="button" data-resolve="Chose both, ISO by default">Both, ISO by default</button>
+              </div>
+            </li>
+            <li class="task" data-key="harbor">
+              <div class="task__meta">
+                <span class="ws" data-ws="teal">Harbor</span>
+                <span class="task__kind"><svg class="icon" aria-hidden="true"><use href="#i-question"/></svg>Question</span>
+                <span class="floor-name"><svg class="icon" aria-hidden="true"><use href="#i-branch"/></svg><span class="truncate">staging-deploy</span></span>
+                <time datetime="2026-11-13T13:37">25m</time>
+              </div>
+              <h3 class="task__title">What is the base URL of the staging API?</h3>
+              <p class="task__body">Corvo is blocked on the deploy script until this is set.</p>
+              <form class="inline-form" action="#">
+                <label class="sr-only" for="ans-harbor">Answer</label>
+                <input class="input" id="ans-harbor" type="text" placeholder="https://staging.example.com" autocomplete="off">
+                <button class="btn btn--primary" type="button" data-resolve="Answered">Send</button>
+              </form>
+            </li>
+            <li class="task" data-key="juniper">
+              <div class="task__meta">
+                <span class="ws" data-ws="amber">Juniper</span>
+                <span class="task__kind"><svg class="icon" aria-hidden="true"><use href="#i-approve"/></svg>Approval</span>
+                <time datetime="2026-11-13T12:58">1h</time>
+              </div>
+              <h3 class="task__title">Publish the rewritten quickstart guide?</h3>
+              <p class="task__body">Draft is in <code>docs/quickstart.md</code>. It replaces the old install steps with the single-binary flow.</p>
+              <div class="task__actions">
+                <button class="btn btn--primary btn--sm" type="button" data-resolve="Approved"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>Approve</button>
+                <button class="btn btn--sm" type="button" data-resolve="Rejected"><svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>Reject</button>
+                <button class="btn btn--ghost btn--sm" type="button" data-resolve="Postponed"><svg class="icon" aria-hidden="true"><use href="#i-clock"/></svg>Later</button>
+              </div>
+            </li>
+          </ul>
+        </section>
+
+        <div class="overview-side">
+
+          <!-- Agents at work -->
+          <section class="card panel span-all" aria-labelledby="agents-title">
+            <header class="panel__head">
+              <h2 class="panel__title" id="agents-title">
+                <svg class="icon" aria-hidden="true"><use href="#i-activity"/></svg>
+                Agents at work <span class="count">8</span>
+              </h2>
+              <div class="panel__aside"><span class="status" data-status="needs">1 waiting</span><span class="status" data-status="blocked">1 blocked</span></div>
+            </header>
+            <ul class="list">
+              <li><a class="agent-line" href="workspace-activity.html">
+                <span class="dot" data-status="needs"></span>
+                <span class="agent-line__top"><span class="agent-line__name">Orin</span><span class="ws" data-ws="blue">Atlas</span><span class="floor-name truncate">billing-webhooks</span></span>
+                <span class="agent-line__brief truncate is-attn" data-status="needs">Waiting on Y/n: install zod</span>
+              </a></li>
+              <li><a class="agent-line" href="workspace-activity.html">
+                <span class="dot" data-status="working"></span>
+                <span class="agent-line__top"><span class="agent-line__name">Vesper</span><span class="ws" data-ws="blue">Atlas</span><span class="floor-name truncate">billing-webhooks</span></span>
+                <span class="agent-line__brief truncate">Writing retry tests for webhook signature failures</span>
+              </a></li>
+              <li><a class="agent-line" href="workspace-activity.html">
+                <span class="dot" data-status="working"></span>
+                <span class="agent-line__top"><span class="agent-line__name">Tamsin</span><span class="ws" data-ws="blue">Atlas</span><span class="floor-name truncate">main</span></span>
+                <span class="agent-line__brief truncate">Reviewing the rate limiter changes</span>
+              </a></li>
+              <li><a class="agent-line" href="workspace-activity.html">
+                <span class="dot" data-status="working"></span>
+                <span class="agent-line__top"><span class="agent-line__name">Pell</span><span class="ws" data-ws="violet">Nimbus</span><span class="floor-name truncate">export-formats</span></span>
+                <span class="agent-line__brief truncate">Streaming CSV exporter for large reports</span>
+              </a></li>
+              <li><a class="agent-line" href="workspace-activity.html">
+                <span class="dot" data-status="working"></span>
+                <span class="agent-line__top"><span class="agent-line__name">Ilse</span><span class="ws" data-ws="violet">Nimbus</span><span class="floor-name truncate">nightly-qa</span></span>
+                <span class="agent-line__brief truncate">Running the nightly regression suite</span>
+              </a></li>
+              <li><a class="agent-line" href="workspace-activity.html">
+                <span class="dot" data-status="blocked"></span>
+                <span class="agent-line__top"><span class="agent-line__name">Corvo</span><span class="ws" data-ws="teal">Harbor</span><span class="floor-name truncate">staging-deploy</span></span>
+                <span class="agent-line__brief truncate is-attn" data-status="blocked">Blocked: needs the staging API URL</span>
+              </a></li>
+              <li><a class="agent-line" href="workspace-activity.html">
+                <span class="dot" data-status="working"></span>
+                <span class="agent-line__top"><span class="agent-line__name">Brann</span><span class="ws" data-ws="teal">Harbor</span><span class="floor-name truncate">main</span></span>
+                <span class="agent-line__brief truncate">Profiling cold start of the API container</span>
+              </a></li>
+              <li><a class="agent-line" href="workspace-activity.html">
+                <span class="dot" data-status="working"></span>
+                <span class="agent-line__top"><span class="agent-line__name">Kesh</span><span class="ws" data-ws="amber">Juniper</span><span class="floor-name truncate">docs-refresh</span></span>
+                <span class="agent-line__brief truncate">Rewriting the quickstart guide</span>
+              </a></li>
+            </ul>
+          </section>
+
+          <!-- Usage -->
+          <section class="card panel" aria-labelledby="usage-title">
+            <header class="panel__head">
+              <h2 class="panel__title" id="usage-title">
+                <svg class="icon" aria-hidden="true"><use href="#i-gauge"/></svg>
+                Usage
+              </h2>
+              <div class="panel__aside"><a href="usage.html">Standby settings</a></div>
+            </header>
+            <div class="panel__body usage-list">
+              <div class="usage-provider">
+                <div class="usage-provider__head"><span class="usage-provider__name">Claude</span><span class="status" data-status="ok">Standby armed</span></div>
+                <div class="gauge">
+                  <div class="gauge__row"><span class="gauge__label">5-hour session</span><span class="gauge__value">64%</span></div>
+                  <div class="gauge__track"><progress class="gauge__bar" max="100" value="64">64%</progress><span class="gauge__mark mark-90" title="Standby at 90%"></span></div>
+                  <div class="gauge__foot"><span>Resets in 2h 10m</span><span>Pause at 90%</span></div>
+                </div>
+                <div class="gauge">
+                  <div class="gauge__row"><span class="gauge__label">Weekly</span><span class="gauge__value">41%</span></div>
+                  <div class="gauge__track"><progress class="gauge__bar" max="100" value="41">41%</progress></div>
+                  <div class="gauge__foot"><span>Resets Mon 09:00</span></div>
+                </div>
+              </div>
+              <div class="usage-provider">
+                <div class="usage-provider__head"><span class="usage-provider__name">Gemini</span><span class="status status--badge" data-status="warn">Paused</span></div>
+                <div class="gauge" data-status="danger">
+                  <div class="gauge__row"><span class="gauge__label">5-hour session</span><span class="gauge__value">93%</span></div>
+                  <div class="gauge__track"><progress class="gauge__bar" max="100" value="93">93%</progress><span class="gauge__mark mark-90" title="Standby at 90%"></span></div>
+                  <div class="gauge__foot"><span>Resets at 15:20</span><span>Wakes the Maestro on reset</span></div>
+                </div>
+                <div class="gauge" data-status="warn">
+                  <div class="gauge__row"><span class="gauge__label">Weekly</span><span class="gauge__value">78%</span></div>
+                  <div class="gauge__track"><progress class="gauge__bar" max="100" value="78">78%</progress></div>
+                  <div class="gauge__foot"><span>Resets Thu 02:00</span></div>
+                </div>
+              </div>
+              <div class="usage-provider">
+                <div class="usage-provider__head"><span class="usage-provider__name">Codex</span></div>
+                <div class="gauge">
+                  <div class="gauge__row"><span class="gauge__label">Weekly</span><span class="gauge__value">18%</span></div>
+                  <div class="gauge__track"><progress class="gauge__bar" max="100" value="18">18%</progress></div>
+                  <div class="gauge__foot"><span>Resets Sun 21:00</span></div>
+                </div>
+              </div>
+            </div>
+            <div class="panel__foot">1 provider hidden: no data (error)</div>
+          </section>
+
+          <!-- Active floors -->
+          <section class="card panel" aria-labelledby="floors-title">
+            <header class="panel__head">
+              <h2 class="panel__title" id="floors-title">
+                <svg class="icon" aria-hidden="true"><use href="#i-floors"/></svg>
+                Active floors
+              </h2>
+            </header>
+            <ul class="list">
+              <li class="floor-line" data-status="review">
+                <div class="floor-line__top"><span class="ws" data-ws="blue">Atlas</span><span class="floor-line__name truncate">billing-webhooks</span><span class="status" data-status="review">Review</span></div>
+                <progress class="progress" max="1" value="0.85">Almost done</progress>
+              </li>
+              <li class="floor-line" data-status="working">
+                <div class="floor-line__top"><span class="ws" data-ws="violet">Nimbus</span><span class="floor-line__name truncate">export-formats</span><span class="status" data-status="working">Working</span></div>
+                <progress class="progress" max="1" value="0.45">Under half</progress>
+              </li>
+              <li class="floor-line" data-status="working">
+                <div class="floor-line__top"><span class="ws" data-ws="violet">Nimbus</span><span class="floor-line__name truncate">nightly-qa</span><span class="status status--quiet"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-loop"/></svg>Ongoing</span></div>
+                <div class="ongoing" role="img" aria-label="Ongoing, no end date"></div>
+              </li>
+              <li class="floor-line" data-status="blocked">
+                <div class="floor-line__top"><span class="ws" data-ws="teal">Harbor</span><span class="floor-line__name truncate">staging-deploy</span><span class="status" data-status="blocked">Blocked</span></div>
+                <p class="floor-line__text">Waiting on the staging API URL</p>
+              </li>
+              <li class="floor-line" data-status="working">
+                <div class="floor-line__top"><span class="ws" data-ws="amber">Juniper</span><span class="floor-line__name truncate">docs-refresh</span><span class="status" data-status="working">Working</span></div>
+              </li>
+            </ul>
+          </section>
+
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <nav class="bottomnav" aria-label="Sections">
+    <a class="bottomnav__item" href="overview.html" aria-current="page"><svg class="icon" aria-hidden="true"><use href="#i-overview"/></svg>Overview<span class="count" data-status="needs">5</span></a>
+    <a class="bottomnav__item" href="usage.html"><svg class="icon" aria-hidden="true"><use href="#i-gauge"/></svg>Usage</a>
+    <a class="bottomnav__item" href="connector.html"><svg class="icon" aria-hidden="true"><use href="#i-plug"/></svg>Connectors</a>
+    <a class="bottomnav__item" href="security.html"><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg>Security</a>
+  </nav>
+</div>
+</body>
+</html>
