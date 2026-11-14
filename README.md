@@ -80,12 +80,11 @@ maestria init
 `maestria init` is idempotent and walks through:
 
 1. **Maestri data directory & workspace discovery** — checks `MAESTRI_HOME` or `~/.maestri` (read-only on usage data) and lets you pick which workspaces to register.
-2. **Optional V1 import** — detects an existing V1 SQLite database and offers a read-only import of inbox items, chat, and events (`maestria import-v1`).
-3. **Authentication setup** — sets your admin password, enrols a TOTP authenticator app, and prints one-time recovery codes (`maestria auth setup`).
-4. **Maestri Wire pairing** — optionally pairs with Maestri Wire so Maestria streams live agent status, chat, and floors (`maestria wire pair`).
-5. **Standby guard defaults** — optionally configures pause thresholds for provider usage.
-6. **Maestro skill install** — installs the embedded `maestria-maestro` skill into Claude (`~/.claude/skills`) and/or Antigravity (`~/.gemini/config/skills`).
-7. **Background service** — optionally installs (and starts) the OS user service.
+2. **Authentication setup** — sets your admin password, enrols a TOTP authenticator app, and prints one-time recovery codes (`maestria auth setup`).
+3. **Maestri Wire pairing** — optionally pairs with Maestri Wire so Maestria streams live agent status, chat, and floors (`maestria wire pair`).
+4. **Standby guard defaults** — optionally configures pause thresholds for provider usage.
+5. **Maestro skill install** — installs the embedded `maestria-maestro` skill into Claude (`~/.claude/skills`) and/or Antigravity (`~/.gemini/config/skills`).
+6. **Background service** — optionally installs (and starts) the OS user service.
 
 ### Non-Interactive Setup
 
@@ -234,11 +233,7 @@ go run ./tools/release \
 
 ## Legacy (V1)
 
-A legacy Node.js/TypeScript implementation lives alongside v2 under `src/`, `public/`, and `test/` while users migrate. Existing V1 data (`maestria.db` inbox, chat, and events) can be imported read-only during `maestria init` or via:
-
-```sh
-maestria import-v1 [--from /path/to/v1-config]
-```
+An unreleased Node.js/TypeScript prototype still lives under `src/`, `public/`, and `test/` and will be removed. It is not distributed and there is no migration path from it.
 
 V1 development commands:
 

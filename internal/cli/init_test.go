@@ -3,7 +3,6 @@ package cli
 import (
 	"bytes"
 	"context"
-	"database/sql"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,9 +11,7 @@ import (
 
 	"github.com/maestria-dev/maestria/internal/auth"
 	"github.com/maestria-dev/maestria/internal/config"
-	"github.com/maestria-dev/maestria/internal/inbox"
 	"github.com/maestria-dev/maestria/internal/service"
-	"github.com/maestria-dev/maestria/internal/store"
 	"github.com/maestria-dev/maestria/internal/workspaces"
 )
 
@@ -93,35 +90,10 @@ func setupSampleMaestriEnv(t *testing.T, home string) (maestriDir, proj1, proj2 
 	return maestriDir, proj1, proj2
 }
 
-func createSampleV1DB(t *testing.T, configDir string) {
-	t.Helper()
-	if err := config.EnsureDir(configDir); err != nil {
-		t.Fatal(err)
-	}
-	v1Path := filepath.Join(configDir, store.V1FileName)
-	db, err := sql.Open("sqlite", "file:"+filepath.ToSlash(v1Path))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-	for _, stmt := range []string{
-		`CREATE TABLE inbox (id INTEGER PRIMARY KEY, workspace_id TEXT, kind TEXT, body TEXT, options_json TEXT, response TEXT, author TEXT, status TEXT, created_at INTEGER, answered_at INTEGER, acknowledged INTEGER, postponed_until INTEGER)`,
-		`CREATE TABLE chat_messages (id INTEGER PRIMARY KEY, workspace_id TEXT, sender TEXT, body TEXT, created_at INTEGER)`,
-		`CREATE TABLE events (id INTEGER PRIMARY KEY, workspace_id TEXT, kind TEXT, payload TEXT, created_at INTEGER)`,
-		`INSERT INTO inbox VALUES (7, 'w1', 'notice', 'Imported V1 notice', NULL, NULL, 'Maestro', 'open', 1700000000000, NULL, 0, NULL)`,
-		`INSERT INTO chat_messages VALUES (3, 'w1', 'maestro', 'Hello from V1', 1700000001000)`,
-	} {
-		if _, err := db.Exec(stmt); err != nil {
-			t.Fatal(err)
-		}
-	}
-}
-
-func TestInitNonInteractiveWithDiscoveryV1ImportAndSkills(t *testing.T) {
+func TestInitNonInteractiveWithDiscoveryAndSkills(t *testing.T) {
 	f := newFixture(t)
 	home := t.TempDir()
 	maestriDir, proj1, _ := setupSampleMaestriEnv(t, home)
-	createSampleV1DB(t, f.dir)
 
 	bin := filepath.Join(t.TempDir(), "maestria")
 	if err := os.WriteFile(bin, []byte("bin"), 0o755); err != nil {
@@ -143,7 +115,6 @@ func TestInitNonInteractiveWithDiscoveryV1ImportAndSkills(t *testing.T) {
 	for _, want := range []string{
 		"Verified Maestri usage providers",
 		"Detected 2 new Maestri workspace(s)",
-		"Imported V1 data",
 		"Installed Maestro skill:",
 		"Installed Maestria service (serve):",
 	} {
@@ -159,17 +130,6 @@ func TestInitNonInteractiveWithDiscoveryV1ImportAndSkills(t *testing.T) {
 	wsList, err := workspaces.Load(f.dir)
 	if err != nil || len(wsList) != 2 || wsList[0].Path != proj1 || wsList[0].RoadmapPath != "ROADMAP.md" {
 		t.Fatalf("workspaces: %+v err=%v", wsList, err)
-	}
-
-	// Verify V1 inbox item was imported into v2 SQLite.
-	db, err := store.Open(f.dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	items, err := inbox.List(db, inbox.ListOptions{WorkspaceID: "w1", Status: inbox.StatusOpen})
-	db.Close()
-	if err != nil || len(items) != 1 || items[0].Body != "Imported V1 notice" {
-		t.Fatalf("imported inbox: %+v err=%v", items, err)
 	}
 
 	// Verify both skills installed.
@@ -190,13 +150,14 @@ func TestInitNonInteractiveWithDiscoveryV1ImportAndSkills(t *testing.T) {
 		t.Fatal("expected service to be installed")
 	}
 
-	// Idempotent re-run preserves existing state and skips duplicate V1 import rows.
+	// Idempotent re-run preserves existing state.
 	code = f.run(env, "init", "--yes")
 	if code != 0 {
 		t.Fatalf("re-run failed (%d): %s", code, f.errOut.String())
 	}
-	if !strings.Contains(f.out.String(), "0 imported / 1 skipped") {
-		t.Fatalf("expected idempotent V1 skip on re-run:\n%s", f.out.String())
+	wsList, err = workspaces.Load(f.dir)
+	if err != nil || len(wsList) != 2 {
+		t.Fatalf("workspaces after re-run: %+v err=%v", wsList, err)
 	}
 }
 

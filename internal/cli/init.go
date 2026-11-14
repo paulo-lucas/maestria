@@ -16,11 +16,9 @@ import (
 
 	"golang.org/x/term"
 
-	"github.com/maestria-dev/maestria/internal/audit"
 	"github.com/maestria-dev/maestria/internal/auth"
 	"github.com/maestria-dev/maestria/internal/config"
 	"github.com/maestria-dev/maestria/internal/service"
-	"github.com/maestria-dev/maestria/internal/store"
 	"github.com/maestria-dev/maestria/internal/wire"
 	"github.com/maestria-dev/maestria/internal/workspaces"
 )
@@ -28,7 +26,7 @@ import (
 //go:embed skill/SKILL.md
 var embeddedSkillMD []byte
 
-const initUsage = "Usage: maestria init [--maestri-dir <path>] [--workspaces all|none|id1,id2] [--standby default|none] [--skill claude,antigravity|both|none] [--service install|start|none] [--service-mode serve|connect] [--import-v1 | --skip-import-v1] [--skip-auth] [--skip-wire] [--yes]"
+const initUsage = "Usage: maestria init [--maestri-dir <path>] [--workspaces all|none|id1,id2] [--standby default|none] [--skill claude,antigravity|both|none] [--service install|start|none] [--service-mode serve|connect] [--skip-auth] [--skip-wire] [--yes]"
 
 var providerIDRE = regexp.MustCompile(`(?i)^[a-z0-9*][a-z0-9._:-]{0,63}$`)
 
@@ -48,8 +46,6 @@ func cmdInit(args []string, env *Env) error {
 			"yes":             true,
 			"non-interactive": true,
 			"skip-auth":       true,
-			"import-v1":       true,
-			"skip-import-v1":  true,
 			"skip-wire":       true,
 			"help":            true,
 		},
@@ -76,9 +72,6 @@ func cmdInit(args []string, env *Env) error {
 	}
 	if parsed.HasString("skill") && parsed.HasString("install-skill") && parsed.String("skill") != parsed.String("install-skill") {
 		return usagef("Pass either --skill or --install-skill, not both with different values.")
-	}
-	if parsed.Bool("import-v1") && parsed.Bool("skip-import-v1") {
-		return usagef("Pass either --import-v1 or --skip-import-v1, not both.")
 	}
 	svcMode, err := service.ValidateMode(parsed.String("service-mode"))
 	if err != nil {
@@ -108,10 +101,6 @@ func cmdInit(args []string, env *Env) error {
 	}
 
 	if err := initAuthStep(in, dir, parsed.Bool("skip-auth"), nonInteractive, env); err != nil {
-		return err
-	}
-
-	if err := initImportV1Step(in, dir, parsed.Bool("import-v1"), parsed.Bool("skip-import-v1"), nonInteractive, env); err != nil {
 		return err
 	}
 
@@ -655,47 +644,6 @@ func initAuthStep(in *bufio.Reader, dir string, skipAuth, nonInteractive bool, e
 		return nil
 	}
 	return runAuthSetup(in, false, env)
-}
-
-func initImportV1Step(in *bufio.Reader, dir string, importFlag, skipFlag, nonInteractive bool, env *Env) error {
-	v1Path := filepath.Join(dir, store.V1FileName)
-	if _, err := os.Stat(v1Path); err != nil {
-		return nil
-	}
-	if skipFlag {
-		fmt.Fprintf(env.Stdout, "Found V1 database at %s; skipping import (--skip-import-v1).\n", v1Path)
-		return nil
-	}
-	doImport := importFlag || nonInteractive
-	if !doImport {
-		ok, err := askConfirm(in, env, fmt.Sprintf("Found V1 database at %s. Import inbox, chat, and events into v2 (read-only)?", v1Path), true)
-		if err != nil {
-			return err
-		}
-		doImport = ok
-	}
-	if !doImport {
-		fmt.Fprintln(env.Stdout, `Skipped V1 data import (run "maestria import-v1" anytime).`)
-		return nil
-	}
-	db, err := store.Open(dir)
-	if err != nil {
-		return err
-	}
-	defer db.Close()
-
-	report, err := store.ImportV1(db, dir, v1Path)
-	if err != nil {
-		return err
-	}
-	_ = audit.New(db, env.Now).Write("import_v1", "init", report)
-	fmt.Fprintf(env.Stdout, "Imported V1 data from %s (inbox: %d imported / %d skipped, chat: %d / %d, events: %d / %d).\n",
-		report.V1Path,
-		report.InboxImported, report.InboxSkipped,
-		report.ChatImported, report.ChatSkipped,
-		report.EventsImported, report.EventsSkipped,
-	)
-	return nil
 }
 
 func initWireStep(in *bufio.Reader, dir string, skipWire, nonInteractive bool, env *Env) error {

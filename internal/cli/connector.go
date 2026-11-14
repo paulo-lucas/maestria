@@ -12,7 +12,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/maestria-dev/maestria/internal/audit"
 	"github.com/maestria-dev/maestria/internal/chat"
 	"github.com/maestria-dev/maestria/internal/config"
 	"github.com/maestria-dev/maestria/internal/events"
@@ -427,40 +426,6 @@ func checkPanelReachable(port int) serverReachability {
 	}
 	_ = conn.Close()
 	return serverReachability{Reachable: true, URL: url}
-}
-
-func cmdImportV1(args []string, env *Env) error {
-	parsed, err := parseFlexArgs(args, flagSpec{
-		Bools:   map[string]bool{"json": true},
-		Strings: map[string]bool{"from": true},
-	})
-	if err != nil {
-		return usagef("%v", err)
-	}
-	dir := configDir(env)
-	db, err := store.Open(dir)
-	if err != nil {
-		return err
-	}
-	defer db.Close()
-
-	report, err := store.ImportV1(db, dir, parsed.String("from"))
-	if err != nil {
-		return err
-	}
-	auditLog := audit.New(db, env.Now)
-	_ = auditLog.Write("import_v1", "cli", report)
-
-	if parsed.Bool("json") {
-		return writeJSONLine(env, report)
-	}
-	fmt.Fprintf(env.Stdout, "Imported from %s:\n  inbox: %d imported, %d skipped\n  chat:  %d imported, %d skipped\n  events:%d imported, %d skipped\n",
-		report.V1Path,
-		report.InboxImported, report.InboxSkipped,
-		report.ChatImported, report.ChatSkipped,
-		report.EventsImported, report.EventsSkipped,
-	)
-	return nil
 }
 
 func parseWaitTimeout(raw string) (time.Duration, error) {
