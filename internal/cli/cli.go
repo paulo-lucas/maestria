@@ -4,6 +4,7 @@ package cli
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -52,7 +53,8 @@ type Env struct {
 	Now    func() time.Time
 	// ReadSecret reads a line without echo. nil uses the terminal.
 	ReadSecret func(prompt string) (string, error)
-	// Serve runs until interrupted. nil uses the real signal-driven serve loop.
+	// Ctx ends long-running commands (connect) when cancelled. nil uses SIGINT and SIGTERM.
+	Ctx     context.Context
 	Version string
 }
 

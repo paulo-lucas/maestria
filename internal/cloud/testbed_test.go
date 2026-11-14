@@ -77,7 +77,7 @@ type syncBuf struct {
 }
 
 func (s *syncBuf) Write(p []byte) (int, error) { s.mu.Lock(); defer s.mu.Unlock(); return s.b.Write(p) }
-func (s *syncBuf) String() string               { s.mu.Lock(); defer s.mu.Unlock(); return s.b.String() }
+func (s *syncBuf) String() string              { s.mu.Lock(); defer s.mu.Unlock(); return s.b.String() }
 
 func newBed(t *testing.T, mut ...func(*Config)) *bed {
 	t.Helper()
@@ -291,3 +291,15 @@ func (br *browser) login(email, password, secret string) bool {
 func (br *browser) signedIn() bool { return br.api("GET", "/api/me", nil).StatusCode == 200 }
 
 const testPassword = "correct horse battery staple"
+
+// newServer starts an http.Server on a free port and returns its base URL.
+func newServer(t *testing.T, s *http.Server) string {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	go s.Serve(ln)
+	t.Cleanup(func() { s.Close() })
+	return "http://" + ln.Addr().String()
+}

@@ -27,6 +27,9 @@ const connectUsage = `Usage:
   maestria connect unlink [--yes]                                      Revoke this machine's link and forget it
 `
 
+// LinkPollInterval is how often the CLI asks the cloud whether its code was entered.
+var LinkPollInterval = 2 * time.Second
+
 // kvState is where the running connector leaves its connection state for `connect status`.
 const kvState = "connect.state"
 
@@ -177,7 +180,7 @@ func yes(s string) bool { return strings.EqualFold(s, "y") || strings.EqualFold(
 func linkMachine(env *Env, dir, cloud, code, name string, assumeYes bool) (*connect.Link, error) {
 	api := &connect.API{Cloud: cloud, Machine: machineInfo(env)}
 	in := bufio.NewReader(env.Stdin)
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := env.signalCtx()
 	defer stop()
 
 	var linked *relay.Linked
@@ -212,7 +215,7 @@ func linkMachine(env *Env, dir, cloud, code, name string, assumeYes bool) (*conn
 			select {
 			case <-ctx.Done():
 				return nil, errors.New("cancelled; nothing was linked")
-			case <-time.After(2 * time.Second):
+			case <-time.After(LinkPollInterval):
 			}
 			p, err := api.Poll(ctx, st.PollToken, false, "")
 			if err != nil {
@@ -261,7 +264,7 @@ func runConnector(env *Env, link *connect.Link) error {
 		return err
 	}
 	defer c.Close()
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := env.signalCtx()
 	defer stop()
 	c.Server.Srv.StartBackground(ctx)
 	fmt.Fprintf(env.Stdout, "Connecting to %s. Approve browsers on this machine with \"maestria devices\".\n", link.Cloud)
@@ -469,4 +472,12 @@ func cmdDevices(args []string, env *Env) error {
 		return nil
 	}
 	return usagef("Unknown devices command %q\n\n%s", args[0], devicesUsage)
+}
+
+// signalCtx is the context a long-running command stops on: env.Ctx (tests), or SIGINT/SIGTERM.
+func (e *Env) signalCtx() (context.Context, context.CancelFunc) {
+	if e.Ctx != nil {
+		return context.WithCancel(e.Ctx)
+	}
+	return signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 }
