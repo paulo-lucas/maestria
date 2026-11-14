@@ -133,6 +133,40 @@ var migrations = []string{
 	CREATE INDEX IF NOT EXISTS idx_floors_ws_state ON floors (workspace_id, state, sort_order, id);
 	CREATE UNIQUE INDEX IF NOT EXISTS idx_floors_live_name ON floors (workspace_id, name) WHERE state IN ('planned','active');
 	`,
+	// 5: Maestri Wire. Inbox gains the agent_prompt kind (a Y/n an agent waits on, mirrored from
+	// the Wire feed) and a ref that keeps it unique while open; agents get a short brief the Maestro
+	// writes through the CLI.
+	`
+	CREATE TABLE inbox_v5 (
+		id              INTEGER PRIMARY KEY AUTOINCREMENT,
+		workspace_id    TEXT NOT NULL,
+		kind            TEXT NOT NULL CHECK (kind IN ('notice','approve','input','choice','agent_prompt')),
+		body            TEXT NOT NULL,
+		options_json    TEXT,
+		response        TEXT,
+		author          TEXT,
+		status          TEXT NOT NULL CHECK (status IN ('open','answered','dismissed')) DEFAULT 'open',
+		created_at      INTEGER NOT NULL,
+		answered_at     INTEGER,
+		acknowledged    INTEGER NOT NULL DEFAULT 0,
+		postponed_until INTEGER,
+		ref             TEXT
+	);
+	INSERT INTO inbox_v5 (id, workspace_id, kind, body, options_json, response, author, status, created_at, answered_at, acknowledged, postponed_until)
+		SELECT id, workspace_id, kind, body, options_json, response, author, status, created_at, answered_at, acknowledged, postponed_until FROM inbox;
+	DROP TABLE inbox;
+	ALTER TABLE inbox_v5 RENAME TO inbox;
+	CREATE INDEX IF NOT EXISTS idx_inbox_ws_status ON inbox (workspace_id, status, id);
+	CREATE UNIQUE INDEX IF NOT EXISTS idx_inbox_open_ref ON inbox (workspace_id, ref) WHERE ref IS NOT NULL AND status = 'open';
+
+	CREATE TABLE IF NOT EXISTS agent_briefs (
+		workspace_id TEXT NOT NULL,
+		agent        TEXT NOT NULL,
+		brief        TEXT NOT NULL,
+		updated_at   INTEGER NOT NULL,
+		PRIMARY KEY (workspace_id, agent)
+	);
+	`,
 }
 
 // Open opens (creating if needed) the v2 database in configDir and migrates it.
