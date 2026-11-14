@@ -269,6 +269,7 @@ a.ws:hover { box-shadow: inset 0 0 0 1px var(--tone-line); }
   box-shadow: var(--shadow-1);
   color: var(--text);
   text-decoration: none;
+  overflow-wrap: normal; /* never break a word mid-way */
   transition: border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
 }
 .ws-card::before {
@@ -281,13 +282,13 @@ a.ws:hover { box-shadow: inset 0 0 0 1px var(--tone-line); }
 }
 .ws-card:hover { border-color: var(--line-strong); box-shadow: var(--shadow-2); text-decoration: none; }
 .ws-card__head { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
-.ws-card__name { font-weight: var(--fw-semibold); font-size: var(--fs-base); letter-spacing: var(--tracking-tight); }
-.ws-card__head .status { margin-left: auto; }
-.ws-card__stats { display: flex; gap: var(--space-4); font-size: var(--fs-xs); color: var(--text-2); }
+.ws-card__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--fw-semibold); font-size: var(--fs-base); letter-spacing: var(--tracking-tight); }
+.ws-card__head .status { margin-left: auto; flex: none; }
+.ws-card__stats { display: flex; gap: var(--space-4); white-space: nowrap; font-size: var(--fs-xs); color: var(--text-2); }
 .ws-card__stats strong { display: block; color: var(--text); font-size: var(--fs-lg); font-weight: var(--fw-semibold); line-height: 1.2; font-variant-numeric: tabular-nums; }
 .ws-card__stats [data-status] strong { color: var(--tone-ink); }
 .ws-card__stats .is-zero strong { color: var(--text-3); }
-.ws-card__meta { color: var(--text-3); font-size: var(--fs-xs); }
+.ws-card__meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-3); font-size: var(--fs-xs); }
 .ws-card.is-offline { background: var(--surface-2); box-shadow: none; }
 .ws-card.is-offline::before { background: var(--line-strong); }
 .ws-card.is-offline .ws-card__name { color: var(--text-2); }

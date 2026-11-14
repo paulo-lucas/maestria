@@ -41,9 +41,7 @@
   gap: var(--space-2);
   height: calc(var(--topbar-h) + env(safe-area-inset-top));
   padding: env(safe-area-inset-top) max(var(--space-3), env(safe-area-inset-right)) 0 max(var(--space-3), env(safe-area-inset-left));
-  background: color-mix(in oklab, var(--bg) 94%, transparent);
-  -webkit-backdrop-filter: saturate(1.4) blur(14px);
-  backdrop-filter: saturate(1.4) blur(14px);
+  background: var(--bg);
   border-bottom: 1px solid var(--line);
 }
 .topbar__end { margin-left: auto; display: flex; align-items: center; gap: var(--space-1); }
@@ -100,10 +98,8 @@
   grid-auto-columns: minmax(0, 1fr);
   height: calc(var(--bottomnav-h) + env(safe-area-inset-bottom));
   padding: 0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
-  background: color-mix(in oklab, var(--surface) 96%, transparent);
-  -webkit-backdrop-filter: saturate(1.4) blur(14px);
-  backdrop-filter: saturate(1.4) blur(14px);
-  border-top: 1px solid var(--line);
+  background: var(--surface); /* opaque: list content must never show behind the labels */
+  border-top: 1px solid var(--line-strong);
 }
 .bottomnav__item {
   position: relative;
@@ -249,7 +245,7 @@
 .ws-strip {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: 148px;
+  grid-auto-columns: minmax(176px, max-content);
   gap: var(--space-2);
   margin: 0 calc(var(--space-4) * -1);
   padding: 2px var(--space-4) var(--space-1);
