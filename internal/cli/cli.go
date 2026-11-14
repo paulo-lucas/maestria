@@ -15,12 +15,15 @@ import (
 	"golang.org/x/term"
 
 	"github.com/maestria-dev/maestria/internal/config"
+	"github.com/maestria-dev/maestria/internal/service"
 )
 
 const help = `maestria: control panel for Maestri workspaces
 
 Usage:
+  maestria init                      Run the interactive setup wizard
   maestria serve                     Start the panel (127.0.0.1 only)
+  maestria service <subcommand>      Manage background service (install|uninstall|start|stop|restart|status|logs)
   maestria post <kind> <body>        Post a human task or notice (notice|approve|input|choice)
   maestria inbox                     List inbox tasks
   maestria answers [--ack]           Read (and optionally acknowledge) human responses
@@ -49,8 +52,16 @@ type Env struct {
 	Now    func() time.Time
 	// ReadSecret reads a line without echo. nil uses the terminal.
 	ReadSecret func(prompt string) (string, error)
-	// Serve runs until interrupted. nil uses the real signal-driven serve loop.
+	// IsTTY reports whether Stdin is an interactive terminal. nil checks Stdin.(*os.File).
+	IsTTY func() bool
+	// ServiceRunner, ServiceBinaryPath, and ServiceReachability allow tests to stub service operations.
+	ServiceRunner       service.CommandRunner
+	ServiceBinaryPath   string
+	ServiceReachability func(host string, port int) service.Reachability
+	// Version, Commit, and Date are injected at build time via -ldflags.
 	Version string
+	Commit  string
+	Date    string
 }
 
 // DefaultEnv returns the real process environment.
@@ -120,6 +131,8 @@ func run(args []string, env *Env) error {
 		return nil
 	case "serve":
 		return cmdServe(rest, env)
+	case "service":
+		return cmdService(rest, env)
 	case "auth":
 		if len(rest) == 0 {
 			return usagef("Usage: maestria auth setup [--force] | reset-sessions")
