@@ -28,6 +28,8 @@ Usage:
   maestria wait                      Block until a workspace event arrives
   maestria status                    Show workspace counts, standby, and usage status
   maestria floor <subcommand>        Manage Present, Future, and Past floors
+  maestria agent brief <name> <text> Set the one-line brief the panel shows for an agent
+  maestria wire pair|status|unpair   Connect to Maestri Wire (live agents, chat, floors)
   maestria workspace list|add|remove Manage registered workspaces
   maestria import-v1 [--from path]   Import V1 SQLite inbox, chat, and events (read-only)
   maestria auth setup [--force]      Set the password, enrol an authenticator app, print recovery codes
@@ -135,6 +137,10 @@ func run(args []string, env *Env) error {
 		return cmdWorkspace(rest, env)
 	case "floor", "floors":
 		return cmdFloor(rest, env)
+	case "wire":
+		return cmdWire(rest, env)
+	case "agent", "agents":
+		return cmdAgent(rest, env)
 	case "post":
 		return cmdPost(rest, env)
 	case "inbox":

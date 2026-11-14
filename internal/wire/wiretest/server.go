@@ -476,7 +476,8 @@ func (s *Server) authed(w *recorder, r *http.Request, dev *Device) {
 		writeErr(w, 401, "unauthorized", "writes need the Authorization header")
 		return
 	}
-	if isWrite && dev.Role != "owner" {
+	selfRevoke := r.Method == http.MethodDelete && len(parts) == 3 && parts[1] == "devices" && parts[2] == dev.ID
+	if isWrite && dev.Role != "owner" && !selfRevoke {
 		writeErr(w, 403, "forbidden", "read-only device")
 		return
 	}
