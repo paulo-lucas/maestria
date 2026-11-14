@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/maestria-dev/maestria/internal/audit"
@@ -54,7 +55,9 @@ type Deps struct {
 	Tunnel   *tunnel.Controller
 	// Access is the optional Cloudflare Access verifier.
 	Access *auth.AccessVerifier
-	Now    func() time.Time
+	// Env overrides OS environment lookup (used in tests).
+	Env config.Env
+	Now func() time.Time
 }
 
 // Server is the panel's http.Handler.
@@ -64,6 +67,11 @@ type Server struct {
 	auth  *auth.Authenticator
 	mux   *http.ServeMux
 	hosts map[string]bool
+	env   config.Env
+	cfgMu sync.RWMutex
+
+	broker          *sseBroker
+	ssePollInterval time.Duration
 
 	sessionCookie string
 	pendingCookie string
@@ -75,11 +83,22 @@ func New(d Deps) (*Server, error) {
 	if d.Now == nil {
 		d.Now = time.Now
 	}
+	env := d.Env
+	if env.Home == "" && env.Getenv == nil && env.GOOS == "" {
+		env = config.OSEnv()
+	}
 	u, err := ui.New()
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{Deps: d, ui: u, mux: http.NewServeMux(), hosts: map[string]bool{}}
+	s := &Server{
+		Deps:   d,
+		ui:     u,
+		mux:    http.NewServeMux(),
+		hosts:  map[string]bool{},
+		env:    env,
+		broker: newSSEBroker(),
+	}
 	port := strconv.Itoa(d.Config.Port)
 	s.hosts["localhost:"+port] = true
 	s.hosts["127.0.0.1:"+port] = true
@@ -118,6 +137,52 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /api/tunnel", s.apiTunnel)
 	m.HandleFunc("POST /api/kill-switch", s.apiKillSwitch)
 	m.HandleFunc("GET /api/audit", s.apiAudit)
+
+	m.HandleFunc("GET /api/stream", s.apiStream)
+	m.HandleFunc("GET /api/workspaces", s.apiWorkspaces)
+	m.HandleFunc("GET /api/inbox", s.apiInbox)
+	m.HandleFunc("POST /api/inbox/dismiss-notices", s.apiDismissNotices)
+	m.HandleFunc("GET /api/workspaces/{id}/inbox", s.apiWorkspaceInbox)
+	m.HandleFunc("POST /api/workspaces/{id}/inbox/dismiss-notices", s.apiDismissNotices)
+	m.HandleFunc("POST /api/workspaces/{id}/inbox/{itemId}/respond", s.apiInboxRespond)
+	m.HandleFunc("POST /api/workspaces/{id}/inbox/{itemId}/dismiss", s.apiInboxDismiss)
+	m.HandleFunc("POST /api/workspaces/{id}/inbox/{itemId}/postpone", s.apiInboxPostpone)
+	m.HandleFunc("GET /api/workspaces/{id}/chat", s.apiChatList)
+	m.HandleFunc("POST /api/workspaces/{id}/chat", s.apiChatSend)
+	m.HandleFunc("GET /api/usage", s.apiUsage)
+	m.HandleFunc("POST /api/standby/config", s.apiStandbyConfig)
+	m.HandleFunc("POST /api/standby/resume", s.apiStandbyResume)
+}
+
+// StartBackground launches periodic session cleanup and usage/standby evaluation until ctx cancels.
+func (s *Server) StartBackground(ctx context.Context) {
+	pollSecs := s.Config.Usage.PollSeconds
+	if pollSecs < 5 {
+		pollSecs = 30
+	}
+	go func() {
+		_, _, changed := s.evaluateUsageAndStandby()
+		if changed {
+			s.notifyStream("standby")
+		}
+		usageTick := time.NewTicker(time.Duration(pollSecs) * time.Second)
+		sessionTick := time.NewTicker(10 * time.Minute)
+		defer usageTick.Stop()
+		defer sessionTick.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-sessionTick.C:
+				_ = s.Sessions.PurgeExpired()
+			case <-usageTick.C:
+				_, _, changed := s.evaluateUsageAndStandby()
+				if changed {
+					s.notifyStream("standby")
+				}
+			}
+		}
+	}()
 }
 
 // isPublic reports whether a path is reachable without a session.

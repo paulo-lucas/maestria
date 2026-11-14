@@ -55,7 +55,7 @@ func BuildServer(env *Env) (*web.Server, *config.Config, func(), error) {
 	}
 	srv, err := web.New(web.Deps{
 		Config: cfg, DB: db, Secrets: secrets, Audit: aud, Sessions: sessions, Limiter: limiter,
-		Tunnel: tun, Access: access, Now: env.Now,
+		Tunnel: tun, Access: access, Env: env.Config, Now: env.Now,
 	})
 	if err != nil {
 		db.Close()
@@ -91,18 +91,7 @@ func cmdServe(args []string, env *Env) error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	go func() {
-		t := time.NewTicker(10 * time.Minute)
-		defer t.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-t.C:
-				_ = srv.Sessions.PurgeExpired()
-			}
-		}
-	}()
+	srv.StartBackground(ctx)
 	errc := make(chan error, 1)
 	go func() { errc <- httpSrv.Serve(ln) }()
 	select {
