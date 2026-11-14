@@ -275,3 +275,13 @@ Connector, unauthenticated by cookie (rate limited, no `Origin`): `POST /api/lin
 | Leaked connector credential | Hashed server-side; revoke in the web; it only lets a machine dial in, it cannot sign for a user |
 | Flooding | Frame, body and in-flight limits, per-device rate limit, bounded caches |
 | Compromised cloud serves hostile JS | Out of protocol scope; bounded by allowlist, rate limit, short device sessions, kill switch, local audit |
+
+## 12. Implementation notes
+
+- **Where the code is**: `internal/relay` (frames, canonical string, allowlist, pairing math, no I/O), `internal/devices` (connector device store, policy, nonce cache, verification), `internal/connect` (outbound client, relay gate, flow-controlled response writer, link file), `internal/cloud` (server, accounts, hub, relay, UI), `cmd/maestria-cloud`. The browser half is `internal/cloud/static/hosted-keys.js`; a Go test runs it under node and checks its signatures, device id, pairing commitment and code against `internal/relay`.
+- **One code per machine**: because each connector contributes its own random value, the pairing screen shows one code per machine (next to its name) instead of one shared code.
+- **Kill switch blocks the relay entirely**: a machine with the kill switch on is refused for every request (including reads), so its data disappears from the panel and the Overview shows a "Kill switch is on" state for it. Monitoring a killed machine is deliberately not possible.
+- **`/c/<id>/...` is both the page address and the relay address**: a request carrying `X-Maestria-Sig` is relayed; a plain navigation gets the app shell.
+- **The Overview is built in the browser** from each machine's own `GET /` view and `GET /api/usage`-style sections (workspaces, tasks, agents, floors, usage), merged per machine. Usage is grouped by provider and account label; a machine name is shown only when the same provider has different accounts on different machines. Other workspace pages are the machine's own HTML views.
+- **Run one of `maestria serve` or `maestria connect` per config directory**: both start the same background work (usage polling, standby, Wire mirror).
+- **Cloud config**: `config.json` in the data dir (0600) plus `MAESTRIA_CLOUD_*` variables; `server.key` (0600) encrypts TOTP secrets at rest.

@@ -57,7 +57,7 @@ const K = require(process.argv[2]);
 	}
 	var got struct {
 		SPKI, ID, Commit, Code, Nonce, R, Formatted, BodyHash string
-		Headers                                              map[string]string
+		Headers                                               map[string]string
 	}
 	if err := json.Unmarshal(out, &got); err != nil {
 		t.Fatalf("%v\n%s", err, out)

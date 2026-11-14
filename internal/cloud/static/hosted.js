@@ -947,7 +947,12 @@
         if (!ready.length) {
           var waiting = onlineConnectors().filter(function (c) { return !state.access[c.id] || state.access[c.id].state === 'ok'; });
           if (waiting.length && !state.loaded) return '<div class="page"><p class="status status--quiet"><span class="spinner"></span>Connecting to your machines…</p></div>';
-          return stateNeedsApproval(onlineConnectors());
+          var live = onlineConnectors();
+          if (live.every(function (c) { return (state.access[c.id] || {}).state === 'killed'; })) {
+            return '<div class="page page--narrow"><header class="page-head"><div class="page-head__title"><h1>Overview</h1></div></header>' +
+              stateKilled(live.map(function (c) { return c.name; })) + '<div class="card">' + machineList(state.connectors) + '</div></div>';
+          }
+          return stateNeedsApproval(live);
         }
         if (!allWorkspaces().length) return stateOnboarding();
         return renderOverview();

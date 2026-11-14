@@ -401,6 +401,54 @@ func TestRejectAndRevokeAll(t *testing.T) {
 	}
 }
 
+// Every state change of a pairing is reported to the cloud once, in order, and an approval is
+// never swallowed by an earlier report.
+func TestPairingChangesAreReportedPerState(t *testing.T) {
+	m, _ := newManager(t)
+	b := relaytest.NewBrowser(t)
+	p := b.StartPairing(t)
+	if _, err := m.Offer("chg-00001", p.Commit, "x", ""); err != nil {
+		t.Fatal(err)
+	}
+	states := func() []string {
+		ch, err := m.Changes()
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, c := range ch {
+			out = append(out, c.State)
+		}
+		return out
+	}
+	if got := states(); len(got) != 1 || got[0] != relay.PairPending {
+		t.Fatalf("after offer: %v", got)
+	}
+	code, err := m.Reveal("chg-00001", relay.Enc(b.SPKI), relay.Enc(p.Nonce))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := states(); len(got) != 1 || got[0] != relay.PairRevealed {
+		t.Fatalf("after reveal: %v", got)
+	}
+	if _, err := m.Approve(code); err != nil {
+		t.Fatal(err)
+	}
+	if got := states(); len(got) != 1 || got[0] != relay.PairApproved {
+		t.Fatalf("after approval: %v", got)
+	}
+	if got := states(); len(got) != 0 {
+		t.Fatalf("nothing new to report: %v", got)
+	}
+	// After a reconnect everything live is reported again.
+	if err := m.MarkUnreported(); err != nil {
+		t.Fatal(err)
+	}
+	if got := states(); len(got) != 1 || got[0] != relay.PairApproved {
+		t.Fatalf("after reconnect: %v", got)
+	}
+}
+
 func TestPairCodeMatchesAcrossSides(t *testing.T) {
 	b := relaytest.NewBrowser(t)
 	n := make([]byte, 16)

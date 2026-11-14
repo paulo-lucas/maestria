@@ -78,12 +78,22 @@ func (n *node) linkWithCLICode(br *browser) {
 func TestEndToEndTwoConnectors(t *testing.T) {
 	f := newFixture(t)
 
-	// Both machines show up for the account, online, with their own names.
+	// Both machines show up for the account, online, with their own names. The mirror of paired
+	// devices reaches the cloud on the connector's next tick, so wait for it.
 	var list struct{ Connectors []connectorView }
-	_ = json.Unmarshal([]byte(f.br.api("GET", "/api/connectors", nil).body), &list)
-	if len(list.Connectors) != 2 {
-		t.Fatalf("connectors: %+v", list)
-	}
+	waitFor(t, "both machines to report their approved device", func() bool {
+		list.Connectors = nil
+		_ = json.Unmarshal([]byte(f.br.api("GET", "/api/connectors", nil).body), &list)
+		if len(list.Connectors) != 2 {
+			return false
+		}
+		for _, c := range list.Connectors {
+			if len(c.Devices) != 1 {
+				return false
+			}
+		}
+		return true
+	})
 	for _, c := range list.Connectors {
 		if !c.Online || c.Version != "9.9.9-test" {
 			t.Fatalf("connector %s: %+v", c.Name, c)

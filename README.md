@@ -165,9 +165,30 @@ Agents and Maestros communicate with the panel through the `maestria` CLI (`post
 
 ---
 
-## Hosted Mode (Coming Soon)
+## Hosted Mode (`maestria-cloud` + `maestria connect`)
 
-A managed hosted relay (`maestria-cloud`) for connecting multiple machines without self-managing a Cloudflare Tunnel is planned for a future release (**coming soon**). Self-hosted local mode (`127.0.0.1` + optional Cloudflare Tunnel/Access) is supported today.
+One web panel for every machine, with no tunnel and no open port on your machines. `maestria-cloud` is a multi-tenant server (accounts, mandatory 2FA, a relay); each machine runs `maestria connect`, which dials out to it. The cloud stores accounts and linked machines only: **no workspace data**, and relayed bodies are never logged or kept. Every command is signed by a browser you approved **on the machine itself**, and the machine checks the signature, so the cloud can relay but cannot forge anything. Full contract and threat model: [docs/hosted-protocol.md](docs/hosted-protocol.md).
+
+Run the server (behind a reverse proxy or tunnel that terminates TLS):
+
+```bash
+export MAESTRIA_CLOUD_PUBLIC_URL=https://maestria.example
+export MAESTRIA_CLOUD_SMTP_HOST=smtp.example.com MAESTRIA_CLOUD_SMTP_FROM=maestria@example.com
+maestria-cloud serve                 # 127.0.0.1:8080 by default (MAESTRIA_CLOUD_LISTEN)
+# local trial without a mail server: MAESTRIA_CLOUD_DEV_EMAIL=stdout
+maestria-cloud user list|disable|enable EMAIL
+```
+
+Sign up in the browser (email, password, authenticator app), then on each machine:
+
+```bash
+maestria connect --link XXXX-XXXX --cloud https://maestria.example   # code shown in the web
+maestria connect --cloud https://maestria.example                    # or: the CLI shows a code, you type it in the web
+maestria devices pending && maestria devices approve <code>          # approve each browser, here, once
+maestria connect status | maestria connect unlink
+```
+
+Per-machine policy (device approval and idle limits, rate limit) lives in the `relay` section of the machine's `config.json`; the local kill switch (`maestria tunnel off`) blocks the relay entirely. Local mode (`maestria serve`) is unchanged.
 
 ---
 

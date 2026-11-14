@@ -345,7 +345,9 @@ func (m *Manager) Changes() ([]Change, error) {
 		return nil, err
 	}
 	for _, c := range out {
-		if _, err := m.db.Exec("UPDATE device_pairings SET reported_state = state WHERE pair_id = ?", c.Pair); err != nil {
+		// Mark exactly the state that is being reported: if the local CLI approved the pairing
+		// since the read above, the new state stays unreported and goes out on the next call.
+		if _, err := m.db.Exec("UPDATE device_pairings SET reported_state = ? WHERE pair_id = ? AND state = ?", c.State, c.Pair, c.State); err != nil {
 			return nil, err
 		}
 	}
