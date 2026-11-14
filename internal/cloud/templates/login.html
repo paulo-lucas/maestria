@@ -1,0 +1,22 @@
+{{define "page"}}{{template "auth" .}}{{end}}
+{{define "content"}}
+  <section class="card auth-card" aria-labelledby="t">
+    <div class="auth-card__head">
+      <h1 id="t">Log in</h1>
+    </div>
+    {{if .Error}}<div class="banner" data-status="danger" role="alert">{{icon "i-alert"}}<div class="banner__body"><p class="banner__text">{{.Error}}</p></div></div>{{end}}
+    <form method="post" action="/login">
+      <input type="hidden" name="_csrf" value="{{.CSRF}}">
+      <div class="field">
+        <label class="field__label" for="email">Email</label>
+        <input class="input" id="email" name="email" type="email" autocomplete="username" placeholder="you@example.com" value="{{.Email}}" required>
+      </div>
+      <div class="field">
+        <div class="auth-card__row"><label class="field__label" for="pw">Password</label><a href="/reset">Forgot password?</a></div>
+        <input class="input" id="pw" name="password" type="password" autocomplete="current-password" required>
+      </div>
+      <button class="btn btn--primary btn--block" type="submit">Log in</button>
+    </form>
+    <p class="auth-card__alt">New here? <a href="/signup">Create an account</a></p>
+  </section>
+{{end}}

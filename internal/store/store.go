@@ -213,7 +213,11 @@ func Open(configDir string) (*sql.DB, error) {
 }
 
 // OpenPath opens a database at an explicit path and migrates it.
-func OpenPath(path string) (*sql.DB, error) {
+func OpenPath(path string) (*sql.DB, error) { return OpenWith(path, migrations) }
+
+// OpenWith opens a database at an explicit path and applies the given ordered, append-only
+// migrations. The hosted server uses it with its own list.
+func OpenWith(path string, migs []string) (*sql.DB, error) {
 	q := url.Values{}
 	q.Add("_pragma", "busy_timeout(5000)")
 	q.Add("_pragma", "journal_mode(WAL)")
@@ -233,7 +237,7 @@ func OpenPath(path string) (*sql.DB, error) {
 		db.Close()
 		return nil, fmt.Errorf("store: open %s: %w", path, err)
 	}
-	if err := Migrate(db); err != nil {
+	if err := MigrateWith(db, migs); err != nil {
 		db.Close()
 		return nil, err
 	}
@@ -241,7 +245,10 @@ func OpenPath(path string) (*sql.DB, error) {
 }
 
 // Migrate applies pending migrations, each in its own transaction.
-func Migrate(db *sql.DB) error {
+func Migrate(db *sql.DB) error { return MigrateWith(db, migrations) }
+
+// MigrateWith applies the given migrations (PRAGMA user_version records how many ran).
+func MigrateWith(db *sql.DB, migrations []string) error {
 	ctx := context.Background()
 	var version int
 	if err := db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {

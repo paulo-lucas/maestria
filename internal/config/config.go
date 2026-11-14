@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -102,6 +103,8 @@ type Config struct {
 	Standby             Standby
 	Tunnel              Tunnel
 	Relay               Relay
+	// Cloud is the hosted Maestria URL for `maestria connect` (the --cloud flag overrides it).
+	Cloud string
 }
 
 // Error is a configuration error with a message meant for the user.
@@ -226,7 +229,7 @@ var (
 	knownTopKey = map[string]bool{
 		"maestriDir": true, "port": true, "cookieSecure": true, "allowedHosts": true,
 		"trustCfConnectingIp": true, "session": true, "login": true, "cloudflareAccess": true,
-		"usage": true, "standby": true, "tunnel": true, "relay": true,
+		"usage": true, "standby": true, "tunnel": true, "relay": true, "cloud": true,
 	}
 )
 
@@ -426,6 +429,13 @@ func Parse(data []byte, configDir string, env Env) (*Config, error) {
 			}
 		}
 	}
+	if raw, ok := top["cloud"]; ok && !isNull(raw) {
+		var u string
+		if json.Unmarshal(raw, &u) != nil || !validCloudURL(u) {
+			return nil, errorf("config: \"cloud\" must be an https URL like https://maestria.example (http is only allowed for localhost)")
+		}
+		cfg.Cloud = strings.TrimRight(u, "/")
+	}
 	if raw, ok := top["relay"]; ok {
 		o, err := decodeObj(raw, "relay")
 		if err != nil {
@@ -616,3 +626,19 @@ func InspectMaestriDir(dir string) MaestriDirStatus {
 	}
 	return st
 }
+
+// validCloudURL accepts an https URL, or http for a loopback host (development).
+func validCloudURL(s string) bool {
+	u, err := url.Parse(strings.TrimSpace(s))
+	if err != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+		return false
+	}
+	if u.Scheme == "https" {
+		return true
+	}
+	h := strings.ToLower(u.Hostname())
+	return u.Scheme == "http" && (h == "localhost" || h == "127.0.0.1" || h == "::1")
+}
+
+// ValidCloudURL reports whether s is an acceptable cloud URL (https, or http on loopback).
+func ValidCloudURL(s string) bool { return validCloudURL(s) }

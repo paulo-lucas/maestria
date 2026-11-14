@@ -31,6 +31,8 @@ type UI struct {
 	assets map[string]asset
 	pages  map[string]*template.Template
 	icons  template.HTML
+	funcs  template.FuncMap
+	base   *template.Template
 }
 
 // Pages that can be rendered.
@@ -140,6 +142,7 @@ func New() (*UI, error) {
 	if err != nil {
 		return nil, err
 	}
+	u.funcs, u.base = funcs, base
 	for _, name := range []string{PageLogin, PageTwoFA, PageOverview, PageTasks, PageChat, PageFloors, PageDocs, PageUsage, PageSecurity, PageComingSoon, PageActivity} {
 		t, err := template.Must(base.Clone()).ParseFS(files, "templates/"+name+".html")
 		if err != nil {
@@ -148,6 +151,29 @@ func New() (*UI, error) {
 		u.pages[name] = t
 	}
 	return u, nil
+}
+
+// Funcs returns the template functions (asset, icon, sprite, ...), for servers that render their
+// own pages with the same design system.
+func (u *UI) Funcs() template.FuncMap { return u.funcs }
+
+// Layout returns a fresh copy of the shared layout templates (head, brandmark, banner, auth...).
+// A caller may redefine any of them in its own copy.
+func (u *UI) Layout() (*template.Template, error) { return u.base.Clone() }
+
+// AddAsset registers another static file (served by ServeStatic and returned by AssetURL).
+func (u *UI) AddAsset(name string, body []byte) {
+	sum := sha256.Sum256(body)
+	ct := mime.TypeByExtension(path.Ext(name))
+	switch path.Ext(name) {
+	case ".css":
+		ct = "text/css; charset=utf-8"
+	case ".js":
+		ct = "text/javascript; charset=utf-8"
+	case ".svg":
+		ct = "image/svg+xml"
+	}
+	u.assets[name] = asset{body: body, hash: hex.EncodeToString(sum[:])[:10], contentType: ct}
 }
 
 // AssetURL returns the cache-busted URL of a static asset.

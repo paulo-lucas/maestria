@@ -1,0 +1,7 @@
+{{define "page"}}{{template "app" .}}{{end}}
+{{define "content"}}
+    <div class="page" data-view="{{.Nav}}">
+      <p class="status status--quiet"><span class="spinner"></span>Loading…</p>
+      <noscript><p>Maestria needs JavaScript: it signs every request with a key kept in your browser.</p></noscript>
+    </div>
+{{end}}

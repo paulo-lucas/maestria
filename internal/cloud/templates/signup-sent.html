@@ -1,0 +1,20 @@
+{{define "page"}}{{template "auth" .}}{{end}}
+{{define "content"}}
+  <section class="card auth-card" aria-labelledby="t">
+    <ol class="steps" aria-label="Sign-up steps"><li class="is-done"><span class="step__n">✓</span><span class="step__label">Account</span></li><li aria-current="step"><span class="step__n">2</span><span class="step__label">Verify email</span></li><li><span class="step__n">3</span><span class="step__label">Two-factor</span></li></ol>
+    <div class="auth-card__head">
+      <h1 id="t">Check your email</h1>
+      <p>We sent a link to <strong>{{.Email}}</strong>. It expires in 30 minutes.</p>
+    </div>
+    {{if .Info}}<div class="banner" data-status="info" role="status">{{icon "i-info"}}<div class="banner__body"><p class="banner__text">{{.Info}}</p></div></div>{{end}}
+    <div class="btn-row">
+      <form method="post" action="/signup/resend">
+        <input type="hidden" name="_csrf" value="{{.CSRF}}">
+        <input type="hidden" name="email" value="{{.Email}}">
+        <button class="btn" type="submit">Resend email</button>
+      </form>
+      <a class="btn btn--ghost" href="/signup">Use another email</a>
+    </div>
+    <p class="auth-card__alt">Opened the link on another device? <a href="/signup/continue">Continue here</a></p>
+  </section>
+{{end}}

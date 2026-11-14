@@ -1,0 +1,28 @@
+{{define "page"}}{{template "auth" .}}{{end}}
+{{define "content"}}
+  <section class="card auth-card" aria-labelledby="t">
+    <div class="auth-card__head">
+      <h1 id="t">Enter your code</h1>
+      <p>Open your authenticator app and enter the 6-digit code for Maestria.</p>
+    </div>
+    <form method="post" action="/login/2fa">
+      <input type="hidden" name="_csrf" value="{{.CSRF}}">
+      <div class="field">
+        <label class="field__label sr-only" for="code">Authentication code</label>
+        <input class="input input--code" id="code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000" required autofocus>
+      </div>
+      <button class="btn btn--primary btn--block" type="submit">Verify</button>
+    </form>
+    <details class="disclosure">
+      <summary>{{icon "i-chevron-right"}}Use a recovery code instead</summary>
+      <form method="post" action="/login/recovery">
+        <input type="hidden" name="_csrf" value="{{.CSRF}}">
+        <div class="inline-form">
+          <label class="sr-only" for="rc">Recovery code</label>
+          <input class="input mono" id="rc" name="recovery" type="text" autocomplete="off" placeholder="xxxx-xxxx">
+          <button class="btn" type="submit">Use code</button>
+        </div>
+      </form>
+    </details>
+  </section>
+{{end}}

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 	"github.com/maestria-dev/maestria/internal/audit"
 	"github.com/maestria-dev/maestria/internal/auth"
 	"github.com/maestria-dev/maestria/internal/config"
+	"github.com/maestria-dev/maestria/internal/devices"
 	"github.com/maestria-dev/maestria/internal/store"
 	"github.com/maestria-dev/maestria/internal/tunnel"
 	"github.com/maestria-dev/maestria/internal/web"
@@ -23,23 +25,44 @@ import (
 // ErrNoCredentials is returned when `auth setup` has not been run.
 var ErrNoCredentials = errors.New(`no credentials configured. Run "maestria auth setup" first`)
 
-// BuildServer wires the panel from the config directory. The caller closes the returned DB.
-func BuildServer(env *Env) (*web.Server, *config.Config, func(), error) {
+// built is everything BuildServer and the connector share.
+type built struct {
+	Srv   *web.Server
+	Cfg   *config.Config
+	DB    *sql.DB
+	Tun   *tunnel.Controller
+	Audit *audit.Log
+	Close func()
+}
+
+type buildOpts struct {
+	// RequireCredentials makes a missing `auth setup` an error (local mode). Hosted mode has no
+	// local login at all: devices and the relay gate replace it.
+	RequireCredentials bool
+	// Devices and ConnectorName switch on the hosted-mode API (devices, relay info).
+	Devices       func(db *sql.DB, cfg *config.Config) *devices.Manager
+	ConnectorName string
+}
+
+func buildServer(env *Env, o buildOpts) (*built, error) {
 	dir := configDir(env)
 	cfg, err := config.Load(dir, env.Config)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 	secrets, err := auth.LoadSecrets(dir)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 	if secrets == nil {
-		return nil, nil, nil, ErrNoCredentials
+		if o.RequireCredentials {
+			return nil, ErrNoCredentials
+		}
+		secrets = &auth.Secrets{}
 	}
 	db, err := store.Open(dir)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
 	aud := audit.New(db, env.Now)
 	sessions := auth.NewSessionStore(db,
@@ -63,15 +86,28 @@ func BuildServer(env *Env) (*web.Server, *config.Config, func(), error) {
 			return list
 		},
 	})
-	srv, err := web.New(web.Deps{
+	deps := web.Deps{
 		Config: cfg, DB: db, Secrets: secrets, Audit: aud, Sessions: sessions, Limiter: limiter,
-		Tunnel: tun, Access: access, Activity: act, Env: env.Config, Now: env.Now,
-	})
+		Tunnel: tun, Access: access, Activity: act, Env: env.Config, Now: env.Now, ConnectorName: o.ConnectorName,
+	}
+	if o.Devices != nil {
+		deps.Devices = o.Devices(db, cfg)
+	}
+	srv, err := web.New(deps)
 	if err != nil {
 		db.Close()
+		return nil, err
+	}
+	return &built{Srv: srv, Cfg: cfg, DB: db, Tun: tun, Audit: aud, Close: func() { db.Close() }}, nil
+}
+
+// BuildServer wires the panel from the config directory. The caller closes the returned DB.
+func BuildServer(env *Env) (*web.Server, *config.Config, func(), error) {
+	b, err := buildServer(env, buildOpts{RequireCredentials: true})
+	if err != nil {
 		return nil, nil, nil, err
 	}
-	return srv, cfg, func() { db.Close() }, nil
+	return b.Srv, b.Cfg, b.Close, nil
 }
 
 func cmdServe(args []string, env *Env) error {

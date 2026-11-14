@@ -1,0 +1,81 @@
+{{define "head"}}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="referrer" content="same-origin">
+  <title>{{.Title}} · Maestria</title>
+  <link rel="stylesheet" href="{{asset "tokens.css"}}">
+  <link rel="stylesheet" href="{{asset "base.css"}}">
+  <link rel="stylesheet" href="{{asset "components.css"}}">
+  <link rel="stylesheet" href="{{asset "shell.css"}}">
+  <script src="{{asset "app.js"}}"></script>
+  {{range .Scripts}}<script src="{{asset .}}" defer></script>
+  {{end}}
+</head>{{end}}
+
+{{define "app"}}{{template "head" .}}
+<body data-csrf="{{.CSRF}}" data-page="{{.Nav}}" data-email="{{.Email}}" data-app="hosted">
+{{sprite}}
+<a class="skip-link" href="#main">Skip to content</a>
+
+<div class="app">
+  <aside class="sidebar" aria-label="Main">
+    <a class="brand" href="/">{{template "brandmark"}} Maestria</a>
+    <nav class="nav" id="nav">
+      <a class="nav__item" href="/" data-nav="overview"{{if eq .Nav "overview"}} aria-current="page"{{end}}>{{icon "i-overview"}} Overview <span class="count" data-status="needs" title="Needs you" id="nav-needs" hidden></span></a>
+      <div class="nav__group">Workspaces</div>
+      <div id="nav-workspaces"><p class="nav__empty">No machine online</p></div>
+      <div class="nav__group">System</div>
+      <a class="nav__item" href="/usage" data-nav="usage"{{if eq .Nav "usage"}} aria-current="page"{{end}}>{{icon "i-gauge"}} Usage &amp; standby</a>
+      <a class="nav__item" href="/connectors" data-nav="connectors"{{if eq .Nav "connectors"}} aria-current="page"{{end}}>{{icon "i-plug"}} Connectors</a>
+      <a class="nav__item" href="/security" data-nav="security"{{if eq .Nav "security"}} aria-current="page"{{end}}>{{icon "i-shield"}} Devices &amp; security</a>
+    </nav>
+    <div class="sidebar__foot">
+      <a class="conn-card" href="/connectors" id="conn-card">
+        <span class="dot" data-status="offline" id="conn-card-dot"></span>
+        <span class="conn-card__name" id="conn-card-name">No machine online</span>
+        <span class="conn-card__ver">{{icon "i-chevron-right" "icon--sm"}}</span>
+        <span class="conn-card__meta" id="conn-card-meta"></span>
+      </a>
+      <div class="account-row">
+        <span class="avatar avatar--sm" data-tone="slate">{{.Initial}}</span>
+        <span class="account-row__name truncate" title="{{.Email}}">{{.Email}}</span>
+        <form method="post" action="/logout"><input type="hidden" name="_csrf" value="{{.CSRF}}"><button class="btn btn--ghost btn--icon btn--sm" type="submit" aria-label="Log out" title="Log out">{{icon "i-arrow-right"}}</button></form>
+        {{template "themetoggle" " btn--sm"}}
+      </div>
+    </div>
+  </aside>
+
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Maestria overview">{{template "brandmark"}}</a>
+    <details class="menu scope" id="scope-menu">
+      <summary aria-label="Switch workspace">
+        {{icon "i-overview" "scope__all-icon"}}<span class="truncate" id="scope-label">All workspaces</span>
+        {{icon "i-chevron-down"}}
+      </summary>
+      <div class="menu__panel" id="scope-panel">
+        <a class="menu__item" href="/" aria-current="page">{{icon "i-overview"}} All workspaces</a>
+      </div>
+    </details>
+    <div class="topbar__end">
+      <a class="conn-dot" href="/connectors" id="conn-dot" aria-label="Machines" title="Machines">{{icon "i-plug"}}</a>
+      {{template "themetoggle" ""}}
+    </div>
+  </header>
+
+  <main class="main" id="main">
+{{template "content" .}}
+  </main>
+
+  <nav class="bottomnav" aria-label="Sections" id="bottomnav">
+    <a class="bottomnav__item" href="/" data-nav="overview"{{if eq .Nav "overview"}} aria-current="page"{{end}}>{{icon "i-overview"}}Overview</a>
+    <a class="bottomnav__item" href="/usage" data-nav="usage"{{if eq .Nav "usage"}} aria-current="page"{{end}}>{{icon "i-gauge"}}Usage</a>
+    <a class="bottomnav__item" href="/connectors" data-nav="connectors"{{if eq .Nav "connectors"}} aria-current="page"{{end}}>{{icon "i-plug"}}Connectors</a>
+    <a class="bottomnav__item" href="/security" data-nav="security"{{if eq .Nav "security"}} aria-current="page"{{end}}>{{icon "i-shield"}}Security</a>
+  </nav>
+</div>
+</body>
+</html>
+{{end}}

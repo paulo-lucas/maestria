@@ -21,6 +21,9 @@ const help = `maestria: control panel for Maestri workspaces
 
 Usage:
   maestria serve                     Start the panel (127.0.0.1 only)
+  maestria connect [--link CODE]     Link this machine to a hosted Maestria and stay connected
+  maestria connect status|unlink     Show the link, or revoke it
+  maestria devices pending|approve|reject|list|revoke   Approve browsers on this machine (hosted mode)
   maestria post <kind> <body>        Post a human task or notice (notice|approve|input|choice)
   maestria inbox                     List inbox tasks
   maestria answers [--ack]           Read (and optionally acknowledge) human responses
@@ -120,6 +123,10 @@ func run(args []string, env *Env) error {
 		return nil
 	case "serve":
 		return cmdServe(rest, env)
+	case "connect":
+		return cmdConnect(rest, env)
+	case "devices", "device":
+		return cmdDevices(rest, env)
 	case "auth":
 		if len(rest) == 0 {
 			return usagef("Usage: maestria auth setup [--force] | reset-sessions")
