@@ -5,12 +5,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/maestria-dev/maestria/internal/audit"
-	"github.com/maestria-dev/maestria/internal/config"
-	"github.com/maestria-dev/maestria/internal/events"
-	"github.com/maestria-dev/maestria/internal/store"
-	"github.com/maestria-dev/maestria/internal/usage"
-	"github.com/maestria-dev/maestria/internal/workspaces"
+	"github.com/paulo-lucas/maestria/internal/audit"
+	"github.com/paulo-lucas/maestria/internal/config"
+	"github.com/paulo-lucas/maestria/internal/events"
+	"github.com/paulo-lucas/maestria/internal/store"
+	"github.com/paulo-lucas/maestria/internal/usage"
+	"github.com/paulo-lucas/maestria/internal/workspaces"
 )
 
 func makeSnap(used float64, resetAt time.Time) usage.Snapshot {

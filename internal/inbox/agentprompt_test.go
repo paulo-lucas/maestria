@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"testing"
 
-	"github.com/maestria-dev/maestria/internal/store"
+	"github.com/paulo-lucas/maestria/internal/store"
 )
 
 func openTestDB(t *testing.T) *sql.DB {

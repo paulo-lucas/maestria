@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/maestria-dev/maestria/internal/config"
-	"github.com/maestria-dev/maestria/internal/workspaces"
+	"github.com/paulo-lucas/maestria/internal/config"
+	"github.com/paulo-lucas/maestria/internal/workspaces"
 )
 
 func cmdWorkspace(args []string, env *Env) error {

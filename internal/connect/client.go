@@ -16,8 +16,8 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/maestria-dev/maestria/internal/devices"
-	"github.com/maestria-dev/maestria/internal/relay"
+	"github.com/paulo-lucas/maestria/internal/devices"
+	"github.com/paulo-lucas/maestria/internal/relay"
 )
 
 // State is the connection state shown by `maestria connect status`.

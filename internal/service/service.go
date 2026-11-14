@@ -20,8 +20,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/maestria-dev/maestria/internal/config"
-	"github.com/maestria-dev/maestria/internal/privfile"
+	"github.com/paulo-lucas/maestria/internal/config"
+	"github.com/paulo-lucas/maestria/internal/privfile"
 )
 
 const (

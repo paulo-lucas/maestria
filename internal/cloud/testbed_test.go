@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/maestria-dev/maestria/internal/auth"
+	"github.com/paulo-lucas/maestria/internal/auth"
 )
 
 func TestMain(m *testing.M) {

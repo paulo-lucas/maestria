@@ -12,12 +12,12 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/maestria-dev/maestria/internal/docs"
-	"github.com/maestria-dev/maestria/internal/floors"
-	"github.com/maestria-dev/maestria/internal/inbox"
-	"github.com/maestria-dev/maestria/internal/standby"
-	"github.com/maestria-dev/maestria/internal/ui"
-	"github.com/maestria-dev/maestria/internal/workspaces"
+	"github.com/paulo-lucas/maestria/internal/docs"
+	"github.com/paulo-lucas/maestria/internal/floors"
+	"github.com/paulo-lucas/maestria/internal/inbox"
+	"github.com/paulo-lucas/maestria/internal/standby"
+	"github.com/paulo-lucas/maestria/internal/ui"
+	"github.com/paulo-lucas/maestria/internal/workspaces"
 )
 
 func (s *Server) populateShell(d *ui.Data, scope string) ([]workspaces.Workspace, map[string]workspaces.Workspace) {

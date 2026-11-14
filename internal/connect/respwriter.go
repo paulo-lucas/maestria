@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/maestria-dev/maestria/internal/relay"
+	"github.com/paulo-lucas/maestria/internal/relay"
 )
 
 // respWriter turns a handler's response into frames: a res head with the first bytes, then

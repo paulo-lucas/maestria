@@ -1,8 +1,8 @@
 # Maestria installer for Windows (PowerShell).
-# Usage: irm https://raw.githubusercontent.com/maestria-dev/maestria/main/install.ps1 | iex
+# Usage: irm https://raw.githubusercontent.com/paulo-lucas/maestria/main/install.ps1 | iex
 $ErrorActionPreference = "Stop"
 
-$Repo = if ($env:MAESTRIA_REPO) { $env:MAESTRIA_REPO } else { "maestria-dev/maestria" }
+$Repo = if ($env:MAESTRIA_REPO) { $env:MAESTRIA_REPO } else { "paulo-lucas/maestria" }
 $Version = if ($env:MAESTRIA_VERSION) { $env:MAESTRIA_VERSION } else { "latest" }
 $InstallDir = if ($env:MAESTRIA_INSTALL_DIR) { $env:MAESTRIA_INSTALL_DIR } else { Join-Path $env:LOCALAPPDATA "Programs\maestria\bin" }
 $BaseUrl = $env:MAESTRIA_BASE_URL

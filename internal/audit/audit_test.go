@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/maestria-dev/maestria/internal/store"
+	"github.com/paulo-lucas/maestria/internal/store"
 )
 
 func TestWriteRecentAndThrottle(t *testing.T) {

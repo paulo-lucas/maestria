@@ -30,7 +30,7 @@ Pick **one** way.
 ### macOS or Linux: the install script
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/maestria-dev/maestria/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/paulo-lucas/maestria/main/install.sh | sh
 ```
 
 The script downloads the right program for your computer, checks its checksum (a fingerprint that proves the file is intact), and puts it in `~/.local/bin`.
@@ -40,13 +40,13 @@ The script downloads the right program for your computer, checks its checksum (a
 If you already use [Homebrew](https://brew.sh):
 
 ```sh
-brew install maestria-dev/tap/maestria
+brew install paulo-lucas/tap/maestria
 ```
 
 ### Windows: PowerShell
 
 ```powershell
-irm https://raw.githubusercontent.com/maestria-dev/maestria/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/paulo-lucas/maestria/main/install.ps1 | iex
 ```
 
 This installs `maestria.exe` to `%LOCALAPPDATA%\Programs\Maestria` and adds it to your `Path`.

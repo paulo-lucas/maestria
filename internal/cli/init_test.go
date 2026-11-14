@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/maestria-dev/maestria/internal/auth"
-	"github.com/maestria-dev/maestria/internal/config"
-	"github.com/maestria-dev/maestria/internal/service"
-	"github.com/maestria-dev/maestria/internal/workspaces"
+	"github.com/paulo-lucas/maestria/internal/auth"
+	"github.com/paulo-lucas/maestria/internal/config"
+	"github.com/paulo-lucas/maestria/internal/service"
+	"github.com/paulo-lucas/maestria/internal/workspaces"
 )
 
 func TestEmbeddedSkillMatchesSource(t *testing.T) {
@@ -200,10 +200,10 @@ func TestInitInteractiveWizardAndIdempotentRerun(t *testing.T) {
 	// Pass 1: interactive fresh setup selecting default maestriDir, workspace #1 only,
 	// default standby, auth setup (with TOTP), skip wire, claude skill only, install+start service.
 	script1 := strings.Join([]string{
-		"1",    // Maestri data dir: Use default
-		"1",    // Workspaces: pick only #1 (Alpha)
-		"1",    // Standby: Use defaults
-		"",     // placeholder for TOTP? Wait: TOTP is read by totpFeeder below!
+		"1", // Maestri data dir: Use default
+		"1", // Workspaces: pick only #1 (Alpha)
+		"1", // Standby: Use defaults
+		"",  // placeholder for TOTP? Wait: TOTP is read by totpFeeder below!
 	}, "\n")
 	_ = script1
 
@@ -216,8 +216,8 @@ func TestInitInteractiveWizardAndIdempotentRerun(t *testing.T) {
 		afterTOTP: []string{
 			"https://Panel.Example.com/", // Public host name (pasted as a URL)
 			"n",                          // Pair with Maestri Wire? -> No
-			"2", // Skill: Claude Code only
-			"1", // Service: Install and start
+			"2",                          // Skill: Claude Code only
+			"1",                          // Service: Install and start
 		},
 	}
 

@@ -16,9 +16,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/maestria-dev/maestria/internal/audit"
-	"github.com/maestria-dev/maestria/internal/auth"
-	"github.com/maestria-dev/maestria/internal/relay"
+	"github.com/paulo-lucas/maestria/internal/audit"
+	"github.com/paulo-lucas/maestria/internal/auth"
+	"github.com/paulo-lucas/maestria/internal/relay"
 )
 
 // CSP is sent on every page: no inline script or style, no framing, no foreign connections.

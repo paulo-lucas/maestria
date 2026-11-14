@@ -13,11 +13,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/maestria-dev/maestria/internal/chat"
-	"github.com/maestria-dev/maestria/internal/config"
-	"github.com/maestria-dev/maestria/internal/events"
-	"github.com/maestria-dev/maestria/internal/inbox"
-	"github.com/maestria-dev/maestria/internal/workspaces"
+	"github.com/paulo-lucas/maestria/internal/chat"
+	"github.com/paulo-lucas/maestria/internal/config"
+	"github.com/paulo-lucas/maestria/internal/events"
+	"github.com/paulo-lucas/maestria/internal/inbox"
+	"github.com/paulo-lucas/maestria/internal/workspaces"
 )
 
 func addTestWorkspace(t *testing.T, h *harness, name string) workspaces.Workspace {
@@ -227,8 +227,8 @@ func TestConnectorAPIIndexInboxChatUsageAndStandby(t *testing.T) {
 
 	// POST /api/standby/config updates threshold and action, persists config.json.
 	cfgResp := c.postJSON("/api/standby/config", map[string]any{
-		"thresholds": map[string]map[string]int{"claude:max": {"session": 80, "weekly": 90}},
-		"actions":    map[string]map[string]string{"claude:max": {"session": "interrupt"}},
+		"thresholds":  map[string]map[string]int{"claude:max": {"session": 80, "weekly": 90}},
+		"actions":     map[string]map[string]string{"claude:max": {"session": "interrupt"}},
 		"wakeOnReset": true,
 	}, csrf)
 	if cfgResp.Code != 200 || !strings.Contains(cfgResp.body, `"action":"interrupt"`) {

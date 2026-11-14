@@ -20,9 +20,9 @@ type parsedArgs struct {
 	Pos     []string
 }
 
-func (p *parsedArgs) Bool(name string) bool       { return p.Bools[name] }
-func (p *parsedArgs) HasString(name string) bool  { _, ok := p.Strings[name]; return ok }
-func (p *parsedArgs) String(name string) string   { return p.Strings[name] }
+func (p *parsedArgs) Bool(name string) bool         { return p.Bools[name] }
+func (p *parsedArgs) HasString(name string) bool    { _, ok := p.Strings[name]; return ok }
+func (p *parsedArgs) String(name string) string     { return p.Strings[name] }
 func (p *parsedArgs) MultiVal(name string) []string { return p.Multi[name] }
 
 func parseFlexArgs(args []string, spec flagSpec) (*parsedArgs, error) {

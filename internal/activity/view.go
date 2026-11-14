@@ -6,7 +6,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/maestria-dev/maestria/internal/wire"
+	"github.com/paulo-lucas/maestria/internal/wire"
 )
 
 // Agent states.

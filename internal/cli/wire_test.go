@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/maestria-dev/maestria/internal/activity"
-	"github.com/maestria-dev/maestria/internal/store"
-	"github.com/maestria-dev/maestria/internal/wire"
-	"github.com/maestria-dev/maestria/internal/wire/wiretest"
+	"github.com/paulo-lucas/maestria/internal/activity"
+	"github.com/paulo-lucas/maestria/internal/store"
+	"github.com/paulo-lucas/maestria/internal/wire"
+	"github.com/paulo-lucas/maestria/internal/wire/wiretest"
 )
 
 func pairEnv(t *testing.T, stdin string, secrets ...string) (*Env, string, *bytes.Buffer, *bytes.Buffer) {

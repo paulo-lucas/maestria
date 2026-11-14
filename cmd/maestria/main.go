@@ -4,7 +4,7 @@ package main
 import (
 	"os"
 
-	"github.com/maestria-dev/maestria/internal/cli"
+	"github.com/paulo-lucas/maestria/internal/cli"
 )
 
 // Build metadata injected at build time:

@@ -1,9 +1,9 @@
 #!/usr/bin/env sh
 # Maestria installer for macOS and Linux.
-# Usage: curl -fsSL https://raw.githubusercontent.com/maestria-dev/maestria/main/install.sh | sh
+# Usage: curl -fsSL https://raw.githubusercontent.com/paulo-lucas/maestria/main/install.sh | sh
 set -eu
 
-MAESTRIA_REPO="${MAESTRIA_REPO:-maestria-dev/maestria}"
+MAESTRIA_REPO="${MAESTRIA_REPO:-paulo-lucas/maestria}"
 MAESTRIA_VERSION="${MAESTRIA_VERSION:-latest}"
 MAESTRIA_INSTALL_DIR="${MAESTRIA_INSTALL_DIR:-$HOME/.local/bin}"
 MAESTRIA_BASE_URL="${MAESTRIA_BASE_URL:-}"

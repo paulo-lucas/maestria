@@ -59,16 +59,16 @@ Not sure which one? Start with self-host. Words you do not know are explained in
 **1. Install** (macOS and Linux):
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/maestria-dev/maestria/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/paulo-lucas/maestria/main/install.sh | sh
 ```
 
 On Windows (PowerShell):
 
 ```powershell
-irm https://raw.githubusercontent.com/maestria-dev/maestria/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/paulo-lucas/maestria/main/install.ps1 | iex
 ```
 
-With Homebrew: `brew install maestria-dev/tap/maestria`. Other ways and more detail: [Getting started](docs/getting-started.md#1-install-maestria).
+With Homebrew: `brew install paulo-lucas/tap/maestria`. Other ways and more detail: [Getting started](docs/getting-started.md#1-install-maestria).
 
 **2. Set up** (open a new terminal first):
 

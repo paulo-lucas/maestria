@@ -1,4 +1,4 @@
-module github.com/maestria-dev/maestria
+module github.com/paulo-lucas/maestria
 
 go 1.27.0
 

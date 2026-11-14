@@ -15,11 +15,11 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/maestria-dev/maestria/internal/audit"
-	"github.com/maestria-dev/maestria/internal/devices"
-	"github.com/maestria-dev/maestria/internal/relay"
-	"github.com/maestria-dev/maestria/internal/relay/relaytest"
-	"github.com/maestria-dev/maestria/internal/store"
+	"github.com/paulo-lucas/maestria/internal/audit"
+	"github.com/paulo-lucas/maestria/internal/devices"
+	"github.com/paulo-lucas/maestria/internal/relay"
+	"github.com/paulo-lucas/maestria/internal/relay/relaytest"
+	"github.com/paulo-lucas/maestria/internal/store"
 )
 
 const cid = "cn_0123456789abcdef0123456789abcdef"

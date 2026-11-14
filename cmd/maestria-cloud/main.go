@@ -5,7 +5,7 @@ package main
 import (
 	"os"
 
-	"github.com/maestria-dev/maestria/internal/cloud"
+	"github.com/paulo-lucas/maestria/internal/cloud"
 )
 
 // Build metadata injected at build time:

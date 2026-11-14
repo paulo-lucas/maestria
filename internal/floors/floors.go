@@ -13,7 +13,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/maestria-dev/maestria/internal/inbox"
+	"github.com/paulo-lucas/maestria/internal/inbox"
 )
 
 const (

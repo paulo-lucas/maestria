@@ -12,7 +12,7 @@ import (
 
 	"rsc.io/qr"
 
-	"github.com/maestria-dev/maestria/internal/ui"
+	"github.com/paulo-lucas/maestria/internal/ui"
 )
 
 //go:embed templates static

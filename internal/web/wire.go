@@ -11,13 +11,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/maestria-dev/maestria/internal/activity"
-	"github.com/maestria-dev/maestria/internal/chat"
-	"github.com/maestria-dev/maestria/internal/inbox"
-	"github.com/maestria-dev/maestria/internal/standby"
-	"github.com/maestria-dev/maestria/internal/ui"
-	"github.com/maestria-dev/maestria/internal/wire"
-	"github.com/maestria-dev/maestria/internal/workspaces"
+	"github.com/paulo-lucas/maestria/internal/activity"
+	"github.com/paulo-lucas/maestria/internal/chat"
+	"github.com/paulo-lucas/maestria/internal/inbox"
+	"github.com/paulo-lucas/maestria/internal/standby"
+	"github.com/paulo-lucas/maestria/internal/ui"
+	"github.com/paulo-lucas/maestria/internal/wire"
+	"github.com/paulo-lucas/maestria/internal/workspaces"
 )
 
 var uuidRE = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)

@@ -19,15 +19,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/maestria-dev/maestria/internal/activity"
-	"github.com/maestria-dev/maestria/internal/audit"
-	"github.com/maestria-dev/maestria/internal/auth"
-	"github.com/maestria-dev/maestria/internal/config"
-	"github.com/maestria-dev/maestria/internal/devices"
-	"github.com/maestria-dev/maestria/internal/docs"
-	"github.com/maestria-dev/maestria/internal/floors"
-	"github.com/maestria-dev/maestria/internal/tunnel"
-	"github.com/maestria-dev/maestria/internal/ui"
+	"github.com/paulo-lucas/maestria/internal/activity"
+	"github.com/paulo-lucas/maestria/internal/audit"
+	"github.com/paulo-lucas/maestria/internal/auth"
+	"github.com/paulo-lucas/maestria/internal/config"
+	"github.com/paulo-lucas/maestria/internal/devices"
+	"github.com/paulo-lucas/maestria/internal/docs"
+	"github.com/paulo-lucas/maestria/internal/floors"
+	"github.com/paulo-lucas/maestria/internal/tunnel"
+	"github.com/paulo-lucas/maestria/internal/ui"
 )
 
 // CSP is the Content-Security-Policy sent on every response: no inline script or style.

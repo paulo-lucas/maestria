@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/maestria-dev/maestria/internal/relay"
+	"github.com/paulo-lucas/maestria/internal/relay"
 )
 
 // The headers the cloud forwards to a connector: the five signature headers and three plain ones.

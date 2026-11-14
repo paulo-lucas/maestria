@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/maestria-dev/maestria/internal/audit"
-	"github.com/maestria-dev/maestria/internal/auth"
+	"github.com/paulo-lucas/maestria/internal/audit"
+	"github.com/paulo-lucas/maestria/internal/auth"
 )
 
 // Token lifetimes.

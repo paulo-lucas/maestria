@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/maestria-dev/maestria/internal/chat"
-	"github.com/maestria-dev/maestria/internal/config"
-	"github.com/maestria-dev/maestria/internal/inbox"
+	"github.com/paulo-lucas/maestria/internal/chat"
+	"github.com/paulo-lucas/maestria/internal/config"
+	"github.com/paulo-lucas/maestria/internal/inbox"
 )
 
 func TestConnectorPagesRequireAuthAndStrictCSP(t *testing.T) {

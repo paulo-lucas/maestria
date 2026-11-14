@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/maestria-dev/maestria/internal/floors"
+	"github.com/paulo-lucas/maestria/internal/floors"
 )
 
 func TestCLIFloorCommandsAndErrors(t *testing.T) {

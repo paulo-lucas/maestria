@@ -9,17 +9,17 @@ import (
 	"sync"
 	"time"
 
-	"github.com/maestria-dev/maestria/internal/activity"
-	"github.com/maestria-dev/maestria/internal/audit"
-	"github.com/maestria-dev/maestria/internal/auth"
-	"github.com/maestria-dev/maestria/internal/config"
-	"github.com/maestria-dev/maestria/internal/connect"
-	"github.com/maestria-dev/maestria/internal/devices"
-	"github.com/maestria-dev/maestria/internal/runlock"
-	"github.com/maestria-dev/maestria/internal/store"
-	"github.com/maestria-dev/maestria/internal/tunnel"
-	"github.com/maestria-dev/maestria/internal/web"
-	"github.com/maestria-dev/maestria/internal/workspaces"
+	"github.com/paulo-lucas/maestria/internal/activity"
+	"github.com/paulo-lucas/maestria/internal/audit"
+	"github.com/paulo-lucas/maestria/internal/auth"
+	"github.com/paulo-lucas/maestria/internal/config"
+	"github.com/paulo-lucas/maestria/internal/connect"
+	"github.com/paulo-lucas/maestria/internal/devices"
+	"github.com/paulo-lucas/maestria/internal/runlock"
+	"github.com/paulo-lucas/maestria/internal/store"
+	"github.com/paulo-lucas/maestria/internal/tunnel"
+	"github.com/paulo-lucas/maestria/internal/web"
+	"github.com/paulo-lucas/maestria/internal/workspaces"
 )
 
 // ErrNoCredentials is returned when `auth setup` has not been run.

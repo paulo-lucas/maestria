@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/maestria-dev/maestria/internal/config"
-	"github.com/maestria-dev/maestria/internal/store"
+	"github.com/paulo-lucas/maestria/internal/config"
+	"github.com/paulo-lucas/maestria/internal/store"
 )
 
 func testCfg(t *testing.T, maestriDir string) *config.Config {

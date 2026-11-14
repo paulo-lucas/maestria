@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/maestria-dev/maestria/internal/auth"
-	"github.com/maestria-dev/maestria/internal/connect"
-	"github.com/maestria-dev/maestria/internal/service"
+	"github.com/paulo-lucas/maestria/internal/auth"
+	"github.com/paulo-lucas/maestria/internal/connect"
+	"github.com/paulo-lucas/maestria/internal/service"
 )
 
 const serviceUsage = "Usage: maestria service install|uninstall|start|stop|restart|status|logs [options]"

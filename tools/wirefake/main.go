@@ -20,11 +20,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/maestria-dev/maestria/internal/auth"
-	"github.com/maestria-dev/maestria/internal/config"
-	"github.com/maestria-dev/maestria/internal/wire"
-	"github.com/maestria-dev/maestria/internal/wire/wiretest"
-	"github.com/maestria-dev/maestria/internal/workspaces"
+	"github.com/paulo-lucas/maestria/internal/auth"
+	"github.com/paulo-lucas/maestria/internal/config"
+	"github.com/paulo-lucas/maestria/internal/wire"
+	"github.com/paulo-lucas/maestria/internal/wire/wiretest"
+	"github.com/paulo-lucas/maestria/internal/workspaces"
 )
 
 const (

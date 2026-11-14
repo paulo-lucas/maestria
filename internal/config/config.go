@@ -16,7 +16,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/maestria-dev/maestria/internal/privfile"
+	"github.com/paulo-lucas/maestria/internal/privfile"
 )
 
 // Host is the only address the panel listens on. It is not configurable on purpose: the

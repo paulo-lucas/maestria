@@ -15,8 +15,8 @@ import (
 
 	"golang.org/x/term"
 
-	"github.com/maestria-dev/maestria/internal/config"
-	"github.com/maestria-dev/maestria/internal/service"
+	"github.com/paulo-lucas/maestria/internal/config"
+	"github.com/paulo-lucas/maestria/internal/service"
 )
 
 const help = `maestria: control panel for Maestri workspaces

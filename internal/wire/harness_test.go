@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/maestria-dev/maestria/internal/wire"
-	"github.com/maestria-dev/maestria/internal/wire/wiretest"
+	"github.com/paulo-lucas/maestria/internal/wire"
+	"github.com/paulo-lucas/maestria/internal/wire/wiretest"
 )
 
 const (

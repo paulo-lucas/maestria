@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/maestria-dev/maestria/internal/service"
+	"github.com/paulo-lucas/maestria/internal/service"
 )
 
 func TestServiceCLI(t *testing.T) {

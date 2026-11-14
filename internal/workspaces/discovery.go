@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/maestria-dev/maestria/internal/config"
+	"github.com/paulo-lucas/maestria/internal/config"
 )
 
 type rawAgent struct {

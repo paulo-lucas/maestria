@@ -53,8 +53,8 @@ uname -m
 
 ```sh
 cd /tmp
-curl -fsSLO https://github.com/maestria-dev/maestria/releases/download/vVERSION/maestria-cloud_VERSION_linux_ARCH.tar.gz
-curl -fsSLO https://github.com/maestria-dev/maestria/releases/download/vVERSION/SHA256SUMS
+curl -fsSLO https://github.com/paulo-lucas/maestria/releases/download/vVERSION/maestria-cloud_VERSION_linux_ARCH.tar.gz
+curl -fsSLO https://github.com/paulo-lucas/maestria/releases/download/vVERSION/SHA256SUMS
 grep " maestria-cloud_VERSION_linux_ARCH.tar.gz" SHA256SUMS | sha256sum -c -
 ```
 
@@ -71,7 +71,7 @@ maestria-cloud version
 **Option B: build from source.** You need Go 1.27 or newer ([go.dev/dl](https://go.dev/dl/)):
 
 ```sh
-git clone https://github.com/maestria-dev/maestria.git
+git clone https://github.com/paulo-lucas/maestria.git
 cd maestria
 go build -trimpath -o maestria-cloud ./cmd/maestria-cloud
 sudo install -m 0755 maestria-cloud /usr/local/bin/maestria-cloud
@@ -186,7 +186,7 @@ Paste this:
 ```ini
 [Unit]
 Description=Maestria hosted server
-Documentation=https://github.com/maestria-dev/maestria
+Documentation=https://github.com/paulo-lucas/maestria
 After=network-online.target
 Wants=network-online.target
 

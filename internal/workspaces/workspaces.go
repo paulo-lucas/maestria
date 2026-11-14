@@ -14,7 +14,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/maestria-dev/maestria/internal/privfile"
+	"github.com/paulo-lucas/maestria/internal/privfile"
 )
 
 // DefaultPalette matches the V1 workspace accent colors.

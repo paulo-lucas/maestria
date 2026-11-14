@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/maestria-dev/maestria/internal/audit"
+	"github.com/paulo-lucas/maestria/internal/audit"
 )
 
 // Outcome is the result of one login step.

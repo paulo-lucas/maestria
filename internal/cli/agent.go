@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/maestria-dev/maestria/internal/activity"
-	"github.com/maestria-dev/maestria/internal/store"
+	"github.com/paulo-lucas/maestria/internal/activity"
+	"github.com/paulo-lucas/maestria/internal/store"
 )
 
 const agentHelp = `Usage: maestria agent brief <name> "<text>" [-w <workspace>] [--json]

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/maestria-dev/maestria/internal/wire"
+	"github.com/paulo-lucas/maestria/internal/wire"
 )
 
 func TestProvisionWithPasswordPairsTwiceAndDemotesOnlyTheReadDevice(t *testing.T) {

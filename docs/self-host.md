@@ -243,9 +243,9 @@ Run the same install command you used first. It replaces the program and checks 
 
 | How you installed | Update with |
 | --- | --- |
-| install script | `curl -fsSL https://raw.githubusercontent.com/maestria-dev/maestria/main/install.sh \| sh` |
+| install script | `curl -fsSL https://raw.githubusercontent.com/paulo-lucas/maestria/main/install.sh \| sh` |
 | Homebrew | `brew upgrade maestria` |
-| Windows | `irm https://raw.githubusercontent.com/maestria-dev/maestria/main/install.ps1 \| iex` |
+| Windows | `irm https://raw.githubusercontent.com/paulo-lucas/maestria/main/install.ps1 \| iex` |
 
 Then **restart the service** so the running panel picks up the new version:
 

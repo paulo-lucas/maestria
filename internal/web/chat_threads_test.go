@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/maestria-dev/maestria/internal/chat"
-	"github.com/maestria-dev/maestria/internal/wire"
+	"github.com/paulo-lucas/maestria/internal/chat"
+	"github.com/paulo-lucas/maestria/internal/wire"
 )
 
 // assertChatNeedsWire checks the Chat page of a workspace whose live chat is unavailable: the

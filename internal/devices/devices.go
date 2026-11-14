@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/maestria-dev/maestria/internal/relay"
+	"github.com/paulo-lucas/maestria/internal/relay"
 )
 
 // Policy is the connector's session policy for relayed requests.

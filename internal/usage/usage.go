@@ -16,30 +16,30 @@ import (
 	"strings"
 	"time"
 
-	"github.com/maestria-dev/maestria/internal/config"
-	"github.com/maestria-dev/maestria/internal/store"
+	"github.com/paulo-lucas/maestria/internal/config"
+	"github.com/paulo-lucas/maestria/internal/store"
 )
 
 const (
-	lastGoodKVKey     = "usage.last_good_v1"
-	recentSuccessMax  = 24 * time.Hour
+	lastGoodKVKey    = "usage.last_good_v1"
+	recentSuccessMax = 24 * time.Hour
 )
 
 var nonKeyRE = regexp.MustCompile(`[^a-z0-9._:-]+`)
 
 // Window is one quota meter (for example session 5h or weekly 7d).
 type Window struct {
-	ID            string   `json:"id"`
-	Label         string   `json:"label"`
-	UsedPercent   float64  `json:"usedPercent"`
-	RoundedPct    int      `json:"roundedPercent"`
-	RemainingPct  float64  `json:"remainingPercent"`
-	ResetAt       *int64   `json:"resetAt,omitempty"`
-	ResetLabel    string   `json:"resetLabel,omitempty"`
-	Threshold     int      `json:"threshold,omitempty"`
-	Action        string   `json:"action,omitempty"`
-	Tripped       bool     `json:"tripped,omitempty"`
-	MarkStep      int      `json:"markStep,omitempty"`
+	ID           string  `json:"id"`
+	Label        string  `json:"label"`
+	UsedPercent  float64 `json:"usedPercent"`
+	RoundedPct   int     `json:"roundedPercent"`
+	RemainingPct float64 `json:"remainingPercent"`
+	ResetAt      *int64  `json:"resetAt,omitempty"`
+	ResetLabel   string  `json:"resetLabel,omitempty"`
+	Threshold    int     `json:"threshold,omitempty"`
+	Action       string  `json:"action,omitempty"`
+	Tripped      bool    `json:"tripped,omitempty"`
+	MarkStep     int     `json:"markStep,omitempty"`
 }
 
 // AccountGroup groups provider meters by (provider + account/plan identity).

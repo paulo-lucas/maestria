@@ -9,8 +9,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/maestria-dev/maestria/internal/privfile"
-	"github.com/maestria-dev/maestria/internal/relay"
+	"github.com/paulo-lucas/maestria/internal/privfile"
+	"github.com/paulo-lucas/maestria/internal/relay"
 )
 
 // KeyFileName holds the 32-byte server key (0600). It encrypts TOTP secrets at rest.

@@ -9,7 +9,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/maestria-dev/maestria/internal/events"
+	"github.com/paulo-lucas/maestria/internal/events"
 )
 
 const (

@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/maestria-dev/maestria/internal/privfile"
+	"github.com/paulo-lucas/maestria/internal/privfile"
 )
 
 // SecretsFileName holds the v2 password hash and TOTP secret (0600). V1's auth.json is left alone.

@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/maestria-dev/maestria/internal/cli"
-	"github.com/maestria-dev/maestria/internal/connect"
-	"github.com/maestria-dev/maestria/internal/relay"
-	"github.com/maestria-dev/maestria/internal/relay/relaytest"
+	"github.com/paulo-lucas/maestria/internal/cli"
+	"github.com/paulo-lucas/maestria/internal/connect"
+	"github.com/paulo-lucas/maestria/internal/relay"
+	"github.com/paulo-lucas/maestria/internal/relay/relaytest"
 )
 
 func init() { cli.LinkPollInterval = 30 * time.Millisecond }

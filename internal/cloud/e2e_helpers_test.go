@@ -17,13 +17,13 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/maestria-dev/maestria/internal/cli"
-	"github.com/maestria-dev/maestria/internal/config"
-	"github.com/maestria-dev/maestria/internal/connect"
-	"github.com/maestria-dev/maestria/internal/relay"
-	"github.com/maestria-dev/maestria/internal/relay/relaytest"
-	"github.com/maestria-dev/maestria/internal/store"
-	"github.com/maestria-dev/maestria/internal/workspaces"
+	"github.com/paulo-lucas/maestria/internal/cli"
+	"github.com/paulo-lucas/maestria/internal/config"
+	"github.com/paulo-lucas/maestria/internal/connect"
+	"github.com/paulo-lucas/maestria/internal/relay"
+	"github.com/paulo-lucas/maestria/internal/relay/relaytest"
+	"github.com/paulo-lucas/maestria/internal/store"
+	"github.com/paulo-lucas/maestria/internal/workspaces"
 )
 
 // node is a real connector: its own config dir and database, the real web handlers behind the

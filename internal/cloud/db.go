@@ -4,8 +4,8 @@ import (
 	"database/sql"
 	"path/filepath"
 
-	"github.com/maestria-dev/maestria/internal/privfile"
-	"github.com/maestria-dev/maestria/internal/store"
+	"github.com/paulo-lucas/maestria/internal/privfile"
+	"github.com/paulo-lucas/maestria/internal/store"
 )
 
 // DBFileName is the cloud database in the data dir.

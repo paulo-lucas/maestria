@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/maestria-dev/maestria/internal/chat"
-	"github.com/maestria-dev/maestria/internal/inbox"
-	"github.com/maestria-dev/maestria/internal/ui"
-	"github.com/maestria-dev/maestria/internal/wire"
-	"github.com/maestria-dev/maestria/internal/workspaces"
+	"github.com/paulo-lucas/maestria/internal/chat"
+	"github.com/paulo-lucas/maestria/internal/inbox"
+	"github.com/paulo-lucas/maestria/internal/ui"
+	"github.com/paulo-lucas/maestria/internal/wire"
+	"github.com/paulo-lucas/maestria/internal/workspaces"
 )
 
 // threadTone maps a Maestri thread colour to a design tone (data-tone), so the swatches follow

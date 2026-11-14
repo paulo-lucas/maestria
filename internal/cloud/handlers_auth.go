@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/maestria-dev/maestria/internal/auth"
+	"github.com/paulo-lucas/maestria/internal/auth"
 )
 
 var csrfShape = regexp.MustCompile(`^[A-Za-z0-9_-]{43}$`)

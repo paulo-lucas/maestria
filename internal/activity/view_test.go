@@ -3,7 +3,7 @@ package activity
 import (
 	"testing"
 
-	"github.com/maestria-dev/maestria/internal/wire"
+	"github.com/paulo-lucas/maestria/internal/wire"
 )
 
 func term(id, name string, running bool) wire.TerminalCard {

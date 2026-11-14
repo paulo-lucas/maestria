@@ -17,8 +17,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/maestria-dev/maestria/internal/privfile"
-	"github.com/maestria-dev/maestria/internal/relay"
+	"github.com/paulo-lucas/maestria/internal/privfile"
+	"github.com/paulo-lucas/maestria/internal/relay"
 )
 
 // SMTP is the outgoing mail server.

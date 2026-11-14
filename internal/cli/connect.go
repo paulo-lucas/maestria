@@ -14,12 +14,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/maestria-dev/maestria/internal/config"
-	"github.com/maestria-dev/maestria/internal/connect"
-	"github.com/maestria-dev/maestria/internal/devices"
-	"github.com/maestria-dev/maestria/internal/relay"
-	"github.com/maestria-dev/maestria/internal/runlock"
-	"github.com/maestria-dev/maestria/internal/store"
+	"github.com/paulo-lucas/maestria/internal/config"
+	"github.com/paulo-lucas/maestria/internal/connect"
+	"github.com/paulo-lucas/maestria/internal/devices"
+	"github.com/paulo-lucas/maestria/internal/relay"
+	"github.com/paulo-lucas/maestria/internal/runlock"
+	"github.com/paulo-lucas/maestria/internal/store"
 )
 
 const connectUsage = `Usage:

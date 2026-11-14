@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/maestria-dev/maestria/internal/relay"
+	"github.com/paulo-lucas/maestria/internal/relay"
 )
 
 // The browser code and the Go code must agree byte for byte: the canonical string, the P1363

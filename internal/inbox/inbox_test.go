@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/maestria-dev/maestria/internal/events"
-	"github.com/maestria-dev/maestria/internal/store"
+	"github.com/paulo-lucas/maestria/internal/events"
+	"github.com/paulo-lucas/maestria/internal/store"
 )
 
 func TestRenderMarkdownSanitization(t *testing.T) {

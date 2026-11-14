@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/maestria-dev/maestria/internal/config"
+	"github.com/paulo-lucas/maestria/internal/config"
 )
 
 func testEnv(goos string, vars map[string]string) config.Env {

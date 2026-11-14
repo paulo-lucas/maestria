@@ -12,11 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/maestria-dev/maestria/internal/auth"
-	"github.com/maestria-dev/maestria/internal/cli"
-	"github.com/maestria-dev/maestria/internal/connect"
-	"github.com/maestria-dev/maestria/internal/relay/relaytest"
-	"github.com/maestria-dev/maestria/internal/runlock"
+	"github.com/paulo-lucas/maestria/internal/auth"
+	"github.com/paulo-lucas/maestria/internal/cli"
+	"github.com/paulo-lucas/maestria/internal/connect"
+	"github.com/paulo-lucas/maestria/internal/relay/relaytest"
+	"github.com/paulo-lucas/maestria/internal/runlock"
 )
 
 func freePort(t *testing.T) int {

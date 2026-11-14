@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/maestria-dev/maestria/internal/relay"
+	"github.com/paulo-lucas/maestria/internal/relay"
 )
 
 // Connector-facing link API: no cookies, no CSRF (nothing ambient to abuse), a body limit, and

@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/maestria-dev/maestria/internal/privfile"
+	"github.com/paulo-lucas/maestria/internal/privfile"
 
 	_ "modernc.org/sqlite" // registers the "sqlite" driver (pure Go, no CGO)
 )

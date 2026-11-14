@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/maestria-dev/maestria/internal/config"
-	"github.com/maestria-dev/maestria/internal/floors"
+	"github.com/paulo-lucas/maestria/internal/config"
+	"github.com/paulo-lucas/maestria/internal/floors"
 )
 
 type stubLiveFloors struct {

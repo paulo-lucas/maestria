@@ -1,5 +1,5 @@
 class Maestria < Formula
-  REPO = "maestria-dev/maestria"
+  REPO = "paulo-lucas/maestria"
 
   desc "Self-hosted control panel and Maestro protocol CLI for Maestri workspaces"
   homepage "https://github.com/#{REPO}"

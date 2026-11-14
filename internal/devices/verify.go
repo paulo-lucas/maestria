@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/maestria-dev/maestria/internal/relay"
+	"github.com/paulo-lucas/maestria/internal/relay"
 )
 
 // Request is a relayed request as the connector received it.

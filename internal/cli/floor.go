@@ -6,8 +6,8 @@ import (
 	"io"
 	"strings"
 
-	"github.com/maestria-dev/maestria/internal/floors"
-	"github.com/maestria-dev/maestria/internal/store"
+	"github.com/paulo-lucas/maestria/internal/floors"
+	"github.com/paulo-lucas/maestria/internal/store"
 )
 
 const floorHelp = `Usage: maestria floor <subcommand> [options]

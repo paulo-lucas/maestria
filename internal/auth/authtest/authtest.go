@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/maestria-dev/maestria/internal/auth"
+	"github.com/paulo-lucas/maestria/internal/auth"
 )
 
 // Key is an RSA signing key that plays the role of a Cloudflare Access team key.

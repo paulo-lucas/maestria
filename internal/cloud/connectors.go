@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/maestria-dev/maestria/internal/auth"
-	"github.com/maestria-dev/maestria/internal/relay"
+	"github.com/paulo-lucas/maestria/internal/auth"
+	"github.com/paulo-lucas/maestria/internal/relay"
 )
 
 // LinkTTL is how long a link code lives.

@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/maestria-dev/maestria/internal/audit"
-	"github.com/maestria-dev/maestria/internal/store"
+	"github.com/paulo-lucas/maestria/internal/audit"
+	"github.com/paulo-lucas/maestria/internal/store"
 )
 
 func openDB(t *testing.T) *sql.DB {

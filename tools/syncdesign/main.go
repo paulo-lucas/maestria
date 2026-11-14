@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/maestria-dev/maestria/internal/ui"
+	"github.com/paulo-lucas/maestria/internal/ui"
 )
 
 func main() {

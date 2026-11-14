@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/maestria-dev/maestria/internal/auth"
-	"github.com/maestria-dev/maestria/internal/auth/authtest"
+	"github.com/paulo-lucas/maestria/internal/auth"
+	"github.com/paulo-lucas/maestria/internal/auth/authtest"
 )
 
 const (

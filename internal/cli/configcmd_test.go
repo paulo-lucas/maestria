@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/maestria-dev/maestria/internal/config"
+	"github.com/paulo-lucas/maestria/internal/config"
 )
 
 func TestConfigAllowAndDisallowHost(t *testing.T) {

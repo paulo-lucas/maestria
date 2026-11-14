@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/maestria-dev/maestria/internal/chat"
-	"github.com/maestria-dev/maestria/internal/config"
-	"github.com/maestria-dev/maestria/internal/events"
-	"github.com/maestria-dev/maestria/internal/inbox"
-	"github.com/maestria-dev/maestria/internal/store"
+	"github.com/paulo-lucas/maestria/internal/chat"
+	"github.com/paulo-lucas/maestria/internal/config"
+	"github.com/paulo-lucas/maestria/internal/events"
+	"github.com/paulo-lucas/maestria/internal/inbox"
+	"github.com/paulo-lucas/maestria/internal/store"
 )
 
 func newConnectorEnv(t *testing.T, now time.Time) (*Env, string, string, *bytes.Buffer, *bytes.Buffer) {

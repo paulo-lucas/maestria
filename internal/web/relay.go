@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/maestria-dev/maestria/internal/auth"
-	"github.com/maestria-dev/maestria/internal/relay"
+	"github.com/paulo-lucas/maestria/internal/auth"
+	"github.com/paulo-lucas/maestria/internal/relay"
 )
 
 // RelayHandler serves relayed (hosted-mode) requests with the same handlers as local mode. It
