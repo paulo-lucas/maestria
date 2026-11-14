@@ -18,6 +18,7 @@ import (
 	"github.com/maestria-dev/maestria/internal/connect"
 	"github.com/maestria-dev/maestria/internal/devices"
 	"github.com/maestria-dev/maestria/internal/relay"
+	"github.com/maestria-dev/maestria/internal/runlock"
 	"github.com/maestria-dev/maestria/internal/store"
 )
 
@@ -51,13 +52,13 @@ type Connector struct {
 	Close   func()
 }
 
-// BuildConnector wires `maestria connect` from the config directory and a saved link.
-func BuildConnector(env *Env, link *connect.Link, log func(string)) (*Connector, error) {
-	var dm *devices.Manager
-	b, err := buildServer(env, buildOpts{
+// hostedOpts is what a server needs to also serve relayed requests: the device manager (policy
+// from the machine's own config) and the machine's name. dm receives the manager once built.
+func hostedOpts(env *Env, link *connect.Link, dm **devices.Manager) buildOpts {
+	return buildOpts{
 		ConnectorName: link.Name,
 		Devices: func(db *sql.DB, cfg *config.Config) *devices.Manager {
-			dm = devices.New(db, func() devices.Policy {
+			*dm = devices.New(db, func() devices.Policy {
 				return devices.Policy{
 					Enabled:       cfg.Relay.Enabled,
 					Absolute:      time.Duration(cfg.Relay.ApprovalAbsoluteDays) * 24 * time.Hour,
@@ -65,12 +66,26 @@ func BuildConnector(env *Env, link *connect.Link, log func(string)) (*Connector,
 					RatePerMinute: cfg.Relay.RatePerMinute,
 				}
 			}, env.Now)
-			return dm
+			return *dm
 		},
-	})
+	}
+}
+
+// BuildConnector wires `maestria connect` from the config directory and a saved link: a server
+// without a local login, used only through the relay gate.
+func BuildConnector(env *Env, link *connect.Link, log func(string)) (*Connector, error) {
+	var dm *devices.Manager
+	b, err := buildServer(env, hostedOpts(env, link, &dm))
 	if err != nil {
 		return nil, err
 	}
+	return newConnector(env, b, dm, link, log), nil
+}
+
+// newConnector builds the outbound client around an already built server. `serve --connect` and
+// `connect` share it, so the relay serves exactly the handlers (and the one Wire subscription and
+// standby guard) of the server it is given.
+func newConnector(env *Env, b *built, dm *devices.Manager, link *connect.Link, log func(string)) *Connector {
 	gate := &connect.Gate{ConnectorID: link.ConnectorID, Devices: dm, Killed: b.Tun.Killed, Audit: b.Audit}
 	c := &connect.Client{
 		Link: link, Version: env.Version, Name: link.Name, Handler: b.Srv.RelayHandler(), Gate: gate, Devices: dm, Killed: b.Tun.Killed,
@@ -98,7 +113,7 @@ func BuildConnector(env *Env, link *connect.Link, log func(string)) (*Connector,
 			}
 		},
 	}
-	return &Connector{Link: link, Client: c, Server: b, Devices: dm, Close: b.Close}, nil
+	return &Connector{Link: link, Client: c, Server: b, Devices: dm, Close: b.Close}
 }
 
 func cloudURL(env *Env, flag string, cfg *config.Config) string {
@@ -152,7 +167,9 @@ func cmdConnect(args []string, env *Env) error {
 	if link != nil && (code != "" || parsed.String("cloud") != "") {
 		return fmt.Errorf("this machine is already linked to %s as %q; run \"maestria connect unlink\" first to link it somewhere else", link.Cloud, link.Name)
 	}
+	justLinked := false
 	if link == nil {
+		justLinked = true
 		cloud := cloudURL(env, parsed.String("cloud"), cfg)
 		if cloud == "" {
 			return usagef("No cloud to link to. Pass --cloud https://your-maestria-cloud (or set \"cloud\" in config.json).")
@@ -165,7 +182,7 @@ func cmdConnect(args []string, env *Env) error {
 			return err
 		}
 	}
-	return runConnector(env, link)
+	return runConnector(env, link, justLinked)
 }
 
 func prompt(env *Env, r *bufio.Reader, q string) string {
@@ -258,7 +275,17 @@ func linkMachine(env *Env, dir, cloud, code, name string, assumeYes bool) (*conn
 	return link, nil
 }
 
-func runConnector(env *Env, link *connect.Link) error {
+func runConnector(env *Env, link *connect.Link, justLinked bool) error {
+	lock, err := runlock.Acquire(configDir(env), "connect")
+	if err != nil {
+		var held *runlock.HeldError
+		if justLinked && errors.As(err, &held) && strings.HasPrefix(held.Info.Mode, "serve") {
+			fmt.Fprintf(env.Stdout, "maestria serve (pid %d) is already running on this config directory. Restart it (\"maestria service restart\", or stop and start it) and it will connect to the cloud as well.\n", held.Info.PID)
+			return nil
+		}
+		return err
+	}
+	defer lock.Release()
 	c, err := BuildConnector(env, link, func(s string) { fmt.Fprintln(env.Stdout, s) })
 	if err != nil {
 		return err

@@ -31,7 +31,21 @@ const (
 
 	ModeServe   = "serve"
 	ModeConnect = "connect"
+	// ModeBoth runs the local panel and the hosted connection in one process
+	// ("maestria serve --connect").
+	ModeBoth = "both"
 )
+
+// ModeArgs returns the command-line arguments a service runs for mode (after the binary).
+func ModeArgs(mode string) []string {
+	switch mode {
+	case ModeConnect:
+		return []string{"connect"}
+	case ModeBoth:
+		return []string{"serve", "--connect"}
+	}
+	return []string{"serve"}
+}
 
 // Error marks a user-facing service management error.
 type Error struct{ err error }
@@ -166,16 +180,16 @@ func IsSupported(goos string) bool {
 	return goos == "darwin" || goos == "linux" || goos == "windows"
 }
 
-// ValidateMode checks that mode is "serve" or "connect" (empty defaults to "serve").
+// ValidateMode checks that mode is "serve", "connect" or "both" (empty defaults to "serve").
 func ValidateMode(mode string) (string, error) {
 	m := strings.ToLower(strings.TrimSpace(mode))
 	if m == "" {
 		return ModeServe, nil
 	}
-	if m == ModeServe || m == ModeConnect {
+	if m == ModeServe || m == ModeConnect || m == ModeBoth {
 		return m, nil
 	}
-	return "", serviceErrorf("invalid service mode %q (must be %q or %q)", mode, ModeServe, ModeConnect)
+	return "", serviceErrorf("invalid service mode %q (must be %q, %q or %q)", mode, ModeServe, ModeConnect, ModeBoth)
 }
 
 // DefaultBinaryPath returns the cleaned absolute path of the running executable.
@@ -451,11 +465,15 @@ func RenderLaunchdPlist(binaryPath, mode, configDir string, env config.Env) stri
 		`  <key>ProgramArguments</key>`,
 		`  <array>`,
 		fmt.Sprintf(`    <string>%s</string>`, xmlEscape(binaryPath)),
-		fmt.Sprintf(`    <string>%s</string>`, xmlEscape(mode)),
+	}
+	for _, a := range ModeArgs(mode) {
+		lines = append(lines, fmt.Sprintf(`    <string>%s</string>`, xmlEscape(a)))
+	}
+	lines = append(lines,
 		`  </array>`,
 		`  <key>EnvironmentVariables</key>`,
 		`  <dict>`,
-	}
+	)
 	lines = append(lines, envLines...)
 	lines = append(lines,
 		`  </dict>`,
@@ -501,7 +519,7 @@ func RenderSystemdUnit(binaryPath, mode, configDir string, env config.Env) strin
 		"",
 		"[Service]",
 		"Type=simple",
-		fmt.Sprintf("ExecStart=%s %s", escapeSystemdArg(binaryPath), mode),
+		fmt.Sprintf("ExecStart=%s %s", escapeSystemdArg(binaryPath), strings.Join(ModeArgs(mode), " ")),
 	}
 	lines = append(lines, envLines...)
 	lines = append(lines,
@@ -542,7 +560,7 @@ func RenderWindowsServiceScript(binaryPath, mode, configDir string, env config.E
 	}
 	lines = append(lines, envLines...)
 	lines = append(lines,
-		fmt.Sprintf(`"%s" %s >> "%s" 2>&1`, escapeCmdValue(binaryPath), mode, escapeCmdValue(logFile)),
+		fmt.Sprintf(`"%s" %s >> "%s" 2>&1`, escapeCmdValue(binaryPath), strings.Join(ModeArgs(mode), " "), escapeCmdValue(logFile)),
 		"",
 	)
 	return strings.Join(lines, "\r\n")

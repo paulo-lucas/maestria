@@ -23,8 +23,8 @@ const help = `maestria: control panel for Maestri workspaces
 
 Usage:
   maestria init                      Run the interactive setup wizard
-  maestria serve                     Start the panel (127.0.0.1 only)
-  maestria connect [--link CODE]     Link this machine to a hosted Maestria and stay connected
+  maestria serve [--connect]         Start the panel (127.0.0.1 only); also connects to the cloud when linked
+  maestria connect [--link CODE]     Link this machine to a hosted Maestria and stay connected (no local panel)
   maestria connect status|unlink     Show the link, or revoke it
   maestria devices pending|approve|reject|list|revoke   Approve browsers on this machine (hosted mode)
   maestria service <subcommand>      Manage background service (install|uninstall|start|stop|restart|status|logs)
