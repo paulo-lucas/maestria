@@ -52,6 +52,18 @@ func (f *fixture) env(stdin string, secrets ...string) Env {
 	return e
 }
 
+// testWord is the confirmation word of humanEnv.
+const testWord = "tabeko"
+
+// humanEnv is env for a person at a terminal: stdin is a TTY that types the confirmation word
+// first, then the given lines.
+func (f *fixture) humanEnv(stdin string, secrets ...string) Env {
+	e := f.env(testWord+"\n"+stdin, secrets...)
+	e.IsTTY = func() bool { return true }
+	e.ConfirmWord = func() string { return testWord }
+	return e
+}
+
 func (f *fixture) run(env Env, args ...string) int {
 	f.out.Reset()
 	f.errOut.Reset()
@@ -219,7 +231,7 @@ func TestTunnelCommandsAndLocalOnlyEnable(t *testing.T) {
 	if code := f.run(f.env(""), "tunnel", "status", "--json"); code != 0 || !strings.Contains(f.out.String(), `"killed": true`) {
 		t.Fatalf("status json: %d %s", code, f.out.String())
 	}
-	if code := f.run(f.env(""), "tunnel", "on"); code != 0 || !strings.Contains(f.out.String(), "kill switch cleared") {
+	if code := f.run(f.humanEnv(""), "tunnel", "on"); code != 0 || !strings.Contains(f.out.String(), "kill switch cleared") {
 		t.Fatalf("on: %d %s %s", code, f.out.String(), f.errOut.String())
 	}
 	if code := f.run(f.env(""), "tunnel", "status"); !strings.Contains(f.out.String(), "inactive") {
@@ -230,7 +242,7 @@ func TestTunnelCommandsAndLocalOnlyEnable(t *testing.T) {
 	if err := config.SaveRaw(f.dir, []byte(`{"tunnel":{"startCommand":["/definitely/not/a/command"]}}`), f.env("").Config); err != nil {
 		t.Fatal(err)
 	}
-	if code := f.run(f.env(""), "tunnel", "on"); code != 1 || !strings.Contains(f.out.String(), "Start command failed") {
+	if code := f.run(f.humanEnv(""), "tunnel", "on"); code != 1 || !strings.Contains(f.out.String(), "Start command failed") {
 		t.Fatalf("failing start: %d %s", code, f.out.String())
 	}
 }

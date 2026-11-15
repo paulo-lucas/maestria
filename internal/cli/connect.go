@@ -14,12 +14,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/paulo-lucas/maestria/internal/audit"
 	"github.com/paulo-lucas/maestria/internal/config"
 	"github.com/paulo-lucas/maestria/internal/connect"
 	"github.com/paulo-lucas/maestria/internal/devices"
 	"github.com/paulo-lucas/maestria/internal/relay"
 	"github.com/paulo-lucas/maestria/internal/runlock"
 	"github.com/paulo-lucas/maestria/internal/store"
+	"github.com/paulo-lucas/maestria/internal/termsafe"
 )
 
 const connectUsage = `Usage:
@@ -87,8 +89,14 @@ func BuildConnector(env *Env, link *connect.Link, log func(string)) (*Connector,
 // standby guard) of the server it is given.
 func newConnector(env *Env, b *built, dm *devices.Manager, link *connect.Link, log func(string)) *Connector {
 	gate := &connect.Gate{ConnectorID: link.ConnectorID, Devices: dm, Killed: b.Tun.Killed, Audit: b.Audit}
+	dm.SetAudit(b.Audit)
 	c := &connect.Client{
 		Link: link, Version: env.Version, Name: link.Name, Handler: b.Srv.RelayHandler(), Gate: gate, Devices: dm, Killed: b.Tun.Killed,
+		OnPairing: func(label string) {
+			if log != nil {
+				log(fmt.Sprintf("A browser (%q) asked to be approved. See \"maestria devices pending\"; it is only yours to approve if you started that pairing.", label))
+			}
+		},
 		OnState: func(s connect.State, err error) {
 			st := connState{State: string(s), Since: time.Now().UnixMilli(), PID: os.Getpid(), UpdatedAt: time.Now().UnixMilli()}
 			if err != nil {
@@ -199,6 +207,20 @@ func linkMachine(env *Env, dir, cloud, code, name string, assumeYes bool) (*conn
 	in := bufio.NewReader(env.Stdin)
 	ctx, stop := env.signalCtx()
 	defer stop()
+
+	// Linking hands a cloud the way to reach this machine, so it needs a person at a terminal
+	// (--yes does not skip this, only the questions after it).
+	log, closeLog := openAudit(env, dir)
+	defer closeLog()
+	const action = "Link this machine to a hosted Maestria"
+	if err := env.requireHuman(in, action, []string{
+		"Cloud: " + cloud,
+		"That server will relay your browsers' requests to this machine. Each request is still signed and checked here,",
+		"but it can read what you view through it and it serves the pages you approve browsers from.",
+		"Only link a server you run or trust.",
+	}, log); err != nil {
+		return nil, err
+	}
 
 	var linked *relay.Linked
 	if code != "" {
@@ -427,19 +449,27 @@ func cmdDevices(args []string, env *Env) error {
 		if err != nil {
 			return err
 		}
+		b := dm.Budget()
 		if len(list) == 0 {
 			fmt.Fprintln(env.Stdout, "No browser is waiting for approval.")
-			return nil
 		}
+		now := env.now()
 		for _, p := range list {
-			left := time.Until(time.UnixMilli(p.ExpiresAt)).Round(time.Second)
+			left := time.UnixMilli(p.ExpiresAt).Sub(now).Round(time.Second)
+			offered := time.UnixMilli(p.CreatedAt).Format("15:04:05")
 			if p.Code == "" {
-				fmt.Fprintf(env.Stdout, "%s  (waiting for the browser to show its code)  expires in %s\n", p.Label, left)
+				fmt.Fprintf(env.Stdout, "%s  (waiting for the browser to show its code)  offered %s, expires in %s\n", termsafe.Clean(p.Label, 80), offered, left)
 				continue
 			}
-			fmt.Fprintf(env.Stdout, "%s  %s  expires in %s\n", relay.FormatPairCode(p.Code), p.Label, left)
+			fmt.Fprintf(env.Stdout, "%s  %s  key %s  offered %s, expires in %s\n", relay.FormatPairCode(p.Code), termsafe.Clean(p.Label, 80), p.Fingerprint, offered, left)
 		}
-		fmt.Fprintln(env.Stdout, "\nCheck the code matches the one your browser shows, then: maestria devices approve <code>")
+		fmt.Fprintf(env.Stdout, "\nPairings offered in the last %d minutes: %d of %d allowed.\n", int(devices.PairWindow/time.Minute), b.Offers, b.MaxOffers)
+		if b.Paused != nil {
+			fmt.Fprintf(env.Stdout, "New pairings are refused for now: %s.\n", b.Paused.Error())
+		}
+		if len(list) > 0 {
+			fmt.Fprintln(env.Stdout, "\nOnly approve a pairing you started yourself. Check that the code and the key match what your browser shows, then: maestria devices approve <code>")
+		}
 		return nil
 	case "approve", "reject":
 		if len(args) < 2 {
@@ -453,12 +483,35 @@ func cmdDevices(args []string, env *Env) error {
 			fmt.Fprintln(env.Stdout, "Rejected.")
 			return nil
 		}
+		const action = "Approve a browser to control this machine"
+		log := audit.New(db, env.Now)
+		dm.SetAudit(log)
+		// A script or an agent without a terminal gets nothing, not even an answer about a code.
+		if err := env.needTTY(action, log); err != nil {
+			return err
+		}
+		p, err := dm.Lookup(code)
+		if err != nil {
+			return err
+		}
+		in := bufio.NewReader(env.Stdin)
+		details := []string{
+			"Name (as the cloud described it): " + termsafe.Clean(p.Label, 80),
+			"Key fingerprint:                  " + p.Fingerprint + "  (the pairing page shows the same one)",
+			"Offered at:                       " + time.UnixMilli(p.CreatedAt).Format("2006-01-02 15:04:05") + " (" + env.now().Sub(time.UnixMilli(p.CreatedAt)).Round(time.Second).String() + " ago)",
+			"Code:                             " + relay.FormatPairCode(p.Code),
+			fmt.Sprintf("It will be able to send commands for %d days (%d if unused). That includes prompting your agents and answering their Y/n questions,", cfg.Relay.ApprovalAbsoluteDays, cfg.Relay.IdleDays),
+			"which can make an agent run commands. Only approve a pairing you started yourself, from a browser you control.",
+		}
+		if err := env.requireHuman(in, action, details, log); err != nil {
+			return err
+		}
 		d, err := dm.Approve(code)
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(env.Stdout, "Approved %q (device %s). It may send commands for %d days, or until it has been idle %d.\n",
-			d.Label, d.ID[:8], cfg.Relay.ApprovalAbsoluteDays, cfg.Relay.IdleDays)
+		fmt.Fprintf(env.Stdout, "Approved %q (key %s). It may send commands for %d days, or until it has been idle %d.\n",
+			termsafe.Clean(d.Label, 80), d.Fingerprint(), cfg.Relay.ApprovalAbsoluteDays, cfg.Relay.IdleDays)
 		return nil
 	case "list":
 		list, err := dm.List()
@@ -470,8 +523,8 @@ func cmdDevices(args []string, env *Env) error {
 			return nil
 		}
 		for _, d := range list {
-			fmt.Fprintf(env.Stdout, "%s  %-8s  %s  approved %s, last used %s\n", d.ID, d.State, d.Label,
-				time.UnixMilli(d.ApprovedAt).Format("Jan 2 15:04"), time.UnixMilli(d.LastUsedAt).Format("Jan 2 15:04"))
+			fmt.Fprintf(env.Stdout, "%s  key %s  %-8s  %s  approved %s, last used %s\n", d.ID, d.Fingerprint(), d.State, termsafe.Clean(d.Label, 80),
+				time.UnixMilli(d.ApprovedAt).Format("2006-01-02 15:04"), time.UnixMilli(d.LastUsedAt).Format("2006-01-02 15:04"))
 		}
 		return nil
 	case "revoke":

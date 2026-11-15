@@ -60,6 +60,9 @@ type Env struct {
 	Ctx context.Context
 	// IsTTY reports whether Stdin is an interactive terminal. nil checks Stdin.(*os.File).
 	IsTTY func() bool
+	// ConfirmWord returns the word the person must type to confirm a sensitive command (see
+	// presence.go). nil picks a random one. Tests only: there is no flag for it.
+	ConfirmWord func() string
 	// ServiceRunner, ServiceBinaryPath, and ServiceReachability allow tests to stub service operations.
 	ServiceRunner       service.CommandRunner
 	ServiceBinaryPath   string

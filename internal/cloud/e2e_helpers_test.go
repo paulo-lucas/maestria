@@ -57,9 +57,13 @@ func (b *bed) newNode(name string) *node {
 		}
 		return ""
 	}
-	n.env = cli.Env{Stdin: strings.NewReader("y\n"), Stdout: n.out, Stderr: n.out, Config: config.Env{Getenv: getenv, GOOS: "linux", Home: home}, Now: n.clock.now, Version: "9.9.9-test"}
+	n.env = cli.Env{Stdin: strings.NewReader("y\n"), Stdout: n.out, Stderr: n.out, Config: config.Env{Getenv: getenv, GOOS: "linux", Home: home}, Now: n.clock.now, Version: "9.9.9-test",
+		IsTTY: func() bool { return true }, ConfirmWord: func() string { return testWord }}
 	return n
 }
+
+// testWord is the confirmation word the test CLI environments use for sensitive commands.
+const testWord = "tabeko"
 
 // cli runs a maestria command line against this node's config dir.
 func (n *node) cli(stdin string, args ...string) (int, string) {
@@ -95,7 +99,7 @@ func (n *node) linkWithWebCode(br *browser) {
 	ctx, cancel := context.WithCancel(context.Background())
 	env := n.env
 	env.Ctx = ctx
-	env.Stdin = strings.NewReader(n.name + "\ny\n")
+	env.Stdin = strings.NewReader(testWord + "\n" + n.name + "\ny\n")
 	env.Stdout, env.Stderr = n.out, n.out
 	done := make(chan int, 1)
 	go func() { done <- cli.Run([]string{"connect", "--link", c.Code, "--cloud", n.cloud}, env) }()
@@ -269,7 +273,7 @@ func (b *bed) pair(br *browser, dev *relaytest.Browser, nodes ...*node) {
 			c, out := n.cli("", "devices", "pending")
 			return c == 0 && strings.Contains(out, relay.FormatPairCode(code))
 		})
-		if c, out := n.cli("", "devices", "approve", relay.FormatPairCode(code)); c != 0 {
+		if c, out := n.cli(testWord+"\n", "devices", "approve", relay.FormatPairCode(code)); c != 0 {
 			b.t.Fatalf("approve on %s: %s", n.name, out)
 		}
 		waitFor(b.t, "approved state on "+n.name, func() bool { return get()[n.link.ConnectorID].State == "approved" })
