@@ -229,8 +229,17 @@ func clip(s string, n int) string {
 	return s
 }
 
+// PairingKeep is how long a finished pairing (approved, rejected, expired, mismatched) stays in
+// the table after its expiry. Past that it has been reported to the cloud long ago and only slows
+// every offer down (a flood of offers once grew the table to 133,000 rows).
+const PairingKeep = time.Hour
+
 func (m *Manager) sweep() error {
-	_, err := m.db.Exec(`UPDATE device_pairings SET state = 'expired' WHERE state IN ('pending','revealed') AND expires_at <= ?`, m.now().UnixMilli())
+	now := m.now().UnixMilli()
+	if _, err := m.db.Exec(`UPDATE device_pairings SET state = 'expired' WHERE state IN ('pending','revealed') AND expires_at <= ?`, now); err != nil {
+		return err
+	}
+	_, err := m.db.Exec(`DELETE FROM device_pairings WHERE state NOT IN ('pending','revealed') AND expires_at < ?`, now-PairingKeep.Milliseconds())
 	return err
 }
 

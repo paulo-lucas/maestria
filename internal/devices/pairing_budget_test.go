@@ -208,3 +208,69 @@ func TestDefaultPolicyLifetimes(t *testing.T) {
 			cfg.Relay.ApprovalAbsoluteDays, cfg.Relay.IdleDays, DefaultAbsoluteDays, DefaultIdleDays)
 	}
 }
+
+// Finished pairings are pruned, so a long flood of offers cannot grow the table and slow every
+// call down; live ones and recent ones are kept.
+func TestFinishedPairingsArePruned(t *testing.T) {
+	m, c := newManager(t)
+	count := func() (n int) {
+		_ = m.db.QueryRow("SELECT COUNT(*) FROM device_pairings").Scan(&n)
+		return n
+	}
+	for i := 0; i < 2000; i++ { // rows as a flood would leave them: expired, rejected, mismatched
+		state := []string{"expired", "rejected", "mismatch", "approved"}[i%4]
+		if _, err := m.db.Exec(`INSERT INTO device_pairings (pair_id, commit_hash, label, ua, r, state, created_at, expires_at) VALUES (?, 'x', 'x', '', 'r', ?, ?, ?)`,
+			fmt.Sprintf("old-%08d", i), state, c.now().UnixMilli(), c.now().Add(PairingTTL).UnixMilli()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	b := relaytest.NewBrowser(t)
+	p := b.StartPairing(t)
+	if _, err := m.Offer("live-0001", p.Commit, "x", ""); err != nil {
+		t.Fatal(err)
+	}
+	if count() != 2001 {
+		t.Fatalf("setup: %d rows", count())
+	}
+	// Shortly after expiry the finished rows are still kept (they may not have been reported yet).
+	c.advance(PairingTTL + 10*time.Minute)
+	if _, err := m.Pending(); err != nil {
+		t.Fatal(err)
+	}
+	if count() != 2001 {
+		t.Fatalf("rows pruned too early: %d", count())
+	}
+	// An hour after expiry they go; the pairing that expired meanwhile goes with them one sweep later.
+	c.advance(PairingKeep)
+	if _, err := m.Pending(); err != nil {
+		t.Fatal(err)
+	}
+	if n := count(); n != 0 {
+		t.Fatalf("%d finished pairings were not pruned", n)
+	}
+	// A pairing still waiting is never pruned.
+	if _, err := m.Offer("live-0002", p.Commit, "x", ""); err != nil {
+		t.Fatal(err)
+	}
+	c.advance(time.Minute)
+	_, _ = m.Pending()
+	if count() != 1 {
+		t.Fatalf("a live pairing was pruned: %d rows", count())
+	}
+	// And the lookups use the index.
+	var plan string
+	rows, err := m.db.Query("EXPLAIN QUERY PLAN SELECT COUNT(*) FROM device_pairings WHERE state IN ('pending','revealed')")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var a, b, c2 int
+		var detail string
+		_ = rows.Scan(&a, &b, &c2, &detail)
+		plan += detail + ";"
+	}
+	if !strings.Contains(plan, "idx_device_pairings_state_expires") {
+		t.Fatalf("the live-pairing count does not use the (state, expires_at) index: %s", plan)
+	}
+}

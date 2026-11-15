@@ -204,6 +204,11 @@ var migrations = []string{
 	);
 	CREATE INDEX IF NOT EXISTS idx_pair_events_kind_at ON pair_events (kind, at);
 	`,
+	// 8: pairings are looked up by state and expiry on every offer and every list, and finished
+	// ones are pruned (see devices.sweep), so the table stays small however many offers arrive.
+	`
+	CREATE INDEX IF NOT EXISTS idx_device_pairings_state_expires ON device_pairings (state, expires_at);
+	`,
 }
 
 // Open opens (creating if needed) the v2 database in configDir and migrates it.
