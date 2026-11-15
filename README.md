@@ -86,16 +86,18 @@ Not sure which one? Start with self-host. Words you do not know are explained in
 **1. Install** (macOS and Linux):
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/paulo-lucas/maestria/main/install.sh | sh
+curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/paulo-lucas/maestria/main/install.sh | sh
 ```
 
 On Windows (PowerShell):
 
 ```powershell
-irm https://raw.githubusercontent.com/paulo-lucas/maestria/main/install.ps1 | iex
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072; irm https://raw.githubusercontent.com/paulo-lucas/maestria/main/install.ps1 | iex
 ```
 
 With Homebrew: `brew install paulo-lucas/tap/maestria`. Other ways and more detail: [Getting started](docs/getting-started.md#1-install-maestria).
+
+**Verify your download:** releases carry build provenance and a signature that prove they were built by this repository's release workflow. With [cosign](https://docs.sigstore.dev/cosign/system_config/installation/) installed the installers check it for you; to check by hand, see [Verify a download](docs/security.md#verify-a-download).
 
 **2. Set up** (open a new terminal first):
 
@@ -113,7 +115,7 @@ Using a hosted server? Link your machine instead, with the code the server shows
 maestria connect --link XXXX-XXXX --cloud https://maestria.example.com
 ```
 
-**Stay current:** `maestria update` installs the latest release (checksum-verified, and it rolls back if the new version does not start). See [Self-host](docs/self-host.md#5-update).
+**Stay current:** `maestria update` installs the latest release (checksum-verified, signature-verified when cosign is installed, and it rolls back if the new version does not start). See [Self-host](docs/self-host.md#5-update).
 
 New to the terminal? [Getting started](docs/getting-started.md) walks through every step and shows what you should see.
 

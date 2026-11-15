@@ -30,10 +30,12 @@ Pick **one** way.
 ### macOS or Linux: the install script
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/paulo-lucas/maestria/main/install.sh | sh
+curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/paulo-lucas/maestria/main/install.sh | sh
 ```
 
 The script downloads the right program for your computer, checks its checksum (a fingerprint that proves the file is intact), and puts it in `~/.local/bin`.
+
+If [cosign](https://docs.sigstore.dev/cosign/system_config/installation/) is installed, the script also checks the release's signature, which proves it was built by this project's release process and not just that the file is intact. Without cosign it says so and carries on with the checksum alone. More in [Verify a download](security.md#verify-a-download).
 
 ### macOS or Linux: Homebrew
 
@@ -46,7 +48,7 @@ brew install paulo-lucas/tap/maestria
 ### Windows: PowerShell
 
 ```powershell
-irm https://raw.githubusercontent.com/paulo-lucas/maestria/main/install.ps1 | iex
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor 3072; irm https://raw.githubusercontent.com/paulo-lucas/maestria/main/install.ps1 | iex
 ```
 
 This installs `maestria.exe` to `%LOCALAPPDATA%\Programs\Maestria` and adds it to your `Path`.

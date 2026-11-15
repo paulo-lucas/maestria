@@ -32,7 +32,7 @@ Your agents work for hours. Then they stop and ask: *"Merge this into main?"* or
 ### Start in two commands
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/paulo-lucas/maestria/main/install.sh | sh
+curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/paulo-lucas/maestria/main/install.sh | sh
 maestria init
 ```
 

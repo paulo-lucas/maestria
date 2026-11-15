@@ -145,6 +145,7 @@ Through the relay, the web app can read the panel's pages and data, answer tasks
 | Leaked link code | Lasts 10 minutes, works once, needs confirmation at your machine. |
 | Leaked connector credential | It only lets a machine connect. It cannot sign for a user. Revoke it in the web app. |
 | Flooding | Limits on message size, requests in flight, per-device rate and cache size. |
+| A tampered or swapped release download | SHA-256 check always. With cosign, a signature pinned to this repository's release workflow and the exact tag, plus build provenance ([Verify a download](#verify-a-download)). **Not stopped:** someone who can push a `v*` tag, and the updater on a machine without cosign. |
 | Wire key theft | Keys are in a `0600` file, never sent to a browser. The read-only key cannot act. |
 
 ### The one limit we cannot remove
@@ -156,6 +157,70 @@ In hosted mode, **the server sends your browser the web page itself**. A server 
 - Check the **audit log** on the Security page from time to time.
 
 Local mode has no such limit. The page comes from your own machine.
+
+## Verify a download
+
+A checksum file that sits next to the archive only proves the download is intact: whoever could replace the archive could replace the checksum too. So every release also carries proof of where it came from, made by the release workflow (`.github/workflows/release.yml`) with GitHub's keyless signing, which needs no secret key to be kept or leaked.
+
+**What a release holds**
+
+| File | What it is |
+| --- | --- |
+| `maestria_<version>_<os>_<arch>.tar.gz` / `.zip`, `maestria-cloud_…` | The programs. |
+| `SHA256SUMS` | The SHA-256 of every archive. |
+| `SHA256SUMS.sigstore.json` | A [cosign](https://docs.sigstore.dev/cosign/) signature on `SHA256SUMS`, with the certificate and the public log entry. |
+| `maestria.rb` | The Homebrew formula. |
+| (GitHub's attestation store) | A signed provenance statement for every file above: which workflow, which commit, which tag. |
+
+**Check an archive by hand** (needs the [GitHub CLI](https://cli.github.com)):
+
+```sh
+gh attestation verify maestria_X.Y.Z_linux_amd64.tar.gz -R paulo-lucas/maestria \
+  --signer-workflow paulo-lucas/maestria/.github/workflows/release.yml
+```
+
+It prints the commit the file was built from. A file that was built anywhere else, or changed afterwards, fails.
+
+**Check `SHA256SUMS`** (needs cosign), then the archive against it:
+
+```sh
+VERSION=vX.Y.Z
+cosign verify-blob --bundle SHA256SUMS.sigstore.json \
+  --certificate-identity "https://github.com/paulo-lucas/maestria/.github/workflows/release.yml@refs/tags/$VERSION" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-github-workflow-repository paulo-lucas/maestria \
+  --certificate-github-workflow-trigger push \
+  SHA256SUMS
+sha256sum --check --ignore-missing SHA256SUMS
+```
+
+The identity is the exact one, with the tag. A looser pattern would accept another release's signed file, or a workflow with the same file name in another repository.
+
+**What the tools do for you**
+
+- `install.sh`, `install.ps1` and `maestria update` / `maestria-cloud update` run exactly that `cosign verify-blob` check **when cosign is installed**, before they read a single line of `SHA256SUMS`. If cosign is installed and anything about the signature is missing or wrong, they stop. They never fall back to the checksum then, because a missing signature file would otherwise be a downgrade. If you run a mirror (`MAESTRIA_BASE_URL`), files come from it but the identity that must have signed them does not change. `MAESTRIA_REPO` changes the repository the identity names (a fork you chose to trust).
+- **Without cosign** they print a clear warning and use the checksum alone. Set `MAESTRIA_REQUIRE_SIGNATURE=1` to make a missing cosign an error instead.
+- Releases are signed with cosign v3. If your cosign is too old to read the bundle, the check fails with a message that says to upgrade; it does not install anyway.
+- Downloads use https only, TLS 1.2 or newer, and a redirect may not leave https. The installer scripts run nothing until their last line, so a download cut short does nothing. The one-liners ask for the same on the `curl` and PowerShell side.
+- Homebrew checks the SHA-256 in the formula. The workflow only publishes the formula to the tap after verifying its provenance and that every URL and checksum in it belongs to this repository's release.
+
+**What this proves, and what it does not**
+
+It proves the files were built by this repository's release workflow, from a `v*` tag, at the commit named in the provenance. It does **not** stop someone who can push a tag: a stolen token with write access can tag a malicious commit that leaves the workflow alone, and the workflow will build and sign it. The commit is recorded, so it is auditable after the fact, but it is not prevented. To narrow that:
+
+- Add a tag ruleset (only maintainers can create `v*` tags) and require two-factor sign-in for them.
+- Keep the Homebrew deploy key in a protected `homebrew` environment restricted to `v*` tags ([Releasing](releasing.md#publishing-the-homebrew-formula)).
+
+Two more limits, both small:
+
+- **The identity is made of names, not ids.** Never rename the owner or the repository: an old name that someone re-registers could produce a workflow that matches old one-liners. If a rename is ever needed, update every one-liner, the installers and the updater's identity first.
+- **Rollback.** Pinning the exact tag stops anyone swapping another release's `SHA256SUMS` into this one. It does not stop someone with release rights marking an older, validly signed release as "latest". Updates never go backwards on their own (`--force` is needed), but a fresh install of "latest" follows whatever GitHub calls latest.
+
+**The self-updater, honestly**
+
+`maestria update` verifies the signature by running `cosign` when it is on the `PATH`; it does not verify sigstore bundles itself. Doing that means embedding Fulcio and Rekor trust roots, verifying the transparency-log proof and the certificate extensions, and surviving root rotation, several hundred lines of delicate crypto in the binary that updates itself, for a dependency-free tool. So today, **on a machine without cosign the updater trusts the checksum, which comes from the same GitHub release as the archive.** Someone who can publish to the repository could ship a release that machines update to. The hosted VM updates itself on a timer, so install cosign there if you want the check to run every time.
+
+Proposed follow-up, the owner's decision: an ed25519 signature on `SHA256SUMS` with the public key built into the binary, signed with a key kept offline or in a protected environment. It is a few lines of standard library, and it is the only option that adds trust outside GitHub, at the cost of managing a key.
 
 ## Good habits
 
