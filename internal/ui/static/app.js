@@ -154,6 +154,18 @@
     }, true);
     document.addEventListener('keydown', function (ev) {
       if (ev.key !== 'ArrowDown' && ev.key !== 'ArrowUp') return;
+      var toggle = ev.target.closest && ev.target.closest('[data-menu-toggle]');
+      if (toggle) {
+        // A menu button: the arrow keys open the menu and land on its first (or last) item.
+        var menuPanel = toggle.parentElement.querySelector('.menu__panel');
+        if (!menuPanel || typeof menuPanel.showPopover !== 'function') return;
+        ev.preventDefault();
+        if (!menuPanel.matches(':popover-open')) menuPanel.showPopover();
+        var entries = menuPanel.querySelectorAll('.menu__item:not([disabled])');
+        var entry = ev.key === 'ArrowDown' ? entries[0] : entries[entries.length - 1];
+        if (entry) entry.focus();
+        return;
+      }
       var item = ev.target.closest && ev.target.closest('[data-menu] > .menu__panel .menu__item');
       if (!item) return;
       var items = Array.prototype.slice.call(item.parentElement.querySelectorAll('.menu__item:not([disabled])'));
