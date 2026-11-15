@@ -408,7 +408,7 @@
     if (dot) dot.setAttribute('data-status', tone);
     if (cdot) { cdot.setAttribute('aria-label', 'Machines: ' + txt); cdot.setAttribute('title', 'Machines: ' + txt); }
     var tabTitle = ({ tasks: 'Human tasks', chat: 'Chat', activity: 'Activity', floors: 'Floors', docs: 'Docs' })[r.tab];
-    document.title = (cur ? cur.name + ' · ' + (tabTitle || 'Workspace') : ({ overview: 'Overview', security: 'Devices & security', usage: 'Usage & standby', connectors: 'Connectors', link: 'Link a machine' })[r.name] || 'Maestria') + ' · Maestria';
+    document.title = (cur ? cur.name + ' · ' + (tabTitle || 'Workspace') : ({ overview: 'Overview', security: 'Devices & security', usage: 'Usage & standby', connectors: 'Connectors', link: 'Link a machine', invites: 'Invite someone' })[r.name] || 'Maestria') + ' · Maestria';
   }
 
   // ---- page content ----
