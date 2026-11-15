@@ -138,6 +138,11 @@
   <main class="main" id="main">
     <div class="page page--narrow">
 
+      <nav class="tabs" aria-label="Usage and insights">
+        <a class="tab" href="usage.html">Usage &amp; standby</a>
+        <a class="tab" href="insights.html" aria-current="page">Insights</a>
+      </nav>
+
       <header class="page-head">
         <div class="page-head__title">
           <h1>Insights</h1>
@@ -184,16 +189,16 @@
           <div class="setting__head">
             <div class="setting__text">
               <h3 class="setting__title">Work that holds</h3>
-              <p class="setting__desc">6 of 7 floors landed · 1 of 12 approvals rejected</p>
+              <p class="setting__desc">6 of 7 floors landed · 1 of 12 approvals answered No (not rated)</p>
             </div>
           </div>
           <div class="gauge">
             <div class="gauge__row"><span class="gauge__label">Level</span><span class="gauge__value">5 of 7</span></div>
             <div class="gauge__track"><progress class="gauge__bar" max="7" value="5">5 of 7</progress></div>
-            <div class="gauge__foot"><span>Higher at ≥ 90% landed · ≤ 5% rejected</span></div>
+            <div class="gauge__foot"><span>Level 6 at ≥ 90%</span></div>
           </div>
           <dl class="kv">
-            <dt>Try</dt><dd>Cancelled floors are usage that shipped nothing. Agree on the brief and when it is done before a floor starts.</dd>
+            <dt>Try</dt><dd>Cancelled floors are usage that shipped nothing. Agreeing on the brief, and on when it is done, before a floor starts helps it land.</dd>
           </dl>
         </div>
 
@@ -234,7 +239,7 @@
 
   <nav class="bottomnav" aria-label="Sections">
     <a class="bottomnav__item" href="overview.html"><svg class="icon" aria-hidden="true"><use href="#i-overview"/></svg>Overview<span class="count" data-status="needs">5</span></a>
-    <a class="bottomnav__item" href="usage.html"><svg class="icon" aria-hidden="true"><use href="#i-gauge"/></svg>Usage</a>
+    <a class="bottomnav__item" href="usage.html" aria-current="page"><svg class="icon" aria-hidden="true"><use href="#i-gauge"/></svg>Usage</a>
     <a class="bottomnav__item" href="connector.html"><svg class="icon" aria-hidden="true"><use href="#i-plug"/></svg>Connectors</a>
     <a class="bottomnav__item" href="security.html"><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg>Security</a>
   </nav>

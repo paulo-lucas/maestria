@@ -160,7 +160,7 @@
       <a class="bottomnav__item" href="/workspaces/{{.CurrentWS.ID}}/docs"{{if eq .Nav "docs"}} aria-current="page"{{end}}>{{icon "i-docs"}}Docs</a>
     {{else}}
       <a class="bottomnav__item" href="/"{{if eq .Nav "overview"}} aria-current="page"{{end}}>{{icon "i-overview"}}Overview{{if .TotalNeeds}} <span class="count" data-status="needs">{{.TotalNeeds}}</span>{{end}}</a>
-      <a class="bottomnav__item" href="/usage"{{if eq .Nav "usage"}} aria-current="page"{{end}}>{{icon "i-gauge"}}Usage</a>
+      <a class="bottomnav__item" href="/usage"{{if or (eq .Nav "usage") (eq .Nav "insights")}} aria-current="page"{{end}}>{{icon "i-gauge"}}Usage</a>
       <a class="bottomnav__item" href="/security"{{if eq .Nav "security"}} aria-current="page"{{end}}>{{icon "i-shield"}}Security</a>
     {{end}}
   </nav>

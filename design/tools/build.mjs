@@ -169,7 +169,7 @@ function bottomnav(m) {
   const items = ws ? WS_NAV : GLOBAL_NAV.filter((n) => !n.sidebarOnly);
   const count = ws ? ws.needs : needsFor(m);
   return `<nav class="bottomnav" aria-label="${ws ? ws.name + ' sections' : 'Sections'}">
-${items.map((n) => `    <a class="bottomnav__item" href="${n.href}"${current(m.nav === n.id)}>${icon(n.icon)}${n.short}${n.count && count ? `<span class="count" data-status="needs">${count}</span>` : ''}</a>`).join('\n')}
+${items.map((n) => `    <a class="bottomnav__item" href="${n.href}"${current(m.nav === n.id || (n.id === 'usage' && m.nav === 'insights'))}>${icon(n.icon)}${n.short}${n.count && count ? `<span class="count" data-status="needs">${count}</span>` : ''}</a>`).join('\n')}
   </nav>`;
 }
 

@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/netip"
@@ -79,6 +80,8 @@ type Deps struct {
 	// Env overrides OS environment lookup (used in tests).
 	Env config.Env
 	Now func() time.Time
+	// Log receives rare operational warnings (the service log). nil discards them.
+	Log io.Writer
 }
 
 // UpdateNotes is what the panel needs from the release notifier: a cached answer (never a network
@@ -110,6 +113,13 @@ type Server struct {
 	sessionCookie string
 	pendingCookie string
 	csrfCookie    string
+
+	// The Insights report reads every 30-day row, so it is kept for a minute.
+	insightsMu  sync.Mutex
+	insightsAt  time.Time
+	insightsRep insights.Report
+	// usageErrLogged rate-limits the warning for a failed usage sample (background goroutine only).
+	usageErrLogged time.Time
 }
 
 // New builds the server. It does not listen: see Listen.
@@ -238,7 +248,7 @@ func (s *Server) StartBackground(ctx context.Context) {
 		}
 		// Sampled here only, not on page loads: RecordUsage keeps at most one sample per window
 		// every few minutes anyway.
-		_ = insights.RecordUsage(s.DB, snap, s.Now())
+		s.recordUsage(snap)
 		usageTick := time.NewTicker(time.Duration(pollSecs) * time.Second)
 		sessionTick := time.NewTicker(10 * time.Minute)
 		defer usageTick.Stop()
@@ -254,7 +264,7 @@ func (s *Server) StartBackground(ctx context.Context) {
 				if changed {
 					s.notifyStream("standby")
 				}
-				_ = insights.RecordUsage(s.DB, snap, s.Now())
+				s.recordUsage(snap)
 			}
 		}
 	}()
