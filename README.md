@@ -31,6 +31,17 @@
 
 When agents work for hours on several projects, they stop and ask: *"Can I merge this?"*, *"Which database?"*. Maestria collects those questions in one place, so you can answer in seconds and let the work go on. It is open source (MIT), a single Go binary, and your data stays on your machine.
 
+> [!TIP]
+> **Skip the reading: let your agent set it up.** Paste this into your Maestro (or any coding agent):
+>
+> ```text
+> Read https://raw.githubusercontent.com/paulo-lucas/maestria/main/docs/getting-started.md
+> and https://raw.githubusercontent.com/paulo-lucas/maestria/main/docs/for-agents.md,
+> then set up Maestria on this machine for me. Follow the "If you are an AI agent" section.
+> ```
+>
+> The agent installs it and walks you through the rest. You only type your password and scan the authenticator code yourself.
+
 ![The Maestria overview](docs/images/overview.png)
 
 | Needs you | Activity | Floors | Usage and standby |

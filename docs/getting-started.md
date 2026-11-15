@@ -13,6 +13,18 @@ Words you do not know? See [Concepts](concepts.md).
 
 > **Using a hosted Maestria server instead?** Skip to [Use a hosted Maestria](hosted.md). You still need to install Maestria (step 1 below).
 
+## If you are an AI agent
+
+Someone asked you to set up Maestria for them. Do it this way:
+
+1. **Install it yourself** (step 1). Pick the installer for their system, then check it with `maestria version`.
+2. **Hand `maestria init` to the person.** Ask them to run it in their own terminal (in Maestri, a terminal on the canvas they can type in). It asks for a password and shows a QR code for their authenticator app. **Never ask for, type or store their password, authenticator codes or recovery codes**, and do not try to script the wizard. Before they start, tell them what to expect, using the questions in step 3. Pressing Enter is fine for everything except the password.
+3. **Commands that ask to type a random word** (`maestria connect --link`, `maestria devices approve`, `maestria tunnel on`) prove a person is at the keyboard. They refuse to run from a script, and no flag skips them. Give the person the exact command to run.
+4. **Once `init` is done, check it:** `maestria status` and `maestria workspace list` run without a password. Then tell them to open <http://127.0.0.1:4777> and sign in (step 5).
+5. **If you are their Maestro,** `maestria init` installed a skill that teaches you the rest. Without it, read [For Maestro agents](for-agents.md).
+
+When something fails, look up the message in [Troubleshooting](troubleshooting.md) before guessing.
+
 ## What a terminal is
 
 The **terminal** is a window where you type commands.
