@@ -123,6 +123,6 @@ Some commands decide who can control the human's machine. They are for the human
 - `maestria devices approve` (and `reject`/`revoke` on their say-so only),
 - `maestria tunnel on` (lifting the kill switch),
 - `maestria connect --link …`, `maestria connect --cloud …` (linking this machine to a cloud),
-- `maestria auth setup --force`, `maestria auth reset-sessions`, `maestria config allow-host`.
+- `maestria auth setup --force` (and `auth setup` when credentials already exist: it replaces the panel's password and authenticator, so it needs the human at a terminal and the random word, like the commands above), `maestria auth reset-sessions`, `maestria config allow-host`.
 
 If one of them seems needed, tell the human what you saw and the exact command to run, and let them decide.

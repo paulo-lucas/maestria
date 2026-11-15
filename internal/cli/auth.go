@@ -32,6 +32,19 @@ func runAuthSetup(in *bufio.Reader, force bool, env *Env) error {
 	if existing != nil && !force {
 		return fmt.Errorf("credentials already exist. Re-run with --force to replace them (this signs out every session)")
 	}
+	// Replacing credentials lets whoever runs this set a password they know and read the new
+	// authenticator key from the screen, so it needs a person at a terminal, like approving a
+	// device. First-time setup (nothing to replace) does not.
+	if existing != nil || force {
+		log, closeLog := openAudit(env, dir)
+		defer closeLog()
+		if err := env.requireHuman(in, "Replace the password and the authenticator app of this panel", []string{
+			"Every signed-in session is signed out, and the old password and recovery codes stop working.",
+			"Whoever sets the new password and reads the authenticator key can sign in to the panel.",
+		}, log); err != nil {
+			return err
+		}
+	}
 	out := env.Stdout
 
 	var password string

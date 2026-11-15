@@ -1,11 +1,13 @@
 package cli
 
 import (
+	"io"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/paulo-lucas/maestria/internal/audit"
+	"github.com/paulo-lucas/maestria/internal/auth"
 	"github.com/paulo-lucas/maestria/internal/config"
 	"github.com/paulo-lucas/maestria/internal/devices"
 	"github.com/paulo-lucas/maestria/internal/relay"
@@ -162,5 +164,103 @@ func TestLinkingNeedsAPersonAndYesDoesNotSkipIt(t *testing.T) {
 	// Nothing was linked.
 	if c := f.run(f.env(""), "connect", "status"); c != 0 || !strings.Contains(f.out.String(), "Not linked") {
 		t.Fatalf("status: %d %s", c, f.out.String())
+	}
+}
+
+// wordThen types the confirmation word, then lets next answer (the authenticator-code feeder).
+type wordThen struct {
+	word string
+	next io.Reader
+	done bool
+}
+
+func (w *wordThen) Read(p []byte) (int, error) {
+	if !w.done {
+		w.done = true
+		return copy(p, w.word+"\n"), nil
+	}
+	return w.next.Read(p)
+}
+
+func existingCredentials(t *testing.T, f *fixture) (hash string) {
+	t.Helper()
+	hash, err := auth.HashPassword("the original long password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := auth.SaveSecrets(f.dir, &auth.Secrets{PasswordHash: hash, TOTPSecret: "JBSWY3DPEHPK3PXP", CreatedAt: "2026-01-01T00:00:00Z"}); err != nil {
+		t.Fatal(err)
+	}
+	return hash
+}
+
+func storedHash(t *testing.T, f *fixture) string {
+	t.Helper()
+	s, err := auth.LoadSecrets(f.dir)
+	if err != nil || s == nil {
+		t.Fatalf("secrets: %v %v", s, err)
+	}
+	return s.PasswordHash
+}
+
+// Replacing the credentials is the same kind of decision as approving a device: a script or an
+// agent that pipes a password and reads the new authenticator key off the screen must not be able
+// to do it.
+func TestReplacingCredentialsNeedsAPerson(t *testing.T) {
+	f := newFixture(t)
+	original := existingCredentials(t, f)
+
+	// No terminal: refused with --force, whatever is piped in, and before any prompt.
+	env := f.env(testWord+"\n", "correct horse battery", "correct horse battery")
+	if c := f.run(env, "auth", "setup", "--force"); c == 0 || !strings.Contains(f.errOut.String(), "interactive terminal") {
+		t.Fatalf("--force without a terminal: exit %d, %s", c, f.errOut.String())
+	}
+	if strings.Contains(f.out.String(), "Scan this QR code") || strings.Contains(f.out.String(), "manually") {
+		t.Fatalf("the new authenticator key was shown to a script:\n%s", f.out.String())
+	}
+	// Without --force and without a terminal it is refused too, and still changes nothing.
+	if c := f.run(f.env(""), "auth", "setup"); c == 0 {
+		t.Fatal("setup over existing credentials must not succeed")
+	}
+	if storedHash(t, f) != original {
+		t.Fatal("the credentials changed")
+	}
+
+	// At a terminal with the wrong word: refused.
+	wrong := f.humanEnv("")
+	wrong.Stdin = strings.NewReader("nope\n")
+	if c := f.run(wrong, "auth", "setup", "--force"); c == 0 || !strings.Contains(f.errOut.String(), "not the word") {
+		t.Fatalf("wrong word: exit %d, %s", c, f.errOut.String())
+	}
+	if storedHash(t, f) != original {
+		t.Fatal("the credentials changed after a wrong word")
+	}
+
+	// A person who types the word it printed can replace them.
+	human := f.env("", "correct horse battery", "correct horse battery")
+	human.IsTTY = func() bool { return true }
+	human.ConfirmWord = func() string { return testWord }
+	human.Stdin = &wordThen{word: testWord, next: &codeFeeder{f: f}}
+	if c := f.run(human, "auth", "setup", "--force"); c != 0 {
+		t.Fatalf("setup by a person: exit %d\n%s\n%s", c, f.out.String(), f.errOut.String())
+	}
+	if storedHash(t, f) == original {
+		t.Fatal("the credentials were not replaced")
+	}
+	ev := auditEvents(t, f)
+	for _, want := range []string{"cli_confirm_refused", "cli_confirm_failed", "cli_confirmed", "auth_setup"} {
+		if ev[want] == 0 {
+			t.Errorf("no %q in the audit log: %v", want, ev)
+		}
+	}
+}
+
+// First-time setup has nothing to replace and keeps working (the wizard and scripted installs).
+func TestFirstTimeSetupDoesNotNeedAConfirmationWord(t *testing.T) {
+	f := newFixture(t)
+	env := f.env("", "correct horse battery", "correct horse battery")
+	env.Stdin = &codeFeeder{f: f}
+	if c := f.run(env, "auth", "setup"); c != 0 {
+		t.Fatalf("first setup: exit %d\n%s", c, f.errOut.String())
 	}
 }
