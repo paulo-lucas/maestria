@@ -317,6 +317,10 @@ func TestFloorDisappearingFromWireRecordsHistory(t *testing.T) {
 	if got["scratch"].State != floors.StateCancelled || !strings.Contains(got["scratch"].Brief, "no brief") {
 		t.Fatalf("scratch = %+v", got["scratch"])
 	}
+	// Recorded from when it was first seen, not as a floor that started when it ended.
+	if s := got["scratch"]; s.StartedAt == nil || s.EndedAt == nil || *s.StartedAt >= *s.EndedAt {
+		t.Fatalf("scratch started %v, ended %v: want a real duration", s.StartedAt, s.EndedAt)
+	}
 	// The outcome is editable afterwards; and nothing is recorded twice.
 	r.fake.SetFeed(wsWire, feed(two(false, false, "")))
 	time.Sleep(100 * time.Millisecond)
