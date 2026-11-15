@@ -226,6 +226,7 @@
       restoreDrafts(newMain);
       applyOverviewFilter(newMain);
       applyAgentsFilter(newMain);
+      reapplyBusy(newMain);
       syncDocsNavPicker(newMain);
 
       const newChat = document.getElementById('chat-log');
@@ -331,12 +332,145 @@
     refreshTimer = setTimeout(() => refreshNow(false), 90);
   }
 
-  function setBusy(el, busy) {
-    if (!el) return;
+  // The button that shows the spinner for a click: the clicked button, or, for an item of a menu,
+  // the button that opens that menu.
+  function busyButtonOf(clicked) {
+    if (!clicked || !clicked.closest) return null;
+    const panel = clicked.closest('.menu__panel');
+    if (panel && panel.parentElement) {
+      return panel.parentElement.querySelector('[data-menu-toggle]') || null;
+    }
+    return clicked.tagName === 'BUTTON' ? clicked : null;
+  }
+
+  // Puts `el` (an item, a form) in a loading state: every control inside is disabled, `el` gets
+  // aria-busy, and the clicked button shows a spinner. Returns false, doing nothing, when `el` is
+  // already busy, so a second click or Enter while a request is in flight is dropped.
+  function setBusy(el, busy, clicked) {
+    if (!el) return false;
+    const isBusy = el.getAttribute('aria-busy') === 'true';
+    if (busy && isBusy) return false;
+    if (!busy && !isBusy) return true;
     el.querySelectorAll('button, input, textarea, select').forEach((ctrl) => {
       if (busy) ctrl.dataset.wasDisabled = ctrl.disabled ? '1' : '0';
       ctrl.disabled = busy ? true : ctrl.dataset.wasDisabled === '1';
     });
+    if (busy) el.setAttribute('aria-busy', 'true');
+    else el.removeAttribute('aria-busy');
+    const target = busyButtonOf(clicked);
+    if (target) {
+      if (busy) {
+        target.setAttribute('aria-busy', 'true');
+        if (!target.querySelector(':scope > .spinner')) {
+          const spin = document.createElement('span');
+          spin.className = 'spinner';
+          spin.setAttribute('aria-hidden', 'true');
+          target.prepend(spin);
+        }
+      } else {
+        target.removeAttribute('aria-busy');
+        const spin = target.querySelector(':scope > .spinner');
+        if (spin) spin.remove();
+      }
+    }
+    return true;
+  }
+
+  const ERROR_TEXT = {
+    item_already_closed: 'This was already answered or dismissed.',
+    item_not_found: 'This item no longer exists.',
+    workspace_not_found: 'This workspace is no longer registered.',
+    internal: 'The panel hit an error. Try again.',
+  };
+
+  function friendlyError(err) {
+    const raw = (err && err.message) || '';
+    return ERROR_TEXT[raw] || raw || 'Something went wrong. Try again.';
+  }
+
+  // The error line of an item: created on first use, so every kind of item can show one.
+  function taskErrorEl(task) {
+    let el = task.querySelector('[data-task-error]');
+    if (!el) {
+      el = document.createElement('p');
+      el.className = 'field__error';
+      el.setAttribute('role', 'alert');
+      el.hidden = true;
+      el.setAttribute('data-task-error', '');
+      task.append(el);
+    }
+    return el;
+  }
+
+  // Items with a write in flight: "workspace:item" -> how to find the clicked button again. A live
+  // refresh can replace the item's markup before the server answers; the new copy is put back in
+  // its loading state (see reapplyBusy) so it cannot be clicked twice.
+  const inflight = new Map();
+
+  function taskKey(task) {
+    return task.dataset.wsId + ':' + task.dataset.itemId;
+  }
+
+  function findTask(key) {
+    for (const t of document.querySelectorAll('.task[data-item-id]')) {
+      if (taskKey(t) === key) return t;
+    }
+    return null;
+  }
+
+  function selectorFor(btn) {
+    if (!btn) return '';
+    if (btn.dataset.action === 'postpone') return `[data-action="postpone"][data-preset="${btn.dataset.preset || ''}"]`;
+    if (btn.dataset.action) return `[data-action="${btn.dataset.action}"]${btn.dataset.value ? `[data-value="${CSS.escape(btn.dataset.value)}"]` : ''}`;
+    return 'button[type="submit"]';
+  }
+
+  function reapplyBusy(root) {
+    inflight.forEach((sel, key) => {
+      const task = findTask(key);
+      if (!task || !root.contains(task) || task.getAttribute('aria-busy') === 'true') return;
+      let btn = null;
+      try { btn = sel ? task.querySelector(sel) : null; } catch {}
+      setBusy(task, true, btn);
+    });
+  }
+
+  // One write on an inbox item (respond, postpone, dismiss), single-flight: the item is busy
+  // until the server answers. On success the page is refreshed (the item leaves or changes); on
+  // error everything is enabled again with the reason shown on the item.
+  async function taskRequest(task, clicked, action, body, onDone) {
+    const wsId = task.dataset.wsId;
+    const itemId = task.dataset.itemId;
+    const key = taskKey(task);
+    if (inflight.has(key) || !setBusy(task, true, clicked)) return;
+    inflight.set(key, selectorFor(clicked));
+    showError(taskErrorEl(task), '');
+    let live = null;
+    try {
+      await api(`/api/workspaces/${encodeURIComponent(wsId)}/inbox/${encodeURIComponent(itemId)}/${action}`, {
+        method: 'POST',
+        body,
+      });
+      if (onDone) onDone();
+      inflight.delete(key);
+      await refreshNow(true);
+      // The refresh normally replaces the item. If it is still here (the refresh failed or is
+      // queued), do not leave it greyed out for ever.
+      setTimeout(() => {
+        const t = findTask(key);
+        if (t && !inflight.has(key)) setBusy(t, false, t.querySelector('[aria-busy="true"]'));
+      }, 8000);
+    } catch (err) {
+      inflight.delete(key);
+      live = findTask(key) || task;
+      const spun = live.querySelector('button[aria-busy="true"]');
+      setBusy(live, false, spun);
+      showError(taskErrorEl(live), friendlyError(err));
+      const back = spun || live.querySelector('button:not([disabled])');
+      if (back && (!document.activeElement || document.activeElement === document.body)) back.focus();
+      // Closed from elsewhere (another tab, the Maestro): show what the item is now.
+      if (err && err.message === 'item_already_closed') refreshNow(true);
+    }
   }
 
   function syncWindowControls(setting) {
@@ -489,7 +623,7 @@
       const term = agent.dataset.terminalId;
       const errEl = agent.querySelector('[data-agent-error]');
       showError(errEl, '');
-      setBusy(agent, true);
+      if (!setBusy(agent, true, btn)) return;
       try {
         await api(`/api/workspaces/${encodeURIComponent(wsId)}/agents/${encodeURIComponent(term)}/${btn.dataset.answer === 'approve' ? 'approve' : 'reject'}`, {
           method: 'POST',
@@ -497,7 +631,7 @@
         });
         await refreshNow(true);
       } catch (err) {
-        setBusy(agent, false);
+        setBusy(agent, false, btn);
         showError(errEl, err.message);
         await refreshNow(true);
       }
@@ -507,23 +641,9 @@
     if (action === 'respond') {
       const task = btn.closest('.task');
       if (!task) return;
-      const wsId = task.dataset.wsId;
-      const itemId = task.dataset.itemId;
-      const value = btn.dataset.value;
       const commentEl = task.querySelector('textarea[data-draft-key]');
       const comment = commentEl ? commentEl.value.trim() : '';
-      setBusy(task, true);
-      try {
-        await api(`/api/workspaces/${encodeURIComponent(wsId)}/inbox/${encodeURIComponent(itemId)}/respond`, {
-          method: 'POST',
-          body: { response: value, comment },
-        });
-        clearDraft(commentEl);
-        await refreshNow(true);
-      } catch (err) {
-        setBusy(task, false);
-        showError(task.querySelector('[data-task-error]'), err.message);
-      }
+      await taskRequest(task, btn, 'respond', { response: btn.dataset.value, comment }, () => clearDraft(commentEl));
       return;
     }
 
@@ -534,51 +654,39 @@
       if (menu) menu.removeAttribute('open');
       const panel = btn.closest('.menu__panel');
       if (panel && panel.matches(':popover-open')) panel.hidePopover();
-      const wsId = task.dataset.wsId;
-      const itemId = task.dataset.itemId;
-      const preset = btn.dataset.preset || '1h';
-      setBusy(task, true);
-      try {
-        await api(`/api/workspaces/${encodeURIComponent(wsId)}/inbox/${encodeURIComponent(itemId)}/postpone`, {
-          method: 'POST',
-          body: { preset },
-        });
-        await refreshNow(true);
-      } catch {
-        setBusy(task, false);
-      }
+      await taskRequest(task, btn, 'postpone', { preset: btn.dataset.preset || '1h' });
       return;
     }
 
     if (action === 'dismiss') {
       const task = btn.closest('.task');
       if (!task) return;
-      const wsId = task.dataset.wsId;
-      const itemId = task.dataset.itemId;
-      setBusy(task, true);
-      try {
-        await api(`/api/workspaces/${encodeURIComponent(wsId)}/inbox/${encodeURIComponent(itemId)}/dismiss`, {
-          method: 'POST',
-          body: {},
-        });
-        await refreshNow(true);
-      } catch {
-        setBusy(task, false);
-      }
+      await taskRequest(task, btn, 'dismiss', {});
       return;
     }
 
     if (action === 'dismiss-all') {
       const wsId = btn.dataset.wsId;
+      if (btn.getAttribute('aria-busy') === 'true') return;
       btn.disabled = true;
+      btn.setAttribute('aria-busy', 'true');
+      const spin = document.createElement('span');
+      spin.className = 'spinner';
+      spin.setAttribute('aria-hidden', 'true');
+      btn.prepend(spin);
+      const stop = () => { btn.disabled = false; btn.removeAttribute('aria-busy'); spin.remove(); };
       try {
         await api(`/api/workspaces/${encodeURIComponent(wsId)}/inbox/dismiss-notices`, {
           method: 'POST',
           body: {},
         });
         await refreshNow(true);
-      } catch {
-        btn.disabled = false;
+        setTimeout(() => { if (btn.isConnected) stop(); }, 8000);
+      } catch (err) {
+        stop();
+        const head = btn.closest('.section__head, .panel__head');
+        const host = head && head.parentElement;
+        if (host) showError(taskErrorEl(host), friendlyError(err));
       }
       return;
     }
@@ -625,19 +733,7 @@
         input.focus();
         return;
       }
-      const wsId = task.dataset.wsId;
-      const itemId = task.dataset.itemId;
-      setBusy(task, true);
-      try {
-        await api(`/api/workspaces/${encodeURIComponent(wsId)}/inbox/${encodeURIComponent(itemId)}/respond`, {
-          method: 'POST',
-          body: { response: val },
-        });
-        clearDraft(input);
-        await refreshNow(true);
-      } catch {
-        setBusy(task, false);
-      }
+      await taskRequest(task, e.submitter || form.querySelector('button[type="submit"]'), 'respond', { response: val }, () => clearDraft(input));
       return;
     }
 

@@ -952,6 +952,15 @@ a.agent-line:hover { background: var(--surface-2); }
 }
 .spinner--lg { width: 28px; height: 28px; border-width: 3px; }
 @keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.4s; } }
+
+/* A request is in flight: the clicked button swaps its icon for a spinner, and the item around it
+   (aria-busy) has all its controls disabled until the server answers. */
+.btn[aria-busy="true"] { cursor: progress; }
+.btn[aria-busy="true"]:disabled { opacity: 1; }
+.btn[aria-busy="true"] > .icon { display: none; }
+.btn > .spinner { width: 14px; height: 14px; border-color: color-mix(in oklab, currentColor 28%, transparent); border-top-color: currentColor; }
+[aria-busy="true"] { cursor: progress; }
 
 /* ---------- Codes (pairing, secrets, recovery) ---------- */
 
