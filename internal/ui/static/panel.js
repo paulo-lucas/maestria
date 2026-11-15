@@ -86,6 +86,18 @@
       list.querySelectorAll('.task').forEach((item) => {
         item.hidden = cur !== 'all' && item.dataset.key !== cur;
       });
+      if (name === 'updates-list') {
+        // The button acts on what the filter shows: its label says so.
+        const btn = root.querySelector('[data-action="dismiss-updates"]');
+        const label = btn && btn.querySelector('[data-dismiss-label]');
+        if (label) {
+          const chip = chips.find((c) => c.dataset.value === cur);
+          // The chip's own text is the workspace name (its swatch and count are elements).
+          const ws = cur === 'all' || !chip ? '' : [...chip.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join('').trim();
+          label.textContent = ws ? 'Mark ' + ws + ' as read' : 'Mark all as read';
+          btn.setAttribute('aria-label', label.textContent);
+        }
+      }
     });
   }
 

@@ -586,7 +586,7 @@
       return '<button class="chip" type="button" aria-pressed="false" data-value="' + esc(w.cid + ':' + w.id) + '" data-ws="' + esc(w.tone) + '"><span class="swatch"></span>' + esc(w.name) + ' <span class="count">' + w.updates + '</span></button>';
     }).join('');
     var updatesPanel = '<section class="card panel" aria-labelledby="updates-title"><header class="panel__head"><h2 class="panel__title" id="updates-title">' + icon('i-bell') + ' Updates <span class="count">' + updatesTotal + '</span></h2>' +
-      (updatesTotal ? '<div class="panel__aside"><button class="btn btn--ghost btn--sm" type="button" data-action="dismiss-updates">Mark all as read</button></div>' : '<div class="panel__aside">Newest first</div>') + '</header>';
+      (updatesTotal ? '<div class="panel__aside"><button class="btn btn--ghost btn--sm" type="button" data-action="dismiss-updates"><span data-dismiss-label>Mark all as read</span></button></div>' : '<div class="panel__aside">Newest first</div>') + '</header>';
     if (updatesTotal) {
       updatesPanel += '<div class="panel__tools"><div class="chip-row" data-filter="updates-list" role="group" aria-label="Filter updates by workspace"><button class="chip" type="button" aria-pressed="true" data-value="all">All <span class="count">' + updatesTotal + '</span></button>' + uchips + '</div></div>' +
         '<ul class="list" id="updates-list">' + updates.map(function (t) { return t.html; }).join('') + '</ul>';

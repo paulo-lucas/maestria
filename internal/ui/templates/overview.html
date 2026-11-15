@@ -119,7 +119,7 @@
               {{icon "i-bell"}}
               Updates <span class="count">{{len .UpdatesItems}}</span>
             </h2>
-            {{if .UpdatesItems}}<div class="panel__aside"><button class="btn btn--ghost btn--sm" type="button" data-action="dismiss-updates">Mark all as read</button></div>{{else}}<div class="panel__aside">Newest first</div>{{end}}
+            {{if .UpdatesItems}}<div class="panel__aside"><button class="btn btn--ghost btn--sm" type="button" data-action="dismiss-updates"><span data-dismiss-label>Mark all as read</span></button></div>{{else}}<div class="panel__aside">Newest first</div>{{end}}
           </header>
           {{if .UpdatesItems}}
           <div class="panel__tools">
