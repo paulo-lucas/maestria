@@ -484,20 +484,6 @@ func TestPairingMessages(t *testing.T) {
 	if ch.Pair != "pair-msg-01" || ch.R == "" {
 		t.Fatalf("challenge: %+v", ch)
 	}
-	// A reveal with the wrong key is a mismatch and never produces a code the user could approve.
-	evil := relaytest.NewBrowser(t)
-	writeFrame(t, r.conn, relay.Frame{T: relay.TypePairReveal, Pair: "pair-msg-01", SPKI: relay.Enc(evil.SPKI), Nonce: relay.Enc(p.Nonce)})
-	for {
-		f := readFrame(t, r.conn)
-		if f.T == relay.TypePairState && f.State == relay.PairMismatch {
-			break
-		}
-	}
-	pend, _ := r.dev.Pending()
-	if len(pend) != 0 {
-		t.Fatalf("mismatched pairing is still pending: %+v", pend)
-	}
-
 	// The good path: reveal, local approval, then the cloud hears "approved".
 	p2 := r.browser.StartPairing(t)
 	writeFrame(t, r.conn, relay.Frame{T: relay.TypePairOffer, Pair: "pair-msg-02", Commit: p2.Commit, Label: "Safari"})
@@ -521,6 +507,36 @@ func TestPairingMessages(t *testing.T) {
 		if f.T == relay.TypePairState && f.Pair == "pair-msg-02" && f.State == relay.PairApproved {
 			if f.Code != "" {
 				t.Fatal("the code must never be sent to the cloud")
+			}
+			break
+		}
+	}
+
+	// A reveal with the wrong key is a mismatch and never produces a code the user could approve.
+	evil := relaytest.NewBrowser(t)
+	writeFrame(t, r.conn, relay.Frame{T: relay.TypePairReveal, Pair: "pair-msg-01", SPKI: relay.Enc(evil.SPKI), Nonce: relay.Enc(p.Nonce)})
+	for {
+		f := readFrame(t, r.conn)
+		if f.T == relay.TypePairState && f.State == relay.PairMismatch {
+			break
+		}
+	}
+	pend, _ := r.dev.Pending()
+	if len(pend) != 0 {
+		t.Fatalf("mismatched pairing is still pending: %+v", pend)
+	}
+
+	// A failed reveal pauses pairing: the next offer is refused and no challenge is sent.
+	p3 := r.browser.StartPairing(t)
+	writeFrame(t, r.conn, relay.Frame{T: relay.TypePairOffer, Pair: "pair-msg-03", Commit: p3.Commit, Label: "Safari"})
+	for {
+		f := readFrame(t, r.conn)
+		if f.T == relay.TypePairChallenge && f.Pair == "pair-msg-03" {
+			t.Fatal("an offer right after a failed reveal got a challenge")
+		}
+		if f.T == relay.TypePairState && f.Pair == "pair-msg-03" {
+			if f.State != relay.PairRejected || f.Code != "pairing_paused" {
+				t.Fatalf("paused offer: %+v", f)
 			}
 			break
 		}

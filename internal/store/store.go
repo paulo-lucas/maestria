@@ -194,6 +194,16 @@ var migrations = []string{
 		expires_at     INTEGER NOT NULL
 	);
 	`,
+	// 7: the pairing attempt budget. One row per pairing offered, failed reveal and wrong code
+	// typed on the machine, so the limits survive a restart and cannot be reset by the cloud.
+	`
+	CREATE TABLE IF NOT EXISTS pair_events (
+		id   INTEGER PRIMARY KEY AUTOINCREMENT,
+		at   INTEGER NOT NULL,           -- epoch ms
+		kind TEXT NOT NULL CHECK (kind IN ('offer','mismatch','bad_code'))
+	);
+	CREATE INDEX IF NOT EXISTS idx_pair_events_kind_at ON pair_events (kind, at);
+	`,
 }
 
 // Open opens (creating if needed) the v2 database in configDir and migrates it.

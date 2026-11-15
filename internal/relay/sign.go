@@ -188,7 +188,12 @@ func VerifySignature(pub *ecdsa.PublicKey, canonical, sig string) bool {
 
 const (
 	pairCommitTag = "maestria-pair-commit-v1"
-	pairSASTag    = "maestria-pair-sas-v1"
+	// v2: the code has 8 digits (v1 had 6), so a browser and a connector of different
+	// generations never show matching codes by accident.
+	pairSASTag = "maestria-pair-sas-v2"
+
+	// PairCodeDigits is the length of the code the person compares.
+	PairCodeDigits = 8
 )
 
 // PairCommit is what the browser sends before it reveals its key: b64u sha256(tag ‖ spki ‖ nonce).
@@ -200,24 +205,36 @@ func PairCommit(spki, nonce []byte) string {
 	return Enc(h.Sum(nil))
 }
 
-// PairCode is the 6-digit code both sides compute: sha256(tag ‖ spki ‖ nonce ‖ r), first four
-// bytes big-endian, mod 10^6.
+// PairCode is the 8-digit code both sides compute: sha256(tag ‖ spki ‖ nonce ‖ r), first six
+// bytes big-endian (48 bits, which keeps the modulo bias negligible and fits a JavaScript
+// number exactly), mod 10^8.
 func PairCode(spki, nonce, r []byte) string {
 	h := sha256.New()
 	h.Write([]byte(pairSASTag))
 	h.Write(spki)
 	h.Write(nonce)
 	h.Write(r)
-	n := binary.BigEndian.Uint32(h.Sum(nil)[:4]) % 1000000
-	return fmt.Sprintf("%06d", n)
+	sum := h.Sum(nil)
+	n := binary.BigEndian.Uint64(append([]byte{0, 0}, sum[:6]...)) % 100000000
+	return fmt.Sprintf("%08d", n)
 }
 
-// FormatPairCode renders 123456 as "12 · 34 · 56".
+// FormatPairCode renders 12345678 as "1234 · 5678".
 func FormatPairCode(code string) string {
-	if len(code) != 6 {
+	if len(code) != PairCodeDigits {
 		return code
 	}
-	return code[0:2] + " · " + code[2:4] + " · " + code[4:6]
+	return code[0:4] + " · " + code[4:8]
+}
+
+// Fingerprint renders a device id as the first 16 hex characters in groups of four, the form
+// shown next to a pairing and in `devices list`: "a1b2 c3d4 e5f6 0718".
+func Fingerprint(deviceID string) string {
+	if len(deviceID) < 16 {
+		return deviceID
+	}
+	d := strings.ToLower(deviceID[:16])
+	return d[0:4] + " " + d[4:8] + " " + d[8:12] + " " + d[12:16]
 }
 
 // NormalizePairCode strips spaces, dots and dashes from user input.

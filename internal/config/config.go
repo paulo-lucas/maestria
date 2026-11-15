@@ -217,7 +217,7 @@ func Defaults(configDir string, env Env) (*Config, error) {
 			WakeOnReset:        true,
 		},
 		Tunnel: Tunnel{StopCommand: []string{}, StartCommand: []string{}, StatusCommand: []string{}},
-		Relay:  Relay{Enabled: true, ApprovalAbsoluteDays: 30, IdleDays: 7, RatePerMinute: 120},
+		Relay:  Relay{Enabled: true, ApprovalAbsoluteDays: 14, IdleDays: 3, RatePerMinute: 120},
 	}, nil
 }
 

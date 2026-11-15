@@ -18,6 +18,7 @@ import (
 
 	"github.com/paulo-lucas/maestria/internal/devices"
 	"github.com/paulo-lucas/maestria/internal/relay"
+	"github.com/paulo-lucas/maestria/internal/termsafe"
 )
 
 // State is the connection state shown by `maestria connect status`.
@@ -48,6 +49,9 @@ type Client struct {
 	Log     *slog.Logger
 	// OnState is called on every connection state change. May be nil.
 	OnState func(State, error)
+	// OnPairing is called when the cloud offers a pairing that was accepted, so the machine can
+	// tell the person that a browser asked to be approved. May be nil.
+	OnPairing func(label string)
 	// HTTP overrides the dial client (tests). May be nil.
 	HTTP *http.Client
 	// Backoff bounds the reconnect delay. Zero values use 1s and 60s.
@@ -512,13 +516,19 @@ func (s *session) onPairOffer(f relay.Frame) {
 		return
 	}
 	r, err := s.c.Devices.Offer(f.Pair, f.Commit, f.Label, f.UA)
+	var paused *devices.ThrottledError
 	switch {
 	case errors.Is(err, devices.ErrTooManyPending):
 		state(relay.PairRejected, "too_many_pending")
+	case errors.As(err, &paused):
+		state(relay.PairRejected, "pairing_paused")
 	case err != nil:
 		state(relay.PairRejected, relay.ErrBadRequest)
 	default:
 		_ = s.send(relay.Frame{T: relay.TypePairChallenge, Pair: f.Pair, R: r})
+		if s.c.OnPairing != nil {
+			s.c.OnPairing(termsafe.Clean(f.Label, 80))
+		}
 	}
 }
 

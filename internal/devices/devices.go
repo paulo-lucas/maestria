@@ -8,11 +8,14 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"errors"
+	"fmt"
 	"regexp"
 	"sync"
 	"time"
 
+	"github.com/paulo-lucas/maestria/internal/audit"
 	"github.com/paulo-lucas/maestria/internal/relay"
+	"github.com/paulo-lucas/maestria/internal/termsafe"
 )
 
 // Policy is the connector's session policy for relayed requests.
@@ -23,10 +26,18 @@ type Policy struct {
 	RatePerMinute int
 }
 
-// DefaultPolicy is 30 days absolute, 7 days idle, 120 requests per minute.
+// DefaultPolicy is 14 days absolute, 3 days idle, 120 requests per minute. Approving a browser
+// takes one command and a typed word on the machine, so asking again every two weeks costs little,
+// and it bounds how long a mistaken approval can be abused.
 func DefaultPolicy() Policy {
-	return Policy{Enabled: true, Absolute: 30 * 24 * time.Hour, Idle: 7 * 24 * time.Hour, RatePerMinute: 120}
+	return Policy{Enabled: true, Absolute: DefaultAbsoluteDays * 24 * time.Hour, Idle: DefaultIdleDays * 24 * time.Hour, RatePerMinute: 120}
 }
+
+// Default session lifetimes of an approved device, in days (the config defaults use the same).
+const (
+	DefaultAbsoluteDays = 14
+	DefaultIdleDays     = 3
+)
 
 // PairingTTL is how long a pairing waits for local approval.
 const PairingTTL = 5 * time.Minute
@@ -34,7 +45,33 @@ const PairingTTL = 5 * time.Minute
 // MaxPending is how many pairings may wait at once.
 const MaxPending = 5
 
+// The attempt budget of this connector. A pairing is a request from the cloud to put a key on
+// this machine's approved list, so the number of tries is limited here, whatever the cloud does:
+// a few offers per window and per day, a long pause after a failed reveal, and a few wrong codes
+// typed at `devices approve`.
+const (
+	PairWindow         = 10 * time.Minute
+	MaxOffersPerWindow = 5
+	MaxOffersPerDay    = 20
+	PairLockout        = time.Hour // no new offer after a failed reveal
+	MaxBadCodes        = 5         // wrong codes per PairWindow
+)
+
 const touchEvery = 30 * time.Second
+
+// ThrottledError says a pairing call was refused by the attempt budget and when to retry.
+type ThrottledError struct {
+	Reason string
+	Retry  time.Duration
+}
+
+func (e *ThrottledError) Error() string {
+	mins := int((e.Retry + time.Minute - 1) / time.Minute)
+	if mins < 1 {
+		mins = 1
+	}
+	return fmt.Sprintf("pairing is paused (%s); try again in about %d min", e.Reason, mins)
+}
 
 // Errors returned by the pairing and approval calls.
 var (
@@ -59,6 +96,9 @@ type Device struct {
 	RevokedAt  int64
 }
 
+// Fingerprint is the short form of the device id shown next to a device ("a1b2 c3d4 e5f6 0718").
+func (d Device) Fingerprint() string { return relay.Fingerprint(d.ID) }
+
 // Info is the display summary reported to the cloud.
 func (d Device) Info() relay.DeviceInfo {
 	return relay.DeviceInfo{ID: d.ID, Label: d.Label, State: d.State, ApprovedAt: d.ApprovedAt, LastUsedAt: d.LastUsedAt, PublicKey: d.SPKI}
@@ -66,13 +106,15 @@ func (d Device) Info() relay.DeviceInfo {
 
 // Pairing is a browser waiting for approval.
 type Pairing struct {
-	ID        string
-	Label     string
-	UA        string
-	State     string
-	Code      string // empty until the browser revealed its key
-	CreatedAt int64
-	ExpiresAt int64
+	ID          string
+	Label       string
+	UA          string
+	State       string
+	Code        string // empty until the browser revealed its key
+	DeviceID    string // empty until the browser revealed its key
+	Fingerprint string // short form of DeviceID, the same one the browser shows
+	CreatedAt   int64
+	ExpiresAt   int64
 }
 
 // Change is a pairing whose state moved since it was last reported to the cloud.
@@ -87,6 +129,7 @@ type Manager struct {
 	db     *sql.DB
 	policy func() Policy
 	now    func() time.Time
+	audit  *audit.Log
 
 	mu     sync.Mutex
 	nonces map[string]int64 // deviceID|nonce -> expiry (epoch ms)
@@ -112,6 +155,70 @@ func New(db *sql.DB, policy func() Policy, now func() time.Time) *Manager {
 
 // Policy returns the current policy.
 func (m *Manager) Policy() Policy { return m.policy() }
+
+// SetAudit makes the manager record every pairing offer, refusal, failure and approval in the
+// local audit log.
+func (m *Manager) SetAudit(l *audit.Log) { m.audit = l }
+
+func (m *Manager) auditWrite(event string, detail any) {
+	if m.audit != nil {
+		_ = m.audit.Write(event, "", detail)
+	}
+}
+
+// record adds one event to the attempt budget (and forgets events older than two days).
+func (m *Manager) record(kind string) {
+	now := m.now().UnixMilli()
+	_, _ = m.db.Exec("INSERT INTO pair_events (at, kind) VALUES (?, ?)", now, kind)
+	_, _ = m.db.Exec("DELETE FROM pair_events WHERE at < ?", now-int64(48*time.Hour/time.Millisecond))
+}
+
+// since counts the events of a kind newer than d, and returns the time of the oldest of them.
+func (m *Manager) since(kind string, d time.Duration) (n int, oldest int64) {
+	from := m.now().Add(-d).UnixMilli()
+	var o sql.NullInt64
+	_ = m.db.QueryRow("SELECT COUNT(*), MIN(at) FROM pair_events WHERE kind = ? AND at > ?", kind, from).Scan(&n, &o)
+	return n, o.Int64
+}
+
+// offerThrottle says whether a new pairing may be offered now.
+func (m *Manager) offerThrottle() *ThrottledError {
+	now := m.now().UnixMilli()
+	if n, _ := m.since("mismatch", PairLockout); n > 0 {
+		var last sql.NullInt64
+		_ = m.db.QueryRow("SELECT MAX(at) FROM pair_events WHERE kind = 'mismatch'").Scan(&last)
+		return &ThrottledError{Reason: "a browser key did not match its commitment", Retry: time.Duration(last.Int64+PairLockout.Milliseconds()-now) * time.Millisecond}
+	}
+	if n, oldest := m.since("offer", PairWindow); n >= MaxOffersPerWindow {
+		return &ThrottledError{Reason: "too many pairings were offered", Retry: time.Duration(oldest+PairWindow.Milliseconds()-now) * time.Millisecond}
+	}
+	if n, oldest := m.since("offer", 24*time.Hour); n >= MaxOffersPerDay {
+		return &ThrottledError{Reason: "too many pairings were offered today", Retry: time.Duration(oldest+(24*time.Hour).Milliseconds()-now) * time.Millisecond}
+	}
+	return nil
+}
+
+// Budget is how much of the pairing attempt budget is used, for `devices pending`.
+type Budget struct {
+	Offers    int             // offers accepted in the last PairWindow
+	MaxOffers int             // MaxOffersPerWindow
+	Paused    *ThrottledError // non-nil while new offers are refused
+}
+
+// Budget reports the budget now.
+func (m *Manager) Budget() Budget {
+	n, _ := m.since("offer", PairWindow)
+	return Budget{Offers: n, MaxOffers: MaxOffersPerWindow, Paused: m.offerThrottle()}
+}
+
+// codeThrottle says whether `devices approve` may look at a code now (after too many wrong ones
+// it does not even answer, so a wrong guess and a right one look the same).
+func (m *Manager) codeThrottle() *ThrottledError {
+	if n, oldest := m.since("bad_code", PairWindow); n >= MaxBadCodes {
+		return &ThrottledError{Reason: "too many wrong codes", Retry: time.Duration(oldest+PairWindow.Milliseconds()-m.now().UnixMilli()) * time.Millisecond}
+	}
+	return nil
+}
 
 var pairIDRE = regexp.MustCompile(`^[A-Za-z0-9_-]{8,64}$`)
 
@@ -143,6 +250,18 @@ func (m *Manager) Offer(pair, commit, label, ua string) (string, error) {
 	if err := m.db.QueryRow("SELECT r FROM device_pairings WHERE pair_id = ?", pair).Scan(&existing); err == nil {
 		return existing, nil
 	}
+	label = termsafe.Clean(label, 80)
+	if label == "" {
+		label = "Unnamed browser"
+	}
+	ua = termsafe.Clean(ua, 200)
+	if te := m.offerThrottle(); te != nil {
+		if m.audit != nil {
+			// At most one entry per minute: a hostile cloud can offer as fast as it likes.
+			_ = m.audit.WriteThrottled("pair_refused", time.Minute, "pair_refused", "", map[string]any{"reason": te.Reason, "label": label})
+		}
+		return "", te
+	}
 	var live int
 	if err := m.db.QueryRow("SELECT COUNT(*) FROM device_pairings WHERE state IN ('pending','revealed')").Scan(&live); err != nil {
 		return "", err
@@ -157,10 +276,12 @@ func (m *Manager) Offer(pair, commit, label, ua string) (string, error) {
 	r := relay.Enc(rb)
 	now := m.now()
 	_, err := m.db.Exec(`INSERT INTO device_pairings (pair_id, commit_hash, label, ua, r, state, created_at, expires_at) VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)`,
-		pair, commit, clip(label, 80), clip(ua, 200), r, now.UnixMilli(), now.Add(PairingTTL).UnixMilli())
+		pair, commit, label, ua, r, now.UnixMilli(), now.Add(PairingTTL).UnixMilli())
 	if err != nil {
 		return "", err
 	}
+	m.record("offer")
+	m.auditWrite("pair_offered", map[string]any{"label": label, "ua": ua})
 	return r, nil
 }
 
@@ -184,6 +305,10 @@ func (m *Manager) Reveal(pair, spkiB64, nonceB64 string) (string, error) {
 	}
 	fail := func() (string, error) {
 		_, _ = m.db.Exec("UPDATE device_pairings SET state = 'mismatch' WHERE pair_id = ?", pair)
+		// A failed reveal is the signature of a guessing attempt: it counts against the budget
+		// and pauses new offers for PairLockout.
+		m.record("mismatch")
+		m.auditWrite("pair_mismatch", map[string]any{"pair": pair})
 		return "", ErrBadPairing
 	}
 	spki, err1 := relay.Dec(spkiB64)
@@ -211,7 +336,7 @@ func (m *Manager) Pending() ([]Pairing, error) {
 	if err := m.sweep(); err != nil {
 		return nil, err
 	}
-	rows, err := m.db.Query(`SELECT pair_id, label, ua, state, COALESCE(code, ''), created_at, expires_at FROM device_pairings
+	rows, err := m.db.Query(`SELECT pair_id, label, ua, state, COALESCE(code, ''), COALESCE(spki, ''), created_at, expires_at FROM device_pairings
 		WHERE state IN ('pending','revealed') ORDER BY created_at`)
 	if err != nil {
 		return nil, err
@@ -220,21 +345,56 @@ func (m *Manager) Pending() ([]Pairing, error) {
 	var out []Pairing
 	for rows.Next() {
 		var p Pairing
-		if err := rows.Scan(&p.ID, &p.Label, &p.UA, &p.State, &p.Code, &p.CreatedAt, &p.ExpiresAt); err != nil {
+		var spki string
+		if err := rows.Scan(&p.ID, &p.Label, &p.UA, &p.State, &p.Code, &spki, &p.CreatedAt, &p.ExpiresAt); err != nil {
 			return nil, err
+		}
+		if raw, err := relay.Dec(spki); err == nil && len(raw) > 0 {
+			p.DeviceID = relay.DeviceID(raw)
+			p.Fingerprint = relay.Fingerprint(p.DeviceID)
 		}
 		out = append(out, p)
 	}
 	return out, rows.Err()
 }
 
-func (m *Manager) byCode(code string) (string, error) {
-	code = relay.NormalizePairCode(code)
-	if len(code) != 6 {
-		return "", ErrNoPairing
+// Lookup is the pairing a typed code points to, for the confirmation shown before Approve. A
+// wrong code counts against the budget; after MaxBadCodes the lookup is refused outright.
+func (m *Manager) Lookup(code string) (*Pairing, error) {
+	id, err := m.byCode(code, true)
+	if err != nil {
+		return nil, err
 	}
+	list, err := m.Pending()
+	if err != nil {
+		return nil, err
+	}
+	for i := range list {
+		if list[i].ID == id {
+			return &list[i], nil
+		}
+	}
+	return nil, ErrNoPairing
+}
+
+// byCode finds the one revealed pairing with that code. With count set, a code that matches
+// nothing is a failed attempt: it is recorded, audited and, past the budget, refused before it is
+// even looked up.
+func (m *Manager) byCode(code string, count bool) (string, error) {
+	if count {
+		if te := m.codeThrottle(); te != nil {
+			return "", te
+		}
+	}
+	code = relay.NormalizePairCode(code)
 	if err := m.sweep(); err != nil {
 		return "", err
+	}
+	if len(code) != relay.PairCodeDigits {
+		if count {
+			m.badCode()
+		}
+		return "", ErrNoPairing
 	}
 	rows, err := m.db.Query("SELECT pair_id FROM device_pairings WHERE state = 'revealed' AND code = ?", code)
 	if err != nil {
@@ -251,6 +411,9 @@ func (m *Manager) byCode(code string) (string, error) {
 	}
 	switch len(ids) {
 	case 0:
+		if count {
+			m.badCode()
+		}
 		return "", ErrNoPairing
 	case 1:
 		return ids[0], nil
@@ -258,10 +421,15 @@ func (m *Manager) byCode(code string) (string, error) {
 	return "", ErrAmbiguous
 }
 
+func (m *Manager) badCode() {
+	m.record("bad_code")
+	m.auditWrite("pair_bad_code", nil)
+}
+
 // Approve is `maestria devices approve <code>`: it approves the revealed pairing with that code
 // and stores the device. A key that was revoked is refused.
 func (m *Manager) Approve(code string) (*Device, error) {
-	id, err := m.byCode(code)
+	id, err := m.byCode(code, true)
 	if err != nil {
 		return nil, err
 	}
@@ -298,13 +466,14 @@ func (m *Manager) Approve(code string) (*Device, error) {
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
+	m.auditWrite("device_approved", map[string]any{"device": devID, "fingerprint": relay.Fingerprint(devID), "label": label})
 	return m.Get(devID)
 }
 
 // Reject is `maestria devices reject <code>`. It also accepts a pairing that has not revealed its
 // key yet when given its id.
 func (m *Manager) Reject(codeOrID string) error {
-	id, err := m.byCode(codeOrID)
+	id, err := m.byCode(codeOrID, false)
 	if err != nil {
 		if !pairIDRE.MatchString(codeOrID) {
 			return err

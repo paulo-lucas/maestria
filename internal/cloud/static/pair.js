@@ -56,7 +56,7 @@
         meta = '<span class="status" data-status="ok">Approved</span>'; right = '';
         break;
       case 'rejected':
-        meta = m.reason === 'kill_switch' ? 'The kill switch is on for this machine.' : m.reason === 'too_many_pending' ? 'This machine has too many pairings waiting. Approve or reject one first.' : 'Rejected on the machine.';
+        meta = m.reason === 'kill_switch' ? 'The kill switch is on for this machine.' : m.reason === 'too_many_pending' ? 'This machine has too many pairings waiting. Approve or reject one first.' : m.reason === 'pairing_paused' ? 'This machine paused pairing after too many tries. Wait a while, then start again.' : 'Rejected on the machine.';
         right = '';
         break;
       case 'expired': meta = 'The code expired. Start again.'; break;
@@ -80,7 +80,7 @@
       big = '<div class="field"><span class="field__label">Each machine shows its own code. Check it matches the one next to its name.</span></div>';
     }
     var html = big +
-      '<dl class="kv"><dt>This device</dt><dd>' + esc(label) + '</dd><dt>Approve with</dt><dd>on the machine: <code>maestria devices pending</code>, then <code>maestria devices approve</code> with the code shown here</dd></dl>' +
+      '<dl class="kv"><dt>This device</dt><dd>' + esc(label) + '</dd><dt>Device key</dt><dd><code>' + esc(K.fingerprint(rec.id)) + '</code> (the machine shows the same fingerprint when you approve)</dd><dt>Approve with</dt><dd>on the machine, in a terminal you are typing in: <code>maestria devices pending</code>, then <code>maestria devices approve</code> with the code shown here</dd></dl>' +
       '<ul class="card list">' + view.machines.map(row).join('') + '</ul>';
     if (!online.length) {
       html += '<div class="banner" data-status="info">' + icon('i-offline') + '<div class="banner__body"><p class="banner__title">No machine is online</p><p class="banner__text">Start the connector on a machine, then come back. <code>maestria connect</code></p></div></div>';
