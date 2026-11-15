@@ -1,5 +1,7 @@
 name: Release
 
+# Only a tag push. Never add workflow_call or workflow_dispatch: the signing certificate names
+# this file, and installers trust it because nothing else can run it with another repo's code.
 on:
   push:
     tags:
@@ -80,12 +82,15 @@ jobs:
         # release here, not on a user's machine, if the identity or the format is not what the
         # consumers expect.
         env:
-          IDENTITY: ^https://github\.com/${{ github.repository }}/\.github/workflows/release\.yml@refs/tags/v.+$
+          REPOSITORY: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
         run: |
           cosign verify-blob \
             --bundle dist/release/SHA256SUMS.sigstore.json \
-            --certificate-identity-regexp "${IDENTITY}" \
+            --certificate-identity "https://github.com/${REPOSITORY}/.github/workflows/release.yml@refs/tags/${TAG}" \
             --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            --certificate-github-workflow-repository "${REPOSITORY}" \
+            --certificate-github-workflow-trigger push \
             dist/release/SHA256SUMS
 
       - name: Attach release assets
