@@ -79,7 +79,9 @@ if [ ! -f "$ENVFILE" ]; then
       echo "MAESTRIA_CLOUD_SMTP_PORT=587"
       echo "MAESTRIA_CLOUD_SMTP_USER="
       echo "MAESTRIA_CLOUD_SMTP_PASSWORD="
-      echo "MAESTRIA_CLOUD_SMTP_FROM="
+      echo '# From: a bare address, or a name with the whole value in double quotes:'
+      echo '#   MAESTRIA_CLOUD_SMTP_FROM="Maestria <maestria@example.com>"'
+      echo 'MAESTRIA_CLOUD_SMTP_FROM='
     fi
   } > "$ENVFILE"
   chown root:maestria "$ENVFILE"

@@ -153,8 +153,10 @@ MAESTRIA_CLOUD_SMTP_HOST=smtp.mail.example.com
 MAESTRIA_CLOUD_SMTP_PORT=587
 MAESTRIA_CLOUD_SMTP_USER=your-smtp-login
 MAESTRIA_CLOUD_SMTP_PASSWORD=your-smtp-password
-MAESTRIA_CLOUD_SMTP_FROM=maestria@example.com
+MAESTRIA_CLOUD_SMTP_FROM="Maestria <maestria@example.com>"
 ```
+
+Keep the **double quotes** around the From value when it has a name and `<...>`: they make sure the whole value reaches the server as one string, whatever reads the file (systemd, or a shell that sources it). A bare address (`MAESTRIA_CLOUD_SMTP_FROM=maestria@example.com`) needs no quotes.
 
 Lock the file:
 
@@ -186,7 +188,7 @@ Each setting can be an environment variable or a key in `/var/lib/maestria-cloud
 | `smtp.port` | `MAESTRIA_CLOUD_SMTP_PORT` | `587` | Mail port. |
 | `smtp.username` | `MAESTRIA_CLOUD_SMTP_USER` | none | Mail login. |
 | `smtp.password` | `MAESTRIA_CLOUD_SMTP_PASSWORD` | none | Mail password. |
-| `smtp.from` | `MAESTRIA_CLOUD_SMTP_FROM` | none | The "From" address. Required with a host. |
+| `smtp.from` | `MAESTRIA_CLOUD_SMTP_FROM` | none | The "From" address, `name@example.com` or `Name <name@example.com>` (in a systemd environment file, put the value in double quotes). Required with a host. |
 | `smtp.tls` | `MAESTRIA_CLOUD_SMTP_TLS` | `false` | `true` for implicit TLS (usually port 465). |
 | `devEmail` | `MAESTRIA_CLOUD_DEV_EMAIL` | none | `stdout` or `file:<path>`: print mail instead of sending it. **For trying things out only.** |
 | none | `MAESTRIA_CLOUD_DIR` | `~/.config/maestria-cloud` (`%AppData%\maestria-cloud` on Windows) | The data directory. |
