@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"time"
 )
 
 // EnsureDir creates dir (and parents) and restricts it to the owner on POSIX.
@@ -59,11 +60,26 @@ func WriteAtomic(path string, data []byte) error {
 		cleanup()
 		return err
 	}
-	if err := os.Rename(tmpName, path); err != nil {
+	if err := renameReplacing(tmpName, path); err != nil {
 		cleanup()
 		return err
 	}
 	return nil
+}
+
+// renameReplacing renames over an existing file. On Windows that fails with "Access is denied"
+// while another handle has the target open (a watcher reading it, an antivirus scan), so it
+// retries for up to about a second before giving up. POSIX renames do not have that problem.
+func renameReplacing(from, to string) error {
+	err := os.Rename(from, to)
+	if runtime.GOOS != "windows" {
+		return err
+	}
+	for wait := 10 * time.Millisecond; err != nil && errors.Is(err, os.ErrPermission) && wait <= 320*time.Millisecond; wait *= 2 {
+		time.Sleep(wait)
+		err = os.Rename(from, to)
+	}
+	return err
 }
 
 // RestrictBestEffort sets 0600 on path on POSIX, ignoring errors (e.g. a file that does not exist yet).
