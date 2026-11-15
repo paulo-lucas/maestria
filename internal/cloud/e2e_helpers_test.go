@@ -147,10 +147,12 @@ func (n *node) stop() {
 		case <-time.After(5 * time.Second):
 		}
 		n.cancel = nil
-		if n.conn != nil {
-			n.conn.Close()
-			n.conn = nil
-		}
+	}
+	// Close the connector (and its database) even when a test already ended the client itself
+	// (revoked, refused) and cleared cancel: Windows cannot delete a TempDir with an open DB.
+	if n.conn != nil {
+		n.conn.Close()
+		n.conn = nil
 	}
 }
 
