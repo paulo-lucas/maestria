@@ -204,3 +204,49 @@ func requestWith(remote, cfIP string) *http.Request {
 	r.Header.Set("Cf-Connecting-Ip", cfIP)
 	return r
 }
+
+// An unauthenticated post with a bad CSRF token (and a matching Origin, which a non-browser client
+// sets freely) must not write one audit row per request.
+func TestBadCSRFPostsDoNotFloodTheAuditLog(t *testing.T) {
+	h := newHarness(t)
+	c := h.client()
+	var before int
+	_ = h.db.QueryRow("SELECT COUNT(*) FROM audit").Scan(&before)
+	for i := 0; i < 2000; i++ {
+		c.postForm("/login", url.Values{"_csrf": {"nope"}, "password": {"x"}}, nil)
+	}
+	var after int
+	_ = h.db.QueryRow("SELECT COUNT(*) FROM audit").Scan(&after)
+	if after-before > 3 {
+		t.Fatalf("2000 bad-token posts from one address added %d audit rows", after-before)
+	}
+	// And rotating the claimed address (a sender can choose it behind a trusted proxy header) is
+	// bounded too by the server-wide throttle.
+	h2 := newHarness(t, opts{mutate: trustCfHeader})
+	c2 := h2.client()
+	_ = h2.db.QueryRow("SELECT COUNT(*) FROM audit").Scan(&before)
+	for i := 0; i < 600; i++ {
+		c2.postForm("/login", url.Values{"_csrf": {"nope"}, "password": {"x"}}, map[string]string{"Cf-Connecting-Ip": "192.0.2." + strconv.Itoa(i%250+1)})
+	}
+	_ = h2.db.QueryRow("SELECT COUNT(*) FROM audit").Scan(&after)
+	if after-before > 3 {
+		t.Fatalf("600 bad-token posts from rotating addresses added %d audit rows", after-before)
+	}
+}
+
+// The Security page lists the last significant events: a flood of refusals cannot push a sign-in
+// out of it.
+func TestSecurityPageKeepsSignificantEventsVisible(t *testing.T) {
+	h := newHarness(t)
+	for i := 0; i < 80; i++ {
+		_ = h.srv.Audit.Write("csrf_reject", "6.6.6.6", nil)
+	}
+	c := h.client()
+	if _, r := c.attempt(testPassword, h.code(0), false); r.Header().Get("Location") != "/" {
+		t.Fatal("sign-in failed")
+	}
+	page := c.get("/security")
+	if !strings.Contains(page.body, "Signed in") {
+		t.Fatalf("the sign-in is not on the Security page:\n%.600s", page.body)
+	}
+}

@@ -42,3 +42,55 @@ func TestWriteRecentAndThrottle(t *testing.T) {
 		}
 	}
 }
+
+func TestThrottleMapIsBoundedWithoutForgettingLiveKeys(t *testing.T) {
+	db, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	now := time.UnixMilli(1_700_000_000_000)
+	l := New(db, func() time.Time { return now })
+
+	if !l.Allow("victim", time.Hour) || l.Allow("victim", time.Hour) {
+		t.Fatal("a key acts once per interval")
+	}
+	// A flood of new keys (attacker-chosen addresses) with shorter intervals must neither grow the
+	// map without bound nor make it forget the key that is still throttled.
+	for i := 0; i < 5000; i++ {
+		l.Allow("flood:"+string(rune('a'+i%26))+time.Duration(i).String(), time.Second)
+		now = now.Add(time.Millisecond)
+	}
+	if len(l.throttle) > maxThrottleKeys {
+		t.Fatalf("throttle map grew to %d keys", len(l.throttle))
+	}
+	if l.Allow("victim", time.Hour) {
+		t.Fatal("a flood of other keys reset a throttled key")
+	}
+}
+
+func TestRecentSignificantLeavesOutFloodedRefusals(t *testing.T) {
+	db, err := store.Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	l := New(db, nil)
+	_ = l.Write("login_ok", "1.2.3.4", nil)
+	_ = l.Write("device_approved", "", nil)
+	for i := 0; i < 300; i++ {
+		_ = l.Write("csrf_reject", "6.6.6.6", nil)
+		_ = l.Write("origin_reject", "6.6.6.6", nil)
+		_ = l.Write("login_blocked", "6.6.6.6", nil)
+	}
+	all, _ := l.Recent(50)
+	for _, e := range all {
+		if e.Event == "login_ok" {
+			t.Fatal("test setup: the flood should have pushed login_ok out of the plain view")
+		}
+	}
+	sig, _ := l.RecentSignificant(50)
+	if len(sig) != 2 || sig[0].Event != "device_approved" || sig[1].Event != "login_ok" {
+		t.Fatalf("significant view: %+v", sig)
+	}
+}

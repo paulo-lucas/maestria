@@ -270,6 +270,16 @@ func describeEvent(event, detail string) string {
 		"auth_setup":           "Credentials set up",
 		"auth_reset_sessions":  "Sessions reset locally",
 		"write":                "Change made",
+		"login_throttled":      "Sign-in paused: too many password checks",
+		"pair_offered":         "A browser asked to be approved (hosted mode)",
+		"pair_refused":         "A pairing was refused: too many tries",
+		"pair_mismatch":        "A pairing key did not match: pairing paused",
+		"pair_bad_code":        "Wrong pairing code typed on this machine",
+		"device_approved":      "Browser approved on this machine",
+		"cli_confirmed":        "A sensitive command was confirmed at the terminal",
+		"cli_confirm_failed":   "A sensitive command was refused: wrong confirmation word",
+		"cli_confirm_refused":  "A sensitive command was refused: no interactive terminal",
+		"relay_write":          "Change made through the hosted relay",
 	}
 	n, ok := names[event]
 	if !ok {
@@ -281,7 +291,9 @@ func describeEvent(event, detail string) string {
 
 func (s *Server) getSecurity(w http.ResponseWriter, r *http.Request) {
 	d := s.appData(r, "Security", "security")
-	entries, err := s.Audit.Recent(50)
+	// Without the refusals: anyone can cause those, and they must not push a sign-in or an
+	// approval out of the last 50 rows. They stay in the log (and in GET /api/audit).
+	entries, err := s.Audit.RecentSignificant(50)
 	if err != nil {
 		s.serverError(w, r, err)
 		return

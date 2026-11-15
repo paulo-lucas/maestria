@@ -30,7 +30,7 @@ type Log struct {
 	now func() time.Time
 
 	mu       sync.Mutex
-	throttle map[string]time.Time
+	throttle map[string]time.Time // key -> when it may act again
 }
 
 // New returns an audit log on db. now may be nil (time.Now).
@@ -76,27 +76,69 @@ func (l *Log) Write(event, ip string, detail any) error {
 // WriteThrottled is like Write but at most once per interval per key, so floods of rejected
 // requests cannot fill the table.
 func (l *Log) WriteThrottled(key string, interval time.Duration, event, ip string, detail any) error {
-	t := l.now()
-	l.mu.Lock()
-	last, seen := l.throttle[key]
-	if seen && t.Sub(last) < interval {
-		l.mu.Unlock()
+	if !l.Allow(key, interval) {
 		return nil
 	}
-	if len(l.throttle) > 1000 {
-		l.throttle = map[string]time.Time{}
-	}
-	l.throttle[key] = t
-	l.mu.Unlock()
 	return l.Write(event, ip, detail)
 }
 
+// maxThrottleKeys bounds the throttle map. When it is full, entries whose interval has passed are
+// dropped first, then the ones that would expire soonest; a flood of new keys (they can come from
+// an attacker-chosen address) cannot make the map forget a key that is still being throttled
+// while an older one is kept.
+const maxThrottleKeys = 1000
+
+// Allow reports whether key may act now, and if so starts its interval. It is the bookkeeping
+// behind WriteThrottled, exposed so a caller can combine several keys (per address and global).
+func (l *Log) Allow(key string, interval time.Duration) bool {
+	t := l.now()
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if until, seen := l.throttle[key]; seen && t.Before(until) {
+		return false
+	}
+	if len(l.throttle) >= maxThrottleKeys {
+		for k, until := range l.throttle {
+			if !t.Before(until) {
+				delete(l.throttle, k)
+			}
+		}
+		for len(l.throttle) >= maxThrottleKeys {
+			var oldest string
+			var oldestUntil time.Time
+			for k, until := range l.throttle {
+				if oldest == "" || until.Before(oldestUntil) {
+					oldest, oldestUntil = k, until
+				}
+			}
+			delete(l.throttle, oldest)
+		}
+	}
+	l.throttle[key] = t.Add(interval)
+	return true
+}
+
 // Recent returns the newest entries first.
-func (l *Log) Recent(limit int) ([]Entry, error) {
+func (l *Log) Recent(limit int) ([]Entry, error) { return l.recent(limit, false) }
+
+// RecentSignificant is Recent without the noise of refused requests (rejected tokens and origins,
+// blocked and throttled sign-ins, refused relay requests and pairings). Anyone can cause those
+// with a few requests, so a page that listed them with the rest could be flooded until a sign-in,
+// an approval or a kill switch scrolled out of view. The refusals stay in the log and in Recent.
+func (l *Log) RecentSignificant(limit int) ([]Entry, error) { return l.recent(limit, true) }
+
+// noisyEvents are the refusal events RecentSignificant leaves out (besides every "*_reject").
+const noisyEvents = `'login_blocked', 'login_blocked_killed', 'login_throttled', 'relay_refused', 'pair_refused', 'pair_bad_code', 'cli_confirm_refused'`
+
+func (l *Log) recent(limit int, significant bool) ([]Entry, error) {
 	if limit < 1 || limit > 500 {
 		limit = 100
 	}
-	rows, err := l.db.Query("SELECT id, ts, event, COALESCE(ip, ''), COALESCE(detail, '') FROM audit ORDER BY id DESC LIMIT ?", limit)
+	where := ""
+	if significant {
+		where = ` WHERE event NOT LIKE '%\_reject' ESCAPE '\' AND event NOT IN (` + noisyEvents + `)`
+	}
+	rows, err := l.db.Query("SELECT id, ts, event, COALESCE(ip, ''), COALESCE(detail, '') FROM audit"+where+" ORDER BY id DESC LIMIT ?", limit)
 	if err != nil {
 		return nil, err
 	}
