@@ -492,3 +492,67 @@ func TestPendingLoginIsNotEvictedBySameAddress(t *testing.T) {
 		t.Fatalf("the owner's sign-in was evicted by another visitor: %v", r.Header)
 	}
 }
+
+// Someone who types an address before its owner must not be able to keep it: the newest sign-up
+// wins until the address is verified, and unverified accounts expire.
+func TestUnverifiedAddressCannotBeSquatted(t *testing.T) {
+	b := newBed(t)
+	squatter := b.browser("10.5.0.1")
+	squatter.get("/signup")
+	squatter.form("/signup", url.Values{"email": {"victim@example.com"}, "password": {"the squatter's long password"}})
+	squatterLink := b.link(b.waitMail("victim@example.com", "Verify"))
+
+	owner := b.browser("10.5.0.2")
+	owner.get("/signup")
+	owner.form("/signup", url.Values{"email": {"victim@example.com"}, "password": {testPassword}})
+	ownerLink := b.link(b.waitMail("victim@example.com", "Verify"))
+
+	// The squatter's link no longer works, and neither does the squatter's password.
+	if r := owner.get(squatterLink); r.StatusCode != 410 {
+		t.Fatalf("an older verification link must stop working: %d", r.StatusCode)
+	}
+	if r := owner.form(ownerLink, url.Values{"password": {"the squatter's long password"}}); r.StatusCode == 303 {
+		t.Fatal("the squatter's password verified the address")
+	}
+	// The owner, with the newest link and the newest password, finishes the sign-up.
+	if r := owner.form(ownerLink, url.Values{"password": {testPassword}}); r.StatusCode != 303 {
+		t.Fatalf("the owner could not verify: %d", r.StatusCode)
+	}
+	// Once verified, a later sign-up cannot change the password.
+	later := b.browser("10.5.0.3")
+	later.get("/signup")
+	later.form("/signup", url.Values{"email": {"victim@example.com"}, "password": {"yet another long password"}})
+	var hash string
+	_ = b.srv.db.QueryRow("SELECT password_hash FROM users WHERE email = 'victim@example.com'").Scan(&hash)
+	if !auth.VerifyPassword(testPassword, hash) {
+		t.Fatal("a sign-up after verification replaced the owner's password")
+	}
+}
+
+func TestUnverifiedAccountsExpireAfterADay(t *testing.T) {
+	b := newBed(t)
+	br := b.browser("10.5.1.1")
+	br.get("/signup")
+	br.form("/signup", url.Values{"email": {"nobody@example.com"}, "password": {testPassword}})
+	var n int
+	count := func() {
+		_ = b.srv.db.QueryRow("SELECT COUNT(*) FROM users WHERE email = 'nobody@example.com'").Scan(&n)
+	}
+	b.srv.acc.Purge()
+	if count(); n != 1 {
+		t.Fatal("an unverified account must survive its first day")
+	}
+	b.clock.advance(UnverifiedTTL + time.Minute)
+	b.srv.acc.Purge()
+	if count(); n != 0 {
+		t.Fatal("an address unverified for a day must be released")
+	}
+	// A verified account is never purged by this.
+	br2 := b.browser("10.5.1.2")
+	br2.signup("kept@example.com", testPassword)
+	b.clock.advance(3 * UnverifiedTTL)
+	b.srv.acc.Purge()
+	if u, _ := b.srv.acc.UserByEmail("kept@example.com"); u == nil {
+		t.Fatal("a verified account was purged")
+	}
+}

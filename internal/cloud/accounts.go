@@ -19,6 +19,9 @@ import (
 const (
 	EmailTokenTTL = 30 * time.Minute
 	SetupTTL      = 30 * time.Minute
+	// UnverifiedTTL is how long an address may stay unverified before the account is removed and
+	// the address is free again.
+	UnverifiedTTL = 24 * time.Hour
 )
 
 // Account errors. They are deliberately coarse: callers never say which check failed.
@@ -242,6 +245,24 @@ func (a *Accounts) Signup(ip, rawEmail, password string) error {
 	case u.VerifiedAt == 0 || u.EnrolledAt == 0:
 		a.event(u.ID, "signup_repeat", ip, nil)
 		if u.VerifiedAt == 0 {
+			// Nobody has proved they own the address yet, so the newest sign-up wins: an earlier
+			// one (someone who typed the address before its owner) must not keep it. The password
+			// becomes the new one and the older verification links stop working; whoever can read
+			// the mailbox and knows the newest password finishes the sign-up.
+			tx, err := a.db.Begin()
+			if err != nil {
+				return err
+			}
+			defer tx.Rollback()
+			if _, err := tx.Exec("UPDATE users SET password_hash = ? WHERE id = ? AND email_verified_at IS NULL", hash, u.ID); err != nil {
+				return err
+			}
+			if _, err := tx.Exec("UPDATE email_tokens SET used_at = ? WHERE user_id = ? AND kind = 'verify' AND used_at IS NULL", a.now().UnixMilli(), u.ID); err != nil {
+				return err
+			}
+			if err := tx.Commit(); err != nil {
+				return err
+			}
 			return a.sendVerify(u.ID, email)
 		}
 		// Verified but 2FA unfinished: the same link works (it asks for the password).
@@ -956,6 +977,8 @@ func (a *Accounts) Purge() {
 	_, _ = a.db.Exec("DELETE FROM setup_sessions WHERE expires_at <= ?", ms)
 	_, _ = a.db.Exec("DELETE FROM email_tokens WHERE expires_at <= ? OR used_at IS NOT NULL AND used_at <= ?", ms, ms-int64(24*time.Hour/time.Millisecond))
 	_, _ = a.db.Exec("DELETE FROM link_codes WHERE expires_at <= ? AND used_at IS NULL", ms-int64(time.Hour/time.Millisecond))
+	// An address nobody verified within a day is released (its tokens and setup go with it).
+	_, _ = a.db.Exec("DELETE FROM users WHERE email_verified_at IS NULL AND created_at <= ?", ms-UnverifiedTTL.Milliseconds())
 	a.rate.Prune()
 }
 
