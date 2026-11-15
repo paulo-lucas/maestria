@@ -885,6 +885,40 @@ a.agent-line:hover { background: var(--surface-2); }
 .menu__item .count, .menu__item .status { margin-left: auto; }
 .menu__sep { height: 1px; margin: var(--space-1) 0; background: var(--line); }
 
+/* Floating menu: a button that opens a native popover. The panel lives in the top layer, so no
+   ancestor (a card with overflow: hidden, a scroll area) can clip it. app.js anchors it to the
+   button, flips it above when there is no room below, and hides it until it is placed. On a
+   phone it becomes a bottom sheet. */
+.menu--float > .menu__panel {
+  position: fixed;
+  inset: auto;
+  top: 0;
+  left: 0;
+  margin: 0;
+  width: max-content;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100dvh - 16px);
+  overflow: auto;
+  color: var(--text);
+}
+.menu--float > .menu__panel:not([data-placed]) { visibility: hidden; }
+.menu--float > .menu__panel[data-placed] { visibility: visible; }
+.menu__item[disabled], .menu__item[aria-busy="true"] { cursor: default; opacity: 0.6; }
+@media (max-width: 640px) {
+  .menu--float > .menu__panel {
+    inset: auto 0 0 0;
+    top: auto;
+    left: 0;
+    width: auto;
+    max-width: none;
+    padding: var(--space-2) var(--space-2) calc(var(--space-2) + env(safe-area-inset-bottom, 0px));
+    border-bottom: 0;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  }
+  .menu--float > .menu__panel .menu__item { min-height: 48px; }
+  .menu--float > .menu__panel::backdrop { background: var(--scrim); }
+}
+
 /* ---------- Dialog (native <dialog>) ---------- */
 
 .dialog {

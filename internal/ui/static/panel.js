@@ -62,7 +62,7 @@
         return true;
       }
     }
-    if (document.querySelector('#main details.menu[open]')) {
+    if (document.querySelector('#main details.menu[open], #main [data-menu] > .menu__panel:popover-open')) {
       return true;
     }
     if (document.querySelector('dialog[open]')) {
@@ -532,6 +532,8 @@
       if (!task) return;
       const menu = btn.closest('details.menu');
       if (menu) menu.removeAttribute('open');
+      const panel = btn.closest('.menu__panel');
+      if (panel && panel.matches(':popover-open')) panel.hidePopover();
       const wsId = task.dataset.wsId;
       const itemId = task.dataset.itemId;
       const preset = btn.dataset.preset || '1h';
@@ -713,7 +715,8 @@
   });
 
   document.addEventListener('toggle', (e) => {
-    if (e.target.matches('details.menu') && !e.target.open && pendingRefresh && !isUserBusy()) {
+    const closedMenu = e.target.matches('details.menu') ? !e.target.open : e.target.matches('[data-menu] > .menu__panel') && e.newState === 'closed';
+    if (closedMenu && pendingRefresh && !isUserBusy()) {
       refreshNow(false);
     }
   }, true);

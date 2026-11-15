@@ -53,6 +53,16 @@
 </html>
 {{end}}
 
+{{/* The "Later" menu of an open task: a button and a popover panel, placed by app.js. */}}
+{{define "postpone-menu"}}<div class="menu menu--float" data-menu>
+                <button class="btn btn--ghost btn--sm" type="button" data-menu-toggle aria-haspopup="menu" aria-expanded="false">{{icon "i-clock"}}Later{{icon "i-chevron-down"}}</button>
+                <div class="menu__panel" popover role="menu" aria-label="Postpone">
+                  <button class="menu__item" type="button" role="menuitem" data-action="postpone" data-preset="1h">In 1 hour</button>
+                  <button class="menu__item" type="button" role="menuitem" data-action="postpone" data-preset="evening">This evening, 18:00</button>
+                  <button class="menu__item" type="button" role="menuitem" data-action="postpone" data-preset="tomorrow">Tomorrow, 09:00</button>
+                </div>
+              </div>{{end}}
+
 {{define "navitem"}}<a class="nav__item" href="{{.Href}}"{{if .On}} aria-current="page"{{end}}>{{icon .Icon}} {{.Label}}</a>{{end}}
 
 {{define "app"}}{{template "head" .}}

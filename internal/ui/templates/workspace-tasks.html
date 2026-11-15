@@ -41,14 +41,7 @@
             <div class="task__actions">
               <button class="btn btn--primary btn--sm" type="button" data-action="respond" data-value="approve">{{icon "i-check"}}Approve</button>
               <button class="btn btn--sm" type="button" data-action="respond" data-value="reject">{{icon "i-x"}}Reject</button>
-              <details class="menu menu--end">
-                <summary class="btn btn--ghost btn--sm">{{icon "i-clock"}}Later{{icon "i-chevron-down"}}</summary>
-                <div class="menu__panel">
-                  <button class="menu__item" type="button" data-action="postpone" data-preset="1h">In 1 hour</button>
-                  <button class="menu__item" type="button" data-action="postpone" data-preset="evening">This evening, 18:00</button>
-                  <button class="menu__item" type="button" data-action="postpone" data-preset="tomorrow">Tomorrow, 09:00</button>
-                </div>
-              </details>
+              {{template "postpone-menu" .}}
             </div>
             {{else if eq .Kind "choice"}}
             <div class="choice-list">
@@ -57,14 +50,7 @@
               {{end}}
             </div>
             <div class="task__actions">
-              <details class="menu">
-                <summary class="btn btn--ghost btn--sm">{{icon "i-clock"}}Later{{icon "i-chevron-down"}}</summary>
-                <div class="menu__panel">
-                  <button class="menu__item" type="button" data-action="postpone" data-preset="1h">In 1 hour</button>
-                  <button class="menu__item" type="button" data-action="postpone" data-preset="evening">This evening, 18:00</button>
-                  <button class="menu__item" type="button" data-action="postpone" data-preset="tomorrow">Tomorrow, 09:00</button>
-                </div>
-              </details>
+              {{template "postpone-menu" .}}
             </div>
             {{else if eq .Kind "input"}}
             <form class="inline-form" data-action="respond-input">
@@ -73,14 +59,7 @@
               <button class="btn btn--primary" type="submit">Send</button>
             </form>
             <div class="task__actions">
-              <details class="menu">
-                <summary class="btn btn--ghost btn--sm">{{icon "i-clock"}}Later{{icon "i-chevron-down"}}</summary>
-                <div class="menu__panel">
-                  <button class="menu__item" type="button" data-action="postpone" data-preset="1h">In 1 hour</button>
-                  <button class="menu__item" type="button" data-action="postpone" data-preset="evening">This evening, 18:00</button>
-                  <button class="menu__item" type="button" data-action="postpone" data-preset="tomorrow">Tomorrow, 09:00</button>
-                </div>
-              </details>
+              {{template "postpone-menu" .}}
             </div>
             {{end}}
           </li>
