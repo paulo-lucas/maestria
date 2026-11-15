@@ -85,6 +85,28 @@ type Server struct {
 	OnAnswer func(terminalID string, approve bool)
 
 	dropReplies bool
+
+	// restFeed overrides what GET /api/workspaces/{id}/feed answers (default: the streamed
+	// snapshot), and failRestFeed makes it fail, so a test can make the two disagree.
+	restFeed     map[string]wire.FeedSnapshot
+	failRestFeed bool
+}
+
+// SetRESTFeed makes GET /api/workspaces/{wsID}/feed answer snap, whatever the stream last sent.
+func (s *Server) SetRESTFeed(wsID string, snap wire.FeedSnapshot) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.restFeed == nil {
+		s.restFeed = map[string]wire.FeedSnapshot{}
+	}
+	s.restFeed[wsID] = snap
+}
+
+// FailRESTFeed makes GET /api/workspaces/{id}/feed answer 500 (or work again).
+func (s *Server) FailRESTFeed(fail bool) {
+	s.mu.Lock()
+	s.failRestFeed = fail
+	s.mu.Unlock()
 }
 
 // Input is a frame a client sent on a terminal stream.
@@ -498,6 +520,27 @@ func (s *Server) authed(w *recorder, r *http.Request, dev *Device) {
 		writeJSON(w, map[string]any{"workspaces": ws})
 	case r.Method == http.MethodGet && p == "/api/feed/stream":
 		s.feedStream(w, r, dev)
+	case len(parts) == 4 && parts[1] == "workspaces" && parts[3] == "feed" && r.Method == http.MethodGet:
+		s.mu.Lock()
+		fail, over, hasOver := s.failRestFeed, s.restFeed[parts[2]], false
+		_, hasOver = s.restFeed[parts[2]]
+		var env struct {
+			Snapshot json.RawMessage `json:"snapshot"`
+		}
+		if f, ok := s.feeds[parts[2]]; ok && f.snap != nil {
+			_ = json.Unmarshal(f.snap, &env)
+		}
+		s.mu.Unlock()
+		switch {
+		case fail:
+			writeErr(w, 500, "internal", "feed unavailable")
+		case hasOver:
+			writeJSON(w, over)
+		case len(env.Snapshot) > 0:
+			_, _ = w.Write(env.Snapshot)
+		default:
+			writeJSON(w, wire.FeedSnapshot{})
+		}
 	case len(parts) == 5 && parts[1] == "terminals" && parts[3] == "chat" && parts[4] == "threads" && r.Method == http.MethodGet:
 		s.mu.Lock()
 		p := s.threads[parts[2]]

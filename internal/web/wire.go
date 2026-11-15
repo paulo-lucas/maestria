@@ -296,6 +296,9 @@ func writeWireError(w http.ResponseWriter, err error) {
 	case errors.Is(err, wire.ErrPromptChanged):
 		status, body.Code = http.StatusConflict, "prompt_changed"
 		body.Error = "That prompt changed or was already answered. Look at the current one."
+	case errors.Is(err, wire.ErrPromptUnverified):
+		status, body.Code = http.StatusServiceUnavailable, "prompt_unverified"
+		body.Error = "Could not re-check the prompt just before approving it, so nothing was approved. Try again."
 	case errors.Is(err, activity.ErrMaestroNotRunning):
 		status, body.Code = http.StatusConflict, "not_running"
 		body.Error = "The Maestro isn't running."

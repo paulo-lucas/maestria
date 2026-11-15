@@ -368,3 +368,70 @@ func TestFeedWorkspaceMappingByPathThenName(t *testing.T) {
 		t.Fatal("unknown workspace was mapped")
 	}
 }
+
+// Wire's approve answers whatever is pending at that moment, so the prompt is read again right
+// before approving: a prompt swapped since the last snapshot is never approved.
+func TestApproveRechecksThePromptAgainstAFreshFeed(t *testing.T) {
+	e := start(t)
+	e.waitLive(t)
+	ctx := context.Background()
+	hash := wire.PromptHash("Install zod@3.23.8? (Y/n)")
+	var answered []string
+	e.fake.OnAnswer = func(id string, approve bool) { answered = append(answered, id) }
+
+	// The cached feed still shows the benign prompt; the host now has a different one.
+	swapped := sampleFeed()
+	for i := range swapped.Items {
+		if swapped.Items[i].Kind == wire.ItemPendingPrompt {
+			swapped.Items[i].Prompt = "Run rm -rf ~ ? (Y/n)"
+		}
+	}
+	e.fake.SetRESTFeed(wsWire, swapped)
+	if err := e.mgr.Answer(ctx, "10.0.0.1", "atlas", termO, hash, true); !errors.Is(err, wire.ErrPromptChanged) {
+		t.Fatalf("a swapped prompt was approved: %v", err)
+	}
+	// Without a hash from the caller the cached prompt is what the human saw, and is held to it.
+	if err := e.mgr.Answer(ctx, "10.0.0.1", "atlas", termO, "", true); !errors.Is(err, wire.ErrPromptChanged) {
+		t.Fatalf("a swapped prompt was approved without a hash: %v", err)
+	}
+	if len(answered) != 0 {
+		t.Fatalf("approve reached Maestri: %v", answered)
+	}
+
+	// A prompt that disappeared is not approved either.
+	gone := sampleFeed()
+	for i := range gone.Items {
+		if gone.Items[i].Kind == wire.ItemPendingPrompt {
+			gone.Items[i].Kind, gone.Items[i].Prompt = wire.ItemTerminal, ""
+		}
+	}
+	e.fake.SetRESTFeed(wsWire, gone)
+	if err := e.mgr.Answer(ctx, "10.0.0.1", "atlas", termO, hash, true); !errors.Is(err, wire.ErrPromptChanged) {
+		t.Fatalf("a vanished prompt was approved: %v", err)
+	}
+
+	// Fail closed: when the fresh feed cannot be read nothing is approved.
+	e.fake.FailRESTFeed(true)
+	if err := e.mgr.Answer(ctx, "10.0.0.1", "atlas", termO, hash, true); !errors.Is(err, wire.ErrPromptUnverified) {
+		t.Fatalf("approving without a fresh feed: %v", err)
+	}
+	if len(answered) != 0 {
+		t.Fatalf("approve reached Maestri: %v", answered)
+	}
+	// Rejecting stays possible whatever the feed does: it can only make an agent do less.
+	if err := e.mgr.Answer(ctx, "10.0.0.1", "atlas", termO, "", false); err != nil {
+		t.Fatalf("reject: %v", err)
+	}
+
+	// And the happy path still works once the feed agrees.
+	e.fake.FailRESTFeed(false)
+	e.fake.SetRESTFeed(wsWire, sampleFeed())
+	if err := e.mgr.Answer(ctx, "10.0.0.1", "atlas", termO, hash, true); err != nil {
+		t.Fatalf("approve with a matching fresh feed: %v", err)
+	}
+	for _, r := range e.fake.Requests() {
+		if r.Role == "owner" && strings.HasSuffix(r.Path, "/feed") {
+			t.Fatal("the owner token read a feed (it would wake terminals)")
+		}
+	}
+}

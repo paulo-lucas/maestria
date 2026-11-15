@@ -246,6 +246,27 @@ func readFrame(ctx context.Context, conn *websocket.Conn) ([]byte, error) {
 	return data, nil
 }
 
+// Feed reads the current feed of a workspace once (guest, never wakes a terminal). It is used to
+// re-check a prompt right before it is approved, instead of trusting the last streamed snapshot.
+func (c *Client) Feed(ctx context.Context, wireWorkspaceID string) (*FeedSnapshot, error) {
+	var raw json.RawMessage
+	if err := c.do(ctx, "GET", "/api/workspaces/"+wireWorkspaceID+"/feed", nil, &raw); err != nil {
+		return nil, err
+	}
+	// The same snapshot as the stream, possibly in its {"type":"feed","snapshot":…} envelope.
+	var env struct {
+		Snapshot json.RawMessage `json:"snapshot"`
+	}
+	if json.Unmarshal(raw, &env) == nil && len(env.Snapshot) > 0 {
+		raw = env.Snapshot
+	}
+	var snap FeedSnapshot
+	if err := json.Unmarshal(raw, &snap); err != nil {
+		return nil, fmt.Errorf("wire: unexpected feed response")
+	}
+	return &snap, nil
+}
+
 // FeedStream subscribes to a workspace feed with this (guest) client and calls fn with every
 // snapshot, until the socket fails or ctx ends. The returned error is never nil.
 func (c *Client) FeedStream(ctx context.Context, wireWorkspaceID string, fn func(*FeedSnapshot)) error {
