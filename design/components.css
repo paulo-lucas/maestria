@@ -1010,6 +1010,8 @@ a.agent-line:hover { background: var(--surface-2); }
   user-select: all;
 }
 .code-inline .btn { flex: none; }
+/* In prose (inbox items, chat) the inline-code chip must not draw a second box in this one. */
+.prose .code-inline code, .task__body .code-inline code { padding: 0; background: none; font-size: inherit; }
 /* Each word of the command is kept whole (a line never breaks inside "--link"); only a word
    longer than the line, like a URL, breaks anywhere. The text of the block is still the plain
    command, which is what Copy takes. */
