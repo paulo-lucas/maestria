@@ -90,8 +90,10 @@ type Relay struct {
 
 // Config is the validated configuration.
 type Config struct {
-	ConfigDir           string
-	MaestriDir          string
+	ConfigDir  string
+	MaestriDir string
+	// Warnings are things worth telling the person about the config file itself (not errors).
+	Warnings            []string
 	Port                int
 	CookieSecure        bool
 	AllowedHosts        []string
@@ -582,7 +584,43 @@ func Load(configDir string, env Env) (*Config, error) {
 	if err != nil {
 		return nil, errorf("config: cannot read %s: %v", FilePath(configDir), err)
 	}
-	return Parse(data, configDir, env)
+	warnings, err := checkFileSafety(FilePath(configDir), env)
+	if err != nil {
+		return nil, err
+	}
+	cfg, err := Parse(data, configDir, env)
+	if err != nil {
+		return nil, err
+	}
+	cfg.Warnings = warnings
+	return cfg, nil
+}
+
+// checkFileSafety guards the one config file that holds commands which run (the tunnel's stop,
+// start and status commands): whoever can write it can run code as the owner. A file anyone can
+// write is refused. A file only the group can write is allowed, with a warning, because many
+// systems give each user a private group and editors then create it that way. On Windows the mode
+// bits mean nothing, so only a config directory chosen by MAESTRIA_CONFIG_DIR (which may sit
+// outside the protected profile) gets a warning.
+func checkFileSafety(path string, env Env) (warnings []string, err error) {
+	if env.GOOS == "windows" || runtime.GOOS == "windows" {
+		if env.Getenv != nil && env.Getenv("MAESTRIA_CONFIG_DIR") != "" {
+			warnings = append(warnings, "MAESTRIA_CONFIG_DIR is set: Windows file permissions are not checked for "+path+". It holds commands that run, so keep that folder writable only by you.")
+		}
+		return warnings, nil
+	}
+	info, statErr := os.Stat(path)
+	if statErr != nil {
+		return nil, nil
+	}
+	perm := info.Mode().Perm()
+	switch {
+	case perm&0o002 != 0:
+		return nil, errorf("config: %s is writable by everyone (mode %o). It holds commands that run, so anyone could run code as you. Run: chmod 600 %s", path, perm, path)
+	case perm&0o020 != 0:
+		warnings = append(warnings, fmt.Sprintf("%s is writable by its group (mode %o). It holds commands that run; run: chmod 600 %s", path, perm, path))
+	}
+	return warnings, nil
 }
 
 // SaveRaw validates raw JSON and writes it as config.json (0600).

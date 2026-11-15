@@ -308,3 +308,60 @@ func TestTrustsCfConnectingIPIsAutomaticWithAPublicHost(t *testing.T) {
 		t.Fatal("an explicit true must win")
 	}
 }
+
+func TestConfigFilePermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("mode bits do not apply")
+	}
+	dir := t.TempDir()
+	path := FilePath(dir)
+	if err := os.WriteFile(path, []byte(`{"tunnel":{"stopCommand":["true"]}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	env := testEnv(t.TempDir(), nil)
+	set := func(mode os.FileMode) {
+		t.Helper()
+		if err := os.Chmod(path, mode); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Private, or readable by others (it holds no secrets): fine, no warning.
+	for _, mode := range []os.FileMode{0o600, 0o644} {
+		set(mode)
+		cfg, err := Load(dir, env)
+		if err != nil || len(cfg.Warnings) != 0 {
+			t.Fatalf("mode %o: %v %v", mode, err, cfg)
+		}
+	}
+	// Writable by the group: loaded, with a warning that says how to fix it.
+	set(0o664)
+	cfg, err := Load(dir, env)
+	if err != nil || len(cfg.Warnings) != 1 || !strings.Contains(cfg.Warnings[0], "chmod 600") {
+		t.Fatalf("group-writable: %v %+v", err, cfg)
+	}
+	// Writable by everyone: refused, because it holds commands that run.
+	for _, mode := range []os.FileMode{0o666, 0o602} {
+		set(mode)
+		if _, err := Load(dir, env); err == nil || !strings.Contains(err.Error(), "writable by everyone") {
+			t.Fatalf("mode %o must be refused: %v", mode, err)
+		}
+	}
+}
+
+func TestWindowsWarnsWhenTheConfigDirIsChosen(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(FilePath(dir), []byte(`{}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	env := testEnv(t.TempDir(), map[string]string{"MAESTRIA_CONFIG_DIR": dir})
+	env.GOOS = "windows"
+	cfg, err := Load(dir, env)
+	if err != nil || len(cfg.Warnings) != 1 || !strings.Contains(cfg.Warnings[0], "MAESTRIA_CONFIG_DIR") {
+		t.Fatalf("%v %+v", err, cfg)
+	}
+	env = testEnv(t.TempDir(), nil)
+	env.GOOS = "windows"
+	if cfg, err := Load(dir, env); err != nil || len(cfg.Warnings) != 0 {
+		t.Fatalf("default dir: %v %+v", err, cfg)
+	}
+}

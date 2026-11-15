@@ -50,6 +50,9 @@ func buildServer(env *Env, o buildOpts) (*built, error) {
 	if err != nil {
 		return nil, err
 	}
+	for _, w := range cfg.Warnings {
+		fmt.Fprintln(env.Stderr, "Warning: "+w)
+	}
 	secrets, err := auth.LoadSecrets(dir)
 	if err != nil {
 		return nil, err

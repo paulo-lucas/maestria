@@ -45,7 +45,7 @@ You do not have to understand the rest to use Maestria safely. Use a long passwo
 | **Host allowlist** | The panel only answers to names you approved (`maestria config allow-host`). This defeats **DNS rebinding**, a trick where a hostile website points its own name at `127.0.0.1`. |
 | **Cloudflare Access (optional)** | If you set it up, the panel also checks Cloudflare's signed token on every request. See [Self-host](self-host.md#3-add-cloudflare-access-optional). |
 | **Audit log** | Every change, sign-in, refusal and kill-switch action is recorded in the local database and shown on the **Security** page. |
-| **Private files** | Secrets are stored in files only you can read (`0600`). Maestria refuses to use them if their permissions are too open (on macOS and Linux). |
+| **Private files** | Secrets are stored in files only you can read (`0600`). Maestria refuses to use them if their permissions are too open (on macOS and Linux). `config.json` holds commands that run (the tunnel's stop, start and status commands), so Maestria refuses it when anyone can write it and warns when its group can. On Windows these checks are not possible; keep the config folder writable only by you, especially if you set `MAESTRIA_CONFIG_DIR`. |
 
 ### The kill switch
 
