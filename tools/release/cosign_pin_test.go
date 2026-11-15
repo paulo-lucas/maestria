@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -19,6 +20,9 @@ func TestSetupCloudPinsTheSameCosignAsTheReleaseWorkflow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// A Windows checkout may have CRLF line endings; the line-anchored patterns below expect LF.
+	script = bytes.ReplaceAll(script, []byte("\r\n"), []byte("\n"))
+	workflow = bytes.ReplaceAll(workflow, []byte("\r\n"), []byte("\n"))
 	scriptVersion := regexp.MustCompile(`(?m)^COSIGN_VERSION=(v\d+\.\d+\.\d+)$`).FindSubmatch(script)
 	workflowVersion := regexp.MustCompile(`cosign-release:\s*(v\d+\.\d+\.\d+)`).FindSubmatch(workflow)
 	if scriptVersion == nil || workflowVersion == nil {
