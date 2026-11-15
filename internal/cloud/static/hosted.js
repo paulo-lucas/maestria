@@ -331,6 +331,20 @@
     return Math.round(d / 86400e3) + ' days';
   }
 
+  // begin:offline-meta (jscompat_test runs this block on its own: keep it free of other helpers)
+  // The line under "N machines online": which machine is offline, since when, and how many more.
+  // Parts that have nothing to say are left out, so it never ends in a bare "·".
+  function offlineMeta(offline, linked, rel) {
+    rel = rel || relTime;
+    if (!offline.length) return linked ? '' : 'Link your first machine';
+    var parts = [offline[0].name + ' offline'];
+    var since = offline[0].lastSeenAt ? rel(offline[0].lastSeenAt) : '';
+    if (since) parts.push(since);
+    if (offline.length > 1) parts.push('+' + (offline.length - 1));
+    return parts.join(' · ');
+  }
+  // end:offline-meta
+
   function renderShell() {
     var wss = allWorkspaces();
     var needs = wss.reduce(function (n, w) { return n + w.needs; }, 0);
@@ -374,6 +388,8 @@
       wss.forEach(function (w) {
         ph += '<a class="menu__item" href="' + esc(wsHref(w.cid, w.id, 'tasks')) + '" data-ws="' + esc(w.tone) + '"' + (cur && cur.cid === w.cid && cur.id === w.id ? ' aria-current="page"' : '') + '><span class="swatch swatch--lg"></span> ' + esc(wname(w)) + (w.needs ? ' <span class="count">' + w.needs + '</span>' : '') + '</a>';
       });
+      var ver = panel.getAttribute('data-version');
+      if (ver) ph += '<div class="menu__sep"></div><div class="menu__meta"><span>' + esc(ver) + '</span>' + versionDot(panel.getAttribute('data-update'), '/connectors') + '</div>';
       panel.innerHTML = ph;
     }
 
@@ -400,7 +416,7 @@
     var txt = !online.length ? 'No machine online' : online.length + ' ' + plural(online.length, 'machine', 'machines') + ' online';
     if (name) { name.textContent = txt; name.title = txt; }
     if (meta) {
-      meta.textContent = offline.length ? offline[0].name + ' offline' + (offline[0].lastSeenAt ? ' · ' + relTime(offline[0].lastSeenAt) : '') + (offline.length > 1 ? ' · +' + (offline.length - 1) : '') : (state.connectors.length ? '' : 'Link your first machine');
+      meta.textContent = offlineMeta(offline, state.connectors.length);
       meta.title = meta.textContent;
     }
     var needPair = online.filter(function (c) { return ['pair', 'revoked'].indexOf((state.access[c.id] || {}).state) >= 0; });
@@ -566,6 +582,35 @@
     }
     needsPanel += '</section>';
 
+    // Updates: the connectors' notices, merged and sorted like Needs you.
+    var updates = [];
+    ready.forEach(function (c) {
+      $('#updates-list > li.task', state.data[c.id].doc).forEach(function (li) {
+        var clone = li.cloneNode(true);
+        var comp = c.id + ':' + (li.getAttribute('data-ws-id') || '');
+        clone.setAttribute('data-ws-id', comp);
+        clone.setAttribute('data-key', comp);
+        clone.setAttribute('data-cid', c.id);
+        uniquify(clone, c.id.slice(3, 11) + '-');
+        rewriteLinks(clone, c.id);
+        updates.push({ at: timeOf(li), html: clone.outerHTML });
+      });
+    });
+    updates.sort(function (a, b) { return b.at - a.at; });
+    var updatesTotal = updates.length;
+    var uchips = wss.filter(function (w) { return w.updates; }).map(function (w) {
+      return '<button class="chip" type="button" aria-pressed="false" data-value="' + esc(w.cid + ':' + w.id) + '" data-ws="' + esc(w.tone) + '"><span class="swatch"></span>' + esc(w.name) + ' <span class="count">' + w.updates + '</span></button>';
+    }).join('');
+    var updatesPanel = '<section class="card panel" aria-labelledby="updates-title"><header class="panel__head"><h2 class="panel__title" id="updates-title">' + icon('i-bell') + ' Updates <span class="count">' + updatesTotal + '</span></h2>' +
+      (updatesTotal ? '<div class="panel__aside"><button class="btn btn--ghost btn--sm" type="button" data-action="dismiss-updates"><span data-dismiss-label>Mark all as read</span></button></div>' : '<div class="panel__aside">Newest first</div>') + '</header>';
+    if (updatesTotal) {
+      updatesPanel += '<div class="panel__tools"><div class="chip-row" data-filter="updates-list" role="group" aria-label="Filter updates by workspace"><button class="chip" type="button" aria-pressed="true" data-value="all">All <span class="count">' + updatesTotal + '</span></button>' + uchips + '</div></div>' +
+        '<ul class="list" id="updates-list">' + updates.map(function (t) { return t.html; }).join('') + '</ul>';
+    } else {
+      updatesPanel += '<div class="empty empty--compact"><span class="empty__icon">' + icon('i-bell') + '</span><p class="empty__title">No unread updates</p><p class="empty__text">Status notices from your agents will appear here.</p></div>';
+    }
+    updatesPanel += '</section>';
+
     // Agents at work.
     var agents = [], agentNeeds = 0, wireEmpty = null;
     ready.forEach(function (c) {
@@ -632,7 +677,7 @@
 
     return '<div class="page" data-live-root="overview"><header class="page-head"><div class="page-head__title"><h1>Overview</h1><p class="page-head__sub">' + esc(sub) + ' · updated <time datetime="' + new Date().toISOString() + '">' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + '</time></p></div></header>' +
       banners + '<section class="section" aria-labelledby="ws-title"><h2 class="sr-only" id="ws-title">Workspaces</h2>' + strip + '</section>' +
-      '<div class="overview-cols">' + needsPanel + '<div class="overview-side">' + agentsPanel + usagePanel + floorsPanel + '</div></div></div>' + (firstReady ? '' : '');
+      '<div class="overview-cols"><div class="overview-main">' + needsPanel + updatesPanel + '</div><div class="overview-side">' + agentsPanel + usagePanel + floorsPanel + '</div></div></div>' + (firstReady ? '' : '');
   }
 
   // ---- workspace and usage views (a machine's own HTML) ----
@@ -714,6 +759,22 @@
 
   function describeDevice(label) { return label || 'Browser'; }
 
+  // The server's build and its "newer release" dot, from the data the server put on the scope menu.
+  function versionDot(update, href) {
+    if (!update) return '';
+    var t = esc(update) + ' is available';
+    // A bare dot in a menu (a link to the machines page); a worded hint where there is room.
+    return href ? '<a class="ver-dot" data-status="info" href="' + esc(href) + '" aria-label="' + t + '" title="' + t + '"></a>'
+      : '<span class="ver-hint" data-status="info">' + esc(update) + ' available</span>';
+  }
+
+  function aboutHtml() {
+    var p = $('#scope-panel');
+    var ver = p && p.getAttribute('data-version');
+    if (!ver) return '';
+    return '<section class="section" aria-labelledby="about-title"><div class="section__head"><h2 class="section__title" id="about-title">About</h2></div><p class="about-line"><span>' + esc(ver) + '</span>' + versionDot(p.getAttribute('data-update')) + '</p></section>';
+  }
+
   async function securityHtml() {
     var ready = readyConnectors();
     var infos = {}, policies = {}, errors = [];
@@ -792,7 +853,7 @@
       '<dialog class="dialog" id="kill-dialog" aria-labelledby="kill-d-title"><form method="dialog" id="kill-form"><div class="dialog__body" data-status="danger"><span class="dialog__icon">' + icon('i-power', 'icon--lg') + '</span><h2 class="dialog__title" id="kill-d-title">Turn on the kill switch?</h2>' +
       '<p class="dialog__text">' + esc(names.join(' and ') || 'Your machines') + ' will reject every command from Maestria right away. Agents keep running. It can only be turned off on each machine, in a terminal you type in:</p>' + cmdBlock('maestria tunnel on') +
       '<label class="check"><input type="checkbox" id="kill-confirm"> I understand this can’t be undone from the web</label><p class="field__error" id="kill-error" hidden></p></div>' +
-      '<div class="dialog__foot"><button class="btn" type="button" data-close-dialog>Cancel</button><button class="btn btn--danger" type="submit" data-requires="kill-confirm">' + icon('i-power') + 'Turn on kill switch</button></div></form></dialog></div>';
+      '<div class="dialog__foot"><button class="btn" type="button" data-close-dialog>Cancel</button><button class="btn btn--danger" type="submit" data-requires="kill-confirm">' + icon('i-power') + 'Turn on kill switch</button></div></form></dialog>' + aboutHtml() + '</div>';
   }
 
   document.addEventListener('click', async function (ev) {

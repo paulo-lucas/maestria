@@ -76,6 +76,15 @@ func TestSidebarFooterShowsTheVersionAndAnUpdateHint(t *testing.T) {
 	if !strings.Contains(page, `class="ver-dot"`) || !strings.Contains(page, `title="v1.2.0 is available"`) {
 		t.Fatalf("update hint missing:\n%s", page)
 	}
+	// On a phone the sidebar footer is hidden: the scope menu carries the version and the dot,
+	// and Security has an About line with it.
+	if !strings.Contains(page, `<div class="menu__meta"><span>maestria v1.1.0<a class="ver-dot"`) {
+		t.Fatalf("version missing from the scope menu:\n%s", page)
+	}
+	about := c.get("/security").body
+	if !strings.Contains(about, `<p class="about-line"><span>maestria v1.1.0<span class="ver-hint"`) {
+		t.Fatalf("About line missing from Security:\n%s", about)
+	}
 
 	// A development build says so and still renders.
 	h = newHarness(t, opts{version: "dev"})

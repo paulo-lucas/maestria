@@ -91,7 +91,11 @@ func (s *Server) getOverview(w http.ResponseWriter, r *http.Request) {
 	})
 	if err == nil {
 		for _, it := range openItems {
-			if it.Kind == inbox.KindNotice || (it.PostponedUntil != nil && *it.PostponedUntil > nowMs) {
+			if it.Kind == inbox.KindNotice {
+				d.UpdatesItems = append(d.UpdatesItems, toTaskView(it, byID, now))
+				continue
+			}
+			if it.PostponedUntil != nil && *it.PostponedUntil > nowMs {
 				continue
 			}
 			d.NeedsItems = append(d.NeedsItems, toTaskView(it, byID, now))
@@ -519,7 +523,10 @@ func toTaskView(it inbox.Item, byID map[string]workspaces.Workspace, now time.Ti
 
 	bodyHTML := ""
 	trimmedBody := strings.TrimSpace(it.Body)
-	if idx := strings.IndexByte(trimmedBody, '\n'); idx >= 0 {
+	if strings.HasSuffix(it.Title, "…") && it.Title == inbox.SummaryTitle(trimmedBody) {
+		// The title is the first line cut short: show the whole text so none of it is lost.
+		bodyHTML = inbox.RenderMarkdown(trimmedBody)
+	} else if idx := strings.IndexByte(trimmedBody, '\n'); idx >= 0 {
 		rest := strings.TrimSpace(trimmedBody[idx+1:])
 		if rest != "" {
 			bodyHTML = inbox.RenderMarkdown(rest)

@@ -117,7 +117,7 @@ func (s *SMTPMailer) Send(m Message) error {
 func parseSender(from string) (envelope, header string, err error) {
 	a, err := mail.ParseAddress(strings.TrimSpace(from))
 	if err != nil {
-		return "", "", fmt.Errorf("invalid sender address %q (use name@example.com or \"Name <name@example.com>\"): %w", from, err)
+		return "", "", fmt.Errorf("invalid sender address %q (use name@example.com or \"Name <name@example.com>\"; in a systemd environment file put the whole value in double quotes): %w", from, err)
 	}
 	return a.Address, a.String(), nil
 }

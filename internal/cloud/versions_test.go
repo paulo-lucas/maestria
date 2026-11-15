@@ -51,6 +51,12 @@ func TestMachinesBehindTheLatestReleaseAreFlagged(t *testing.T) {
 	if !strings.Contains(page, "<span>Server v1.0.0") || !strings.Contains(page, `title="v10.0.0 is available"`) {
 		t.Fatal("server version or its hint missing from the footer")
 	}
+	// The phone has no sidebar footer: the scope menu carries it too, and hosted.js reads the
+	// data attributes to add it to Security's About line.
+	if !strings.Contains(page, `data-version="Server v1.0.0" data-update="v10.0.0"`) ||
+		!strings.Contains(page, `<div class="menu__meta"><span>Server v1.0.0</span><a class="ver-dot"`) {
+		t.Fatalf("server version missing from the scope menu:\n%s", page)
+	}
 
 	// A machine on the latest release is not flagged.
 	f.b.srv.releases = fakeReleases("9.9.9-test")

@@ -13,7 +13,7 @@ flowchart LR
   R -- "once a day, a note only" --> P["panel: update available"]
 ```
 
-- **Hosted VM:** a systemd timer runs `maestria-cloud update --yes` about every 15 minutes (installed by `packaging/linux/setup-cloud.sh`, opt out with `--no-auto-update`). A new tag reaches the VM within roughly 15 to 20 minutes.
+- **Hosted VM:** a systemd timer runs `maestria-cloud update --yes` about every 15 minutes (installed by `packaging/linux/setup-cloud.sh`, opt out with `--no-auto-update`; the same script installs a pinned, checksum-verified cosign so those updates check the release signature, opt out with `--no-cosign`). A new tag reaches the VM within roughly 15 to 20 minutes.
 - **Everyone else:** `maestria update` installs the latest release. The panel only *tells* people one exists (a line at startup and a dismissible note on the Security page, at most one request to GitHub a day); it never installs by itself. `"updates": {"check": false}` in `config.json` turns the check off.
 
 What an update does, in order: finds the newest release (GitHub's public API, no token), downloads the archive for this OS and CPU, **checks the signature on `SHA256SUMS` when cosign is installed** (a missing or failing signature stops everything; without cosign it logs a warning), **checks the archive's SHA-256 against `SHA256SUMS`** (a mismatch or a missing entry stops everything), unpacks only the expected binary, runs it with `version`, replaces the old binary atomically, keeps the old one as `<name>.previous`, restarts the service if one runs, and waits up to 30 seconds for it to be healthy. If it is not, the previous binary is put back and the service restarted again. Development builds (`2.0.0-dev+abc1234`, or built without a version) never update by themselves, and nothing downgrades without `--force`.
@@ -31,7 +31,7 @@ The release workflow does three things after building, all keyless (GitHub's OID
 Rules that keep this meaningful:
 
 - `release.yml` runs only on a `v*` tag push. Never add `workflow_call`, `workflow_dispatch` or a pull request trigger to it: installers trust the certificate because only this file, in this repository, on a tag push, can produce it.
-- Every action is pinned by full commit SHA, and the cosign version is pinned too. To bump one, take the SHA from the real tag (`git ls-remote https://github.com/<owner>/<action>.git 'refs/tags/<tag>*'`, using the `^{}` line when the tag is annotated), never from memory.
+- Every action is pinned by full commit SHA, and the cosign version is pinned too (in the release workflow, and in `packaging/linux/setup-cloud.sh` with the SHA-256 of each Linux binary from that release's `cosign_checksums.txt`; bump both together). To bump one, take the SHA from the real tag (`git ls-remote https://github.com/<owner>/<action>.git 'refs/tags/<tag>*'`, using the `^{}` line when the tag is annotated), never from memory.
 - Top-level permissions are none; the release job gets `contents: write`, `id-token: write` and `attestations: write`, nothing else. It does not use the Go cache.
 - **Never rename the repository or its owner** without updating every installer one-liner and the identity in the installers and the updater first.
 

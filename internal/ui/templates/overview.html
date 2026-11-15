@@ -39,6 +39,8 @@
 
       <div class="overview-cols">
 
+        <div class="overview-main">
+
         <!-- Needs you -->
         <section class="card panel" aria-labelledby="needs-title">
           <header class="panel__head">
@@ -74,14 +76,7 @@
               <div class="task__actions">
                 <button class="btn btn--primary btn--sm" type="button" data-action="respond" data-value="approve">{{icon "i-check"}}Approve</button>
                 <button class="btn btn--sm" type="button" data-action="respond" data-value="reject">{{icon "i-x"}}Reject</button>
-                <details class="menu menu--end">
-                  <summary class="btn btn--ghost btn--sm">{{icon "i-clock"}}Later{{icon "i-chevron-down"}}</summary>
-                  <div class="menu__panel">
-                    <button class="menu__item" type="button" data-action="postpone" data-preset="1h">In 1 hour</button>
-                    <button class="menu__item" type="button" data-action="postpone" data-preset="evening">This evening, 18:00</button>
-                    <button class="menu__item" type="button" data-action="postpone" data-preset="tomorrow">Tomorrow, 09:00</button>
-                  </div>
-                </details>
+                {{template "postpone-menu" .}}
                 <span class="spacer"></span>
                 <a class="btn btn--ghost btn--sm" href="/workspaces/{{.WorkspaceID}}/tasks">Details</a>
               </div>
@@ -93,14 +88,7 @@
                 {{end}}
               </div>
               <div class="task__actions">
-                <details class="menu">
-                  <summary class="btn btn--ghost btn--sm">{{icon "i-clock"}}Later{{icon "i-chevron-down"}}</summary>
-                  <div class="menu__panel">
-                    <button class="menu__item" type="button" data-action="postpone" data-preset="1h">In 1 hour</button>
-                    <button class="menu__item" type="button" data-action="postpone" data-preset="evening">This evening, 18:00</button>
-                    <button class="menu__item" type="button" data-action="postpone" data-preset="tomorrow">Tomorrow, 09:00</button>
-                  </div>
-                </details>
+                {{template "postpone-menu" .}}
               </div>
               {{else if eq .Kind "input"}}
               <form class="inline-form" data-action="respond-input">
@@ -109,14 +97,7 @@
                 <button class="btn btn--primary" type="submit">Send</button>
               </form>
               <div class="task__actions">
-                <details class="menu">
-                  <summary class="btn btn--ghost btn--sm">{{icon "i-clock"}}Later{{icon "i-chevron-down"}}</summary>
-                  <div class="menu__panel">
-                    <button class="menu__item" type="button" data-action="postpone" data-preset="1h">In 1 hour</button>
-                    <button class="menu__item" type="button" data-action="postpone" data-preset="evening">This evening, 18:00</button>
-                    <button class="menu__item" type="button" data-action="postpone" data-preset="tomorrow">Tomorrow, 09:00</button>
-                  </div>
-                </details>
+                {{template "postpone-menu" .}}
               </div>
               {{end}}
             </li>
@@ -130,6 +111,52 @@
           </div>
           {{end}}
         </section>
+
+        <!-- Updates: every workspace's notices, like Needs you -->
+        <section class="card panel" aria-labelledby="updates-title">
+          <header class="panel__head">
+            <h2 class="panel__title" id="updates-title">
+              {{icon "i-bell"}}
+              Updates <span class="count">{{len .UpdatesItems}}</span>
+            </h2>
+            {{if .UpdatesItems}}<div class="panel__aside"><button class="btn btn--ghost btn--sm" type="button" data-action="dismiss-updates"><span data-dismiss-label>Mark all as read</span></button></div>{{else}}<div class="panel__aside">Newest first</div>{{end}}
+          </header>
+          {{if .UpdatesItems}}
+          <div class="panel__tools">
+            <div class="chip-row" data-filter="updates-list" role="group" aria-label="Filter updates by workspace">
+              <button class="chip" type="button" aria-pressed="true" data-value="all">All <span class="count">{{len .UpdatesItems}}</span></button>
+              {{range .Workspaces}}
+                {{if .UpdatesCount}}
+                <button class="chip" type="button" aria-pressed="false" data-value="{{.ID}}" data-ws="{{.Tone}}"><span class="swatch"></span>{{.Name}} <span class="count">{{.UpdatesCount}}</span></button>
+                {{end}}
+              {{end}}
+            </div>
+          </div>
+          <ul class="list" id="updates-list">
+            {{range .UpdatesItems}}
+            <li class="task" data-key="{{.WorkspaceID}}" data-item-id="{{.ID}}" data-ws-id="{{.WorkspaceID}}">
+              <div class="task__meta">
+                <span class="ws" data-ws="{{.WorkspaceTone}}">{{.WorkspaceName}}</span>
+                <span class="task__kind">{{icon "i-bell"}}Update</span>
+                {{if .FloorName}}<span class="floor-name">{{icon "i-branch"}}<span class="truncate">{{.FloorName}}</span></span>{{end}}
+                <time datetime="{{.CreatedISO}}">{{.CreatedRel}}</time>
+              </div>
+              <h3 class="task__title">{{.Title}}</h3>
+              {{if .BodyHTML}}<div class="task__body prose">{{.BodyHTML}}</div>{{end}}
+              <div class="task__actions"><button class="btn btn--sm" type="button" data-action="dismiss">{{icon "i-check"}}Got it</button></div>
+            </li>
+            {{end}}
+          </ul>
+          {{else}}
+          <div class="empty empty--compact">
+            <span class="empty__icon">{{icon "i-bell"}}</span>
+            <p class="empty__title">No unread updates</p>
+            <p class="empty__text">Status notices from your agents will appear here.</p>
+          </div>
+          {{end}}
+        </section>
+
+        </div>
 
         <div class="overview-side">
 

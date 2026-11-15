@@ -148,6 +148,8 @@ function topbar(m) {
       <div class="menu__panel">
         <a class="menu__item" href="overview.html"${current(m.scope === 'all')}>${icon('i-overview')} All workspaces${total ? ` <span class="count" data-status="needs">${total}</span>` : ''}</a>
         ${items ? '<div class="menu__sep"></div>\n' + items : ''}
+        <div class="menu__sep"></div>
+        <div class="menu__meta"><span>Server v1.4.0</span></div>
       </div>
     </details>
     <div class="topbar__end">

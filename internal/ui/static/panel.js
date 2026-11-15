@@ -5,9 +5,11 @@
   const csrf = body.dataset.csrf;
   const DRAFT_PREFIX = 'maestria.draft.';
   let pendingRefresh = false;
+  let focusAfterRedraw = null; // { id, until }: see settleFocus
   let refreshTimer = null;
   let refreshing = false;
-  let overviewFilter = 'all';
+  // The workspace chosen in each overview list's filter chips ("needs-list", "updates-list").
+  const overviewFilters = { 'needs-list': 'all', 'updates-list': 'all' };
   let agentsFilter = 'all';
 
   function draftStorageKey(el) {
@@ -62,7 +64,7 @@
         return true;
       }
     }
-    if (document.querySelector('#main details.menu[open]')) {
+    if (document.querySelector('#main details.menu[open], #main [data-menu] > .menu__panel:popover-open')) {
       return true;
     }
     if (document.querySelector('dialog[open]')) {
@@ -72,19 +74,31 @@
   }
 
   function applyOverviewFilter(root = document) {
-    const row = root.querySelector('.chip-row[data-filter="needs-list"]');
-    const list = root.querySelector('#needs-list');
-    if (!row || !list) return;
-
-    const chips = [...row.querySelectorAll('.chip')];
-    const hasMatch = chips.some((c) => c.dataset.value === overviewFilter);
-    if (!hasMatch) overviewFilter = 'all';
-
-    chips.forEach((c) => {
-      c.setAttribute('aria-pressed', c.dataset.value === overviewFilter ? 'true' : 'false');
-    });
-    list.querySelectorAll('.task').forEach((item) => {
-      item.hidden = overviewFilter !== 'all' && item.dataset.key !== overviewFilter;
+    Object.keys(overviewFilters).forEach((name) => {
+      const row = root.querySelector('.chip-row[data-filter="' + name + '"]');
+      const list = root.querySelector('#' + name);
+      if (!row || !list) return;
+      const chips = [...row.querySelectorAll('.chip')];
+      if (!chips.some((c) => c.dataset.value === overviewFilters[name])) overviewFilters[name] = 'all';
+      const cur = overviewFilters[name];
+      chips.forEach((c) => {
+        c.setAttribute('aria-pressed', c.dataset.value === cur ? 'true' : 'false');
+      });
+      list.querySelectorAll('.task').forEach((item) => {
+        item.hidden = cur !== 'all' && item.dataset.key !== cur;
+      });
+      if (name === 'updates-list') {
+        // The button acts on what the filter shows: its label says so.
+        const btn = root.querySelector('[data-action="dismiss-updates"]');
+        const label = btn && btn.querySelector('[data-dismiss-label]');
+        if (label) {
+          const chip = chips.find((c) => c.dataset.value === cur);
+          // The chip's own text is the workspace name (its swatch and count are elements).
+          const ws = cur === 'all' || !chip ? '' : [...chip.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join('').trim();
+          label.textContent = ws ? 'Mark ' + ws + ' as read' : 'Mark all as read';
+          btn.setAttribute('aria-label', label.textContent);
+        }
+      }
     });
   }
 
@@ -226,7 +240,9 @@
       restoreDrafts(newMain);
       applyOverviewFilter(newMain);
       applyAgentsFilter(newMain);
+      reapplyBusy(newMain);
       syncDocsNavPicker(newMain);
+      applyFocusAfterRedraw();
 
       const newChat = document.getElementById('chat-log');
       if (newChat && (!curChat || chatPinned)) {
@@ -331,12 +347,168 @@
     refreshTimer = setTimeout(() => refreshNow(false), 90);
   }
 
-  function setBusy(el, busy) {
-    if (!el) return;
+  // The button that shows the spinner for a click: the clicked button, or, for an item of a menu,
+  // the button that opens that menu.
+  function busyButtonOf(clicked) {
+    if (!clicked || !clicked.closest) return null;
+    const panel = clicked.closest('.menu__panel');
+    if (panel && panel.parentElement) {
+      return panel.parentElement.querySelector('[data-menu-toggle]') || null;
+    }
+    return clicked.tagName === 'BUTTON' ? clicked : null;
+  }
+
+  // Puts `el` (an item, a form) in a loading state: every control inside is disabled, `el` gets
+  // aria-busy, and the clicked button shows a spinner. Returns false, doing nothing, when `el` is
+  // already busy, so a second click or Enter while a request is in flight is dropped.
+  function setBusy(el, busy, clicked) {
+    if (!el) return false;
+    const isBusy = el.getAttribute('aria-busy') === 'true';
+    if (busy && isBusy) return false;
+    if (!busy && !isBusy) return true;
     el.querySelectorAll('button, input, textarea, select').forEach((ctrl) => {
       if (busy) ctrl.dataset.wasDisabled = ctrl.disabled ? '1' : '0';
       ctrl.disabled = busy ? true : ctrl.dataset.wasDisabled === '1';
     });
+    if (busy) el.setAttribute('aria-busy', 'true');
+    else el.removeAttribute('aria-busy');
+    const target = busyButtonOf(clicked);
+    if (target) {
+      if (busy) {
+        target.setAttribute('aria-busy', 'true');
+        if (!target.querySelector(':scope > .spinner')) {
+          const spin = document.createElement('span');
+          spin.className = 'spinner';
+          spin.setAttribute('aria-hidden', 'true');
+          target.prepend(spin);
+        }
+      } else {
+        target.removeAttribute('aria-busy');
+        const spin = target.querySelector(':scope > .spinner');
+        if (spin) spin.remove();
+      }
+    }
+    return true;
+  }
+
+  const ERROR_TEXT = {
+    item_already_closed: 'This was already answered or dismissed.',
+    item_not_found: 'This item no longer exists.',
+    workspace_not_found: 'This workspace is no longer registered.',
+    internal: 'The panel hit an error. Try again.',
+  };
+
+  function friendlyError(err) {
+    const raw = (err && err.message) || '';
+    return ERROR_TEXT[raw] || raw || 'Something went wrong. Try again.';
+  }
+
+  // The error line of an item: created on first use, so every kind of item can show one.
+  function taskErrorEl(task) {
+    let el = task.querySelector('[data-task-error]');
+    if (!el) {
+      el = document.createElement('p');
+      el.className = 'field__error';
+      el.hidden = true;
+      el.setAttribute('data-task-error', '');
+      task.append(el);
+    }
+    // The line may come from the template (no role) or be new: either way it is announced.
+    el.setAttribute('role', 'alert');
+    return el;
+  }
+
+  // Items with a write in flight: "workspace:item" -> how to find the clicked button again. A live
+  // refresh can replace the item's markup before the server answers; the new copy is put back in
+  // its loading state (see reapplyBusy) so it cannot be clicked twice.
+  const inflight = new Map();
+
+  function taskKey(task) {
+    return task.dataset.wsId + ':' + task.dataset.itemId;
+  }
+
+  function findTask(key) {
+    for (const t of document.querySelectorAll('.task[data-item-id]')) {
+      if (taskKey(t) === key) return t;
+    }
+    return null;
+  }
+
+  function selectorFor(btn) {
+    if (!btn) return '';
+    if (btn.dataset.action === 'postpone') return `[data-action="postpone"][data-preset="${btn.dataset.preset || ''}"]`;
+    if (btn.dataset.action) return `[data-action="${btn.dataset.action}"]${btn.dataset.value ? `[data-value="${CSS.escape(btn.dataset.value)}"]` : ''}`;
+    return 'button[type="submit"]';
+  }
+
+  function reapplyBusy(root) {
+    inflight.forEach((sel, key) => {
+      const task = findTask(key);
+      if (!task || !root.contains(task) || task.getAttribute('aria-busy') === 'true') return;
+      let btn = null;
+      try { btn = sel ? task.querySelector(sel) : null; } catch {}
+      setBusy(task, true, btn);
+    });
+  }
+
+  // After a redraw removed the control that had focus, keyboard focus falls to <body>: put it on
+  // the heading of the list the item left, so the next Tab continues from there.
+  // The refresh that removes the item may still be in flight (the server's own event starts one),
+  // so the request is remembered for a few seconds and applied after each redraw, as long as
+  // nothing else has taken focus meanwhile.
+  function settleFocus(headingId) {
+    focusAfterRedraw = { id: headingId, until: Date.now() + 4000 };
+    applyFocusAfterRedraw();
+  }
+  function applyFocusAfterRedraw() {
+    if (!focusAfterRedraw) return;
+    if (Date.now() > focusAfterRedraw.until) { focusAfterRedraw = null; return; }
+    const active = document.activeElement;
+    if (active && active !== document.body && active.isConnected) return;
+    const h = document.getElementById(focusAfterRedraw.id);
+    if (!h) return;
+    if (!h.hasAttribute('tabindex')) h.setAttribute('tabindex', '-1');
+    h.focus({ preventScroll: true });
+  }
+
+  // One write on an inbox item (respond, postpone, dismiss), single-flight: the item is busy
+  // until the server answers. On success the page is refreshed (the item leaves or changes); on
+  // error everything is enabled again with the reason shown on the item.
+  async function taskRequest(task, clicked, action, body, onDone) {
+    const wsId = task.dataset.wsId;
+    const itemId = task.dataset.itemId;
+    const key = taskKey(task);
+    if (inflight.has(key) || !setBusy(task, true, clicked)) return;
+    inflight.set(key, selectorFor(clicked));
+    showError(taskErrorEl(task), '');
+    let live = null;
+    try {
+      await api(`/api/workspaces/${encodeURIComponent(wsId)}/inbox/${encodeURIComponent(itemId)}/${action}`, {
+        method: 'POST',
+        body,
+      });
+      if (onDone) onDone();
+      inflight.delete(key);
+      const heading = task.closest('#updates-list, [aria-labelledby="updates-title"]') ? 'updates-title' : 'needs-title';
+      await refreshNow(true);
+      settleFocus(heading);
+      // The refresh normally replaces the item. If it is still here (the refresh failed or is
+      // queued), do not leave it greyed out for ever.
+      setTimeout(() => {
+        const t = findTask(key);
+        if (t && !inflight.has(key)) setBusy(t, false, t.querySelector('[aria-busy="true"]'));
+      }, 8000);
+    } catch (err) {
+      inflight.delete(key);
+      live = findTask(key) || task;
+      const spun = live.querySelector('button[aria-busy="true"]');
+      setBusy(live, false, spun);
+      showError(taskErrorEl(live), friendlyError(err));
+      const back = spun || live.querySelector('button:not([disabled])');
+      if (back && (!document.activeElement || document.activeElement === document.body)) back.focus();
+      // Closed from elsewhere (another tab, the Maestro): show what the item is now.
+      if (err && err.message === 'item_already_closed') refreshNow(true);
+    }
   }
 
   function syncWindowControls(setting) {
@@ -462,10 +634,13 @@
   });
 
   document.addEventListener('click', async (e) => {
-    const chip = e.target.closest('.chip-row[data-filter="needs-list"] .chip');
+    const chip = e.target.closest('.chip-row[data-filter$="-list"] .chip');
     if (chip) {
-      overviewFilter = chip.dataset.value || 'all';
-      applyOverviewFilter(document);
+      const name = chip.closest('.chip-row').dataset.filter;
+      if (name in overviewFilters) {
+        overviewFilters[name] = chip.dataset.value || 'all';
+        applyOverviewFilter(document);
+      }
       return;
     }
 
@@ -489,7 +664,7 @@
       const term = agent.dataset.terminalId;
       const errEl = agent.querySelector('[data-agent-error]');
       showError(errEl, '');
-      setBusy(agent, true);
+      if (!setBusy(agent, true, btn)) return;
       try {
         await api(`/api/workspaces/${encodeURIComponent(wsId)}/agents/${encodeURIComponent(term)}/${btn.dataset.answer === 'approve' ? 'approve' : 'reject'}`, {
           method: 'POST',
@@ -497,7 +672,7 @@
         });
         await refreshNow(true);
       } catch (err) {
-        setBusy(agent, false);
+        setBusy(agent, false, btn);
         showError(errEl, err.message);
         await refreshNow(true);
       }
@@ -507,23 +682,9 @@
     if (action === 'respond') {
       const task = btn.closest('.task');
       if (!task) return;
-      const wsId = task.dataset.wsId;
-      const itemId = task.dataset.itemId;
-      const value = btn.dataset.value;
       const commentEl = task.querySelector('textarea[data-draft-key]');
       const comment = commentEl ? commentEl.value.trim() : '';
-      setBusy(task, true);
-      try {
-        await api(`/api/workspaces/${encodeURIComponent(wsId)}/inbox/${encodeURIComponent(itemId)}/respond`, {
-          method: 'POST',
-          body: { response: value, comment },
-        });
-        clearDraft(commentEl);
-        await refreshNow(true);
-      } catch (err) {
-        setBusy(task, false);
-        showError(task.querySelector('[data-task-error]'), err.message);
-      }
+      await taskRequest(task, btn, 'respond', { response: btn.dataset.value, comment }, () => clearDraft(commentEl));
       return;
     }
 
@@ -532,52 +693,78 @@
       if (!task) return;
       const menu = btn.closest('details.menu');
       if (menu) menu.removeAttribute('open');
-      const wsId = task.dataset.wsId;
-      const itemId = task.dataset.itemId;
-      const preset = btn.dataset.preset || '1h';
-      setBusy(task, true);
-      try {
-        await api(`/api/workspaces/${encodeURIComponent(wsId)}/inbox/${encodeURIComponent(itemId)}/postpone`, {
-          method: 'POST',
-          body: { preset },
-        });
-        await refreshNow(true);
-      } catch {
-        setBusy(task, false);
-      }
+      const panel = btn.closest('.menu__panel');
+      if (panel && panel.matches(':popover-open')) panel.hidePopover();
+      await taskRequest(task, btn, 'postpone', { preset: btn.dataset.preset || '1h' });
       return;
     }
 
     if (action === 'dismiss') {
       const task = btn.closest('.task');
       if (!task) return;
-      const wsId = task.dataset.wsId;
-      const itemId = task.dataset.itemId;
-      setBusy(task, true);
-      try {
-        await api(`/api/workspaces/${encodeURIComponent(wsId)}/inbox/${encodeURIComponent(itemId)}/dismiss`, {
-          method: 'POST',
-          body: {},
-        });
-        await refreshNow(true);
-      } catch {
-        setBusy(task, false);
-      }
+      await taskRequest(task, btn, 'dismiss', {});
       return;
     }
 
     if (action === 'dismiss-all') {
       const wsId = btn.dataset.wsId;
+      if (btn.getAttribute('aria-busy') === 'true') return;
       btn.disabled = true;
+      btn.setAttribute('aria-busy', 'true');
+      const spin = document.createElement('span');
+      spin.className = 'spinner';
+      spin.setAttribute('aria-hidden', 'true');
+      btn.prepend(spin);
+      const stop = () => { btn.disabled = false; btn.removeAttribute('aria-busy'); spin.remove(); };
       try {
         await api(`/api/workspaces/${encodeURIComponent(wsId)}/inbox/dismiss-notices`, {
           method: 'POST',
           body: {},
         });
         await refreshNow(true);
-      } catch {
-        btn.disabled = false;
+        settleFocus('updates-title');
+        setTimeout(() => { if (btn.isConnected) stop(); }, 8000);
+      } catch (err) {
+        stop();
+        const head = btn.closest('.section__head, .panel__head');
+        const host = head && head.parentElement;
+        if (host) showError(taskErrorEl(host), friendlyError(err));
       }
+      return;
+    }
+
+    if (action === 'dismiss-updates') {
+      // Mark every update as read: all workspaces, or just the one chosen in the filter.
+      if (btn.getAttribute('aria-busy') === 'true') return;
+      const row = document.querySelector('.chip-row[data-filter="updates-list"]');
+      const cur = overviewFilters['updates-list'];
+      const targets = cur !== 'all' ? [cur] : [...(row ? row.querySelectorAll('.chip') : [])].map((c) => c.dataset.value).filter((v) => v && v !== 'all');
+      if (!targets.length) return;
+      btn.disabled = true;
+      btn.setAttribute('aria-busy', 'true');
+      const spin = document.createElement('span');
+      spin.className = 'spinner';
+      spin.setAttribute('aria-hidden', 'true');
+      btn.prepend(spin);
+      const stop = () => { btn.disabled = false; btn.removeAttribute('aria-busy'); spin.remove(); };
+      const failures = [];
+      for (const ws of targets) {
+        try {
+          await api(`/api/workspaces/${encodeURIComponent(ws)}/inbox/dismiss-notices`, { method: 'POST', body: {} });
+        } catch (err) {
+          failures.push(friendlyError(err));
+        }
+      }
+      if (failures.length) stop();
+      await refreshNow(true);
+      if (!failures.length) settleFocus('updates-title');
+      if (failures.length) {
+        // The page was just redrawn: put the reason on the new panel.
+        const panel = document.getElementById('updates-title');
+        const host = panel && panel.closest('.panel');
+        if (host) showError(taskErrorEl(host), failures[0]);
+      }
+      setTimeout(() => { if (btn.isConnected && btn.getAttribute('aria-busy') === 'true') stop(); }, 8000);
       return;
     }
 
@@ -623,19 +810,7 @@
         input.focus();
         return;
       }
-      const wsId = task.dataset.wsId;
-      const itemId = task.dataset.itemId;
-      setBusy(task, true);
-      try {
-        await api(`/api/workspaces/${encodeURIComponent(wsId)}/inbox/${encodeURIComponent(itemId)}/respond`, {
-          method: 'POST',
-          body: { response: val },
-        });
-        clearDraft(input);
-        await refreshNow(true);
-      } catch {
-        setBusy(task, false);
-      }
+      await taskRequest(task, e.submitter || form.querySelector('button[type="submit"]'), 'respond', { response: val }, () => clearDraft(input));
       return;
     }
 
@@ -713,7 +888,8 @@
   });
 
   document.addEventListener('toggle', (e) => {
-    if (e.target.matches('details.menu') && !e.target.open && pendingRefresh && !isUserBusy()) {
+    const closedMenu = e.target.matches('details.menu') ? !e.target.open : e.target.matches('[data-menu] > .menu__panel') && e.newState === 'closed';
+    if (closedMenu && pendingRefresh && !isUserBusy()) {
       refreshNow(false);
     }
   }, true);

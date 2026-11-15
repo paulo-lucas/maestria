@@ -5,7 +5,12 @@
 #
 # Usage (as root, from the folder holding the maestria-cloud binary):
 #   sudo ./setup-cloud.sh --public-url https://maestria.example.com \
-#        [--binary ./maestria-cloud] [--tunnel-token <token>] [--dev-email] [--no-auto-update]
+#        [--binary ./maestria-cloud] [--tunnel-token <token>] [--dev-email] [--no-auto-update] \
+#        [--no-cosign]
+#
+# cosign: unless it is already installed, a pinned cosign release is downloaded (its SHA-256 is
+# checked) to /usr/local/bin/cosign, so every update also verifies who built the release. Pass
+# --no-cosign to skip it; updates then rely on the SHA256SUMS checksum alone.
 #
 # Updates: by default a systemd timer runs `maestria-cloud update --yes` every ~15 minutes, so
 # pushing a release tag updates this machine (root is needed to replace the binary; the service
@@ -21,6 +26,7 @@ BINARY="./maestria-cloud"
 TUNNEL_TOKEN=""
 DEV_EMAIL=0
 AUTO_UPDATE=1
+INSTALL_COSIGN=1
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -29,7 +35,8 @@ while [ $# -gt 0 ]; do
     --tunnel-token) TUNNEL_TOKEN="$2"; shift 2 ;;
     --dev-email) DEV_EMAIL=1; shift ;;
     --no-auto-update) AUTO_UPDATE=0; shift ;;
-    -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
+    --no-cosign) INSTALL_COSIGN=0; shift ;;
+    -h|--help) sed -n '2,21p' "$0"; exit 0 ;;
     *) echo "Unknown option: $1" >&2; exit 2 ;;
   esac
 done
@@ -63,6 +70,40 @@ step "Binary"
 install -m 0755 -o root -g root "$BINARY" /usr/local/bin/maestria-cloud
 /usr/local/bin/maestria-cloud version || true
 
+step "cosign (checks who built each update)"
+# cosign is how the update command verifies the signature on a release's SHA256SUMS. It is
+# installed from a pinned release, and the download must match the pinned SHA-256 (the values are
+# the ones in that release's cosign_checksums.txt). To bump: change COSIGN_VERSION and both sums.
+COSIGN_VERSION=v3.1.4
+COSIGN_SHA256_AMD64=424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa
+COSIGN_SHA256_ARM64=ade83b7aac62e131cacfe96d958948b2150cc9efec46a570a2649b8e27dedad2
+if [ "$INSTALL_COSIGN" -eq 0 ]; then
+  echo "Skipped (--no-cosign): updates are checked against SHA256SUMS only, and say so in the log."
+elif command -v cosign >/dev/null 2>&1; then
+  echo "Kept the cosign already installed ($(command -v cosign)). Releases are signed with cosign v3: if updates report a bundle format error, upgrade it."
+else
+  case "$(uname -m)" in
+    x86_64|amd64) COSIGN_ARCH=amd64; COSIGN_SHA256=$COSIGN_SHA256_AMD64 ;;
+    aarch64|arm64) COSIGN_ARCH=arm64; COSIGN_SHA256=$COSIGN_SHA256_ARM64 ;;
+    *) echo "No pinned cosign for $(uname -m); install it yourself, or pass --no-cosign. Continuing without it."; COSIGN_ARCH="" ;;
+  esac
+  if [ -n "$COSIGN_ARCH" ]; then
+    command -v curl >/dev/null || { apt-get update -qq && apt-get install -y -qq curl >/dev/null; }
+    COSIGN_TMP=$(mktemp)
+    trap 'rm -f "$COSIGN_TMP"' EXIT
+    if ! curl -fsSL --retry 3 -o "$COSIGN_TMP" "https://github.com/sigstore/cosign/releases/download/$COSIGN_VERSION/cosign-linux-$COSIGN_ARCH"; then
+      echo "Could not download cosign $COSIGN_VERSION. Re-run, or pass --no-cosign to go on without it." >&2
+      exit 1
+    fi
+    if [ "$(sha256sum "$COSIGN_TMP" | awk '{print $1}')" != "$COSIGN_SHA256" ]; then
+      echo "The downloaded cosign does not match the pinned checksum; nothing was installed." >&2
+      exit 1
+    fi
+    install -m 0755 -o root -g root "$COSIGN_TMP" /usr/local/bin/cosign
+    echo "Installed cosign $COSIGN_VERSION (checksum verified)."
+  fi
+fi
+
 step "Settings ($ENVFILE)"
 if [ ! -f "$ENVFILE" ]; then
   {
@@ -79,7 +120,9 @@ if [ ! -f "$ENVFILE" ]; then
       echo "MAESTRIA_CLOUD_SMTP_PORT=587"
       echo "MAESTRIA_CLOUD_SMTP_USER="
       echo "MAESTRIA_CLOUD_SMTP_PASSWORD="
-      echo "MAESTRIA_CLOUD_SMTP_FROM="
+      echo '# From: a bare address, or a name with the whole value in double quotes:'
+      echo '#   MAESTRIA_CLOUD_SMTP_FROM="Maestria <maestria@example.com>"'
+      echo 'MAESTRIA_CLOUD_SMTP_FROM='
     fi
   } > "$ENVFILE"
   chown root:maestria "$ENVFILE"

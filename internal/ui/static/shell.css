@@ -321,7 +321,9 @@
 .ws-strip::-webkit-scrollbar { display: none; }
 .ws-strip > * { scroll-snap-align: start; }
 
-.overview-cols { display: grid; gap: var(--space-4); align-items: start; }
+.overview-cols { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); align-items: start; }
+.overview-cols > * { min-width: 0; }
+.overview-main { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); align-items: start; }
 .overview-side { display: grid; gap: var(--space-4); align-items: start; min-width: 0; }
 
 @container (min-width: 600px) {

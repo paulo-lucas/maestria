@@ -3,6 +3,7 @@ package inbox
 
 import (
 	"bytes"
+	stdhtml "html"
 	"net/url"
 	"regexp"
 	"strings"
@@ -52,5 +53,45 @@ func RenderMarkdown(src string) string {
 	if err := mdParser.Convert([]byte(src), &buf); err != nil {
 		return "<p>" + bluemonday.StrictPolicy().Sanitize(src) + "</p>"
 	}
-	return strings.TrimSpace(mdPolicy.Sanitize(buf.String()))
+	return commandBlocks(strings.TrimSpace(mdPolicy.Sanitize(buf.String())))
+}
+
+// A fenced block of one shell line (what a Maestro posts for the human to run) is shown as the
+// panel's command block, with a Copy button; anything longer stays a plain scrollable <pre>.
+var (
+	fencedBlock = regexp.MustCompile(`<pre><code(?: class="language-([a-zA-Z0-9_-]{1,32})")?>([^<]*)</code></pre>`)
+	shellLangs  = map[string]bool{"": true, "sh": true, "bash": true, "zsh": true, "shell": true, "console": true, "terminal": true, "cmd": true, "powershell": true, "ps1": true, "fish": true}
+)
+
+const maxCommandChars = 4000
+
+func commandBlocks(h string) string {
+	if !strings.Contains(h, "<pre>") {
+		return h
+	}
+	return fencedBlock.ReplaceAllStringFunc(h, func(m string) string {
+		parts := fencedBlock.FindStringSubmatch(m)
+		if !shellLangs[strings.ToLower(parts[1])] {
+			return m
+		}
+		cmd := strings.TrimRight(stdhtml.UnescapeString(parts[2]), "\r\n")
+		cmd = strings.TrimSpace(cmd)
+		cmd = strings.TrimPrefix(cmd, "$ ")
+		if cmd == "" || strings.ContainsAny(cmd, "\r\n") || len(cmd) > maxCommandChars {
+			return m
+		}
+		return commandBlockHTML(cmd)
+	})
+}
+
+// commandBlockHTML is the markup of ui.CommandBlock (kept identical; a test compares them). It is
+// built here from escaped text only, after sanitizing, so the sanitizer never sees the button.
+func commandBlockHTML(command string) string {
+	words := strings.Split(command, " ")
+	for i, w := range words {
+		words[i] = `<span class="cmd-t">` + stdhtml.EscapeString(w) + `</span>`
+	}
+	return `<div class="code-inline"><code>` + strings.Join(words, " ") + `</code>` +
+		`<button class="btn btn--ghost btn--sm" type="button" data-copy aria-label="Copy command" title="Copy command">` +
+		`<svg class="icon" aria-hidden="true"><use href="#i-copy"/></svg><span data-copy-label>Copy</span></button></div>`
 }

@@ -7,8 +7,8 @@
   <title>Overview · Maestria</title>
   <link rel="stylesheet" href="../tokens.css?v=24a1bf6d">
   <link rel="stylesheet" href="../base.css?v=c9e4f4b3">
-  <link rel="stylesheet" href="../components.css?v=dd38a9eb">
-  <link rel="stylesheet" href="../shell.css?v=71e46632">
+  <link rel="stylesheet" href="../components.css?v=82c31d3d">
+  <link rel="stylesheet" href="../shell.css?v=35c971d6">
   <script src="../assets/sidebar.js?v=ee686b5b"></script>
   <script src="../assets/mock.js?v=a5131c49"></script>
 </head>
@@ -118,6 +118,8 @@
         <a class="menu__item" href="workspace-activity.html" data-ws="teal"><span class="swatch swatch--lg"></span> Harbor <span class="count">1</span></a>
         <a class="menu__item" href="workspace-activity.html" data-ws="amber"><span class="swatch swatch--lg"></span> Juniper <span class="count">1</span></a>
         <a class="menu__item" href="workspace-activity.html" data-ws="rose"><span class="swatch swatch--lg"></span> Quarry </a>
+        <div class="menu__sep"></div>
+        <div class="menu__meta"><span>Server v1.4.0</span></div>
       </div>
     </details>
     <div class="topbar__end">
@@ -190,6 +192,8 @@
       </section>
 
       <div class="overview-cols">
+
+        <div class="overview-main">
 
         <!-- Needs you -->
         <section class="card panel" aria-labelledby="needs-title">
@@ -284,6 +288,47 @@
             </li>
           </ul>
         </section>
+
+        <!-- Updates: notices from every workspace, filtered like Needs you -->
+        <section class="card panel" aria-labelledby="updates-title">
+          <header class="panel__head">
+            <h2 class="panel__title" id="updates-title">
+              <svg class="icon" aria-hidden="true"><use href="#i-bell"/></svg>
+              Updates <span class="count">2</span>
+            </h2>
+            <div class="panel__aside"><button class="btn btn--ghost btn--sm" type="button" data-action="dismiss-updates"><span data-dismiss-label>Mark all as read</span></button></div>
+          </header>
+          <div class="panel__tools">
+            <div class="chip-row" data-filter="updates-list" role="group" aria-label="Filter updates by workspace">
+              <button class="chip" type="button" aria-pressed="true" data-value="all">All <span class="count">2</span></button>
+              <button class="chip" type="button" aria-pressed="false" data-value="atlas" data-ws="blue"><span class="swatch"></span>Atlas <span class="count">1</span></button>
+              <button class="chip" type="button" aria-pressed="false" data-value="harbor" data-ws="teal"><span class="swatch"></span>Harbor <span class="count">1</span></button>
+            </div>
+          </div>
+          <ul class="list" id="updates-list">
+            <li class="task" data-key="atlas">
+              <div class="task__meta">
+                <span class="ws" data-ws="blue">Atlas</span>
+                <span class="task__kind"><svg class="icon" aria-hidden="true"><use href="#i-bell"/></svg>Update</span>
+                <span class="floor-name"><svg class="icon" aria-hidden="true"><use href="#i-branch"/></svg><span class="truncate">billing-webhooks</span></span>
+                <time datetime="2026-11-13T13:40">22m</time>
+              </div>
+              <h3 class="task__title">Tests are green on <code>billing-webhooks</code></h3>
+              <div class="task__actions"><button class="btn btn--sm" type="button"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>Got it</button></div>
+            </li>
+            <li class="task" data-key="harbor">
+              <div class="task__meta">
+                <span class="ws" data-ws="teal">Harbor</span>
+                <span class="task__kind"><svg class="icon" aria-hidden="true"><use href="#i-bell"/></svg>Update</span>
+                <time datetime="2026-11-13T11:05">3h</time>
+              </div>
+              <h3 class="task__title">Nightly import finished: 1,204 rows</h3>
+              <div class="task__actions"><button class="btn btn--sm" type="button"><svg class="icon" aria-hidden="true"><use href="#i-check"/></svg>Got it</button></div>
+            </li>
+          </ul>
+        </section>
+
+        </div>
 
         <div class="overview-side">
 
