@@ -421,7 +421,7 @@
         var bt = function (t, ic, l, c) { return '<a class="bottomnav__item" href="' + esc(wsHref(cur.cid, cur.id, t)) + '"' + (r.tab === t ? ' aria-current="page"' : '') + '>' + icon(ic) + l + (c || '') + '</a>'; };
         bn.innerHTML = bt('activity', 'i-activity', 'Activity') + bt('tasks', 'i-inbox', 'Tasks', cur.needs ? ' <span class="count" data-status="needs">' + cur.needs + '</span>' : '') + bt('chat', 'i-chat', 'Chat') + bt('floors', 'i-floors', 'Floors') + bt('docs', 'i-docs', 'Docs');
       } else {
-        var cur2 = function (n) { return r.name === n || (n === 'connectors' && r.name === 'link') ? ' aria-current="page"' : ''; };
+        var cur2 = function (n) { return r.name === n || (n === 'connectors' && r.name === 'link') || (n === 'usage' && r.name === 'insights') ? ' aria-current="page"' : ''; };
         bn.innerHTML = '<a class="bottomnav__item" href="/"' + cur2('overview') + '>' + icon('i-overview') + 'Overview' + (needs ? ' <span class="count" data-status="needs">' + needs + '</span>' : '') + '</a>' +
           '<a class="bottomnav__item" href="/usage"' + cur2('usage') + '>' + icon('i-gauge') + 'Usage</a>' +
           '<a class="bottomnav__item" href="/connectors"' + cur2('connectors') + '>' + icon('i-plug') + 'Connectors</a>' +
@@ -787,7 +787,16 @@
     try {
       var inner = await fetchMachineView(cid, '/' + page, '');
       return switcher ? '<div class="page">' + switcher + '</div>' + inner : inner;
-    } catch (e) { return machineBanner(cid) || errorCard(e); }
+    } catch (e) {
+      // A machine on an older connector refuses the Insights routes: say what fixes it.
+      if (page === 'insights' && e && e.code === 'route_forbidden') return (switcher ? '<div class="page">' + switcher + '</div>' : '') + insightsNeedsUpdate(connector(cid));
+      return machineBanner(cid) || errorCard(e);
+    }
+  }
+
+  function insightsNeedsUpdate(c) {
+    var cmd = window.MaestriaCmd ? window.MaestriaCmd.html('maestria update') : '<code>maestria update</code>';
+    return '<div class="page page--narrow"><div class="card"><div class="empty"><span class="empty__icon">' + icon('i-sparkle', 'icon--lg') + '</span><p class="empty__title">Update this machine to see Insights</p><p class="empty__text">' + esc((c && c.name) || 'This machine') + ' runs a version of Maestria from before Insights. Run this on it:</p>' + cmd + '</div></div></div>';
   }
 
   // ---- security page ----
