@@ -13,6 +13,13 @@ All notable changes to Maestria are listed here. The format follows [Keep a Chan
 
 - A floor created in Maestri that the Maestro never recorded is now kept in Past with the time Maestria first saw it as its start, instead of starting and ending at the same moment.
 
+## [0.1.4] - 2026-11-15
+
+### Fixed
+
+- **A sent chat message did not show until a reload.** When a redraw was already on its way while the message was sent (common on a slow connection), the redraw that should show it was dropped, and the composer then held back the next ones. It now always runs.
+- **Scrolling the chat stopped with a jolt** when the page redrew during a swipe. The message list now stays the same element across a redraw, so a scroll in progress carries on, and its position is only changed when something above the reader actually moved.
+
 ## [0.1.3] - 2026-11-15
 
 ### Fixed

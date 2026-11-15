@@ -5,6 +5,7 @@
   const csrf = body.dataset.csrf;
   const DRAFT_PREFIX = 'maestria.draft.';
   let pendingRefresh = false;
+  let pendingForce = false;
   let focusAfterRedraw = null; // { id, until }: see settleFocus
   let refreshTimer = null;
   let refreshing = false;
@@ -185,11 +186,16 @@
       return;
     }
     if (refreshing) {
+      // A forced redraw (after sending a chat message, say) must not be lost to one already in
+      // flight: that one may have fetched the page before the change, and by the time it ends
+      // the composer has the focus again, which holds back ordinary redraws.
       pendingRefresh = true;
+      if (force) pendingForce = true;
       return;
     }
     refreshing = true;
     pendingRefresh = false;
+    pendingForce = false;
 
     try {
       let html;
@@ -236,7 +242,16 @@
       swap('aside.sidebar .nav');
       swap('header.topbar .scope');
       swap('nav.bottomnav');
-      swap('main#main');
+      const nextMain = doc.querySelector('main#main');
+      const nextChat = nextMain && nextMain.querySelector('#chat-log');
+      const curMain = document.getElementById('main');
+      if (curChat && nextChat && curMain && nextMain && curMain.contains(curChat)) {
+        // Keep the message list's element: replacing the element that scrolls stops a scroll in
+        // progress (a flick at the end of a swipe) and loses its position.
+        swapKeeping(curMain, nextMain, curChat, nextChat);
+      } else {
+        swap('main#main');
+      }
 
       const newMain = document.getElementById('main');
       restoreOpenDisclosures(openDisclosures, newMain);
@@ -259,7 +274,7 @@
           // the background), and its scroll position then reads 0, the very first message.
           const newKeys = chatKeys(newChat);
           if (prevKeys.length) chatUnseen += countNewKeys(prevKeys, newKeys);
-          if (newKeys.length && !restoreChatAnchor(newChat, chatAnchor) && prevKeys.length) newChat.scrollTop = prevChatScroll;
+          if (newKeys.length && !restoreChatAnchor(newChat, chatAnchor) && prevKeys.length && newChat !== curChat) newChat.scrollTop = prevChatScroll;
         } else {
           window.scrollTo(0, prevScrollY);
         }
@@ -271,10 +286,41 @@
       // Transient error; next SSE event will retry.
     } finally {
       refreshing = false;
-      if (pendingRefresh && !isUserBusy()) {
+      if (pendingForce) {
+        refreshNow(true);
+      } else if (pendingRefresh && !isUserBusy()) {
         refreshNow(false);
       }
     }
+  }
+
+  // swapKeeping puts next in place of cur but leaves keep (an element inside cur) in the document:
+  // keep's ancestors are updated in place, their other children are replaced, and keep takes
+  // keepNext's attributes and, when they differ, its contents. It falls back to a plain
+  // replacement when the two trees do not line up.
+  function swapKeeping(cur, next, keep, keepNext) {
+    syncAttributes(cur, next);
+    if (cur === keep) {
+      if (keep.innerHTML !== keepNext.innerHTML) keep.replaceChildren(...keepNext.childNodes);
+      return;
+    }
+    const curChild = Array.from(cur.children).find((c) => c.contains(keep));
+    const nextChild = Array.from(next.children).find((c) => c.contains(keepNext));
+    if (!curChild || !nextChild || curChild.tagName !== nextChild.tagName || (curChild === keep) !== (nextChild === keepNext)) {
+      cur.replaceWith(next);
+      return;
+    }
+    const nodes = Array.from(next.childNodes);
+    const at = nodes.indexOf(nextChild);
+    Array.from(cur.childNodes).forEach((n) => { if (n !== curChild) n.remove(); });
+    curChild.before(...nodes.slice(0, at));
+    curChild.after(...nodes.slice(at + 1));
+    swapKeeping(curChild, nextChild, keep, keepNext);
+  }
+
+  function syncAttributes(el, from) {
+    Array.from(el.attributes).forEach((a) => { if (!from.hasAttribute(a.name)) el.removeAttribute(a.name); });
+    Array.from(from.attributes).forEach((a) => { if (el.getAttribute(a.name) !== a.value) el.setAttribute(a.name, a.value); });
   }
 
   // ---- Chat scroll: follow the newest message until the reader scrolls up ----
@@ -328,7 +374,9 @@
     const el = Array.from(log.querySelectorAll('[data-msg-key], [data-msg-id]'))
       .find((m) => (m.dataset.msgKey || m.dataset.msgId) === anchor.key);
     if (!el) return false;
-    log.scrollTop += el.getBoundingClientRect().top - log.getBoundingClientRect().top - anchor.offset;
+    const delta = el.getBoundingClientRect().top - log.getBoundingClientRect().top - anchor.offset;
+    // Writing scrollTop stops a scroll in progress, so leave it alone when nothing moved.
+    if (Math.abs(delta) >= 1) log.scrollTop += delta;
     return true;
   }
 
@@ -337,7 +385,8 @@
     chatUnseen = 0;
     chatAnchor = null;
     const el = chatScroller();
-    if (el) el.scrollTop = el.scrollHeight;
+    // Only when not there yet: writing scrollTop stops a scroll in progress.
+    if (el && el.scrollTop + el.clientHeight < el.scrollHeight - 1) el.scrollTop = el.scrollHeight;
   }
 
   function syncChatJump() {
@@ -358,8 +407,11 @@
   // Scroll events don't bubble: listen in the capture phase so a swapped-in #chat-log is covered.
   document.addEventListener('scroll', (e) => {
     if (!e.target || e.target.id !== 'chat-log') return;
+    // A log without messages (still connecting) says nothing about where the reader is: its
+    // position snaps to the top when the messages go, and that must not pin or unpin the chat.
+    if (!chatKeys(e.target).length) return;
     const atBottom = chatAtBottom();
-    if (!atBottom && chatKeys(e.target).length) chatAnchor = captureChatAnchor(e.target);
+    if (!atBottom) chatAnchor = captureChatAnchor(e.target);
     if (atBottom !== chatPinned || (atBottom && chatUnseen)) {
       chatPinned = atBottom;
       if (atBottom) chatUnseen = 0;
