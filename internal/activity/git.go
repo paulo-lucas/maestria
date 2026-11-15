@@ -65,3 +65,47 @@ func BranchLanded(dir, branch string) bool {
 	_, ancestor := git(dir, "merge-base", "--is-ancestor", ref, def)
 	return ancestor
 }
+
+// BranchTip returns the commit a local branch points at in dir ("" when there is no such branch,
+// no git, or dir is not a repository). The panel records it while a floor is alive, so that the
+// floor can still be recognised as landed after its branch has been deleted.
+func BranchTip(dir, branch string) string {
+	if dir == "" || !validBranch(branch) {
+		return ""
+	}
+	out, ok := git(dir, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch+"^{commit}")
+	if !ok || !validSHA(out) {
+		return ""
+	}
+	return out
+}
+
+// CommitLanded reports whether commit is an ancestor of the repository's default branch in dir:
+// the same test as BranchLanded, for a commit that outlived its branch.
+func CommitLanded(dir, commit string) bool {
+	if dir == "" || !validSHA(commit) {
+		return false
+	}
+	if _, ok := git(dir, "cat-file", "-e", commit+"^{commit}"); !ok {
+		return false
+	}
+	def := defaultBranchRef(dir)
+	if def == "" {
+		return false
+	}
+	_, ancestor := git(dir, "merge-base", "--is-ancestor", commit, def)
+	return ancestor
+}
+
+// validSHA accepts a full hexadecimal object name (SHA-1 or SHA-256) and nothing else.
+func validSHA(s string) bool {
+	if len(s) != 40 && len(s) != 64 {
+		return false
+	}
+	for _, c := range s {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
+}

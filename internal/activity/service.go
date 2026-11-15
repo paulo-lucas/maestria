@@ -220,10 +220,23 @@ func (s *Service) expirePrompts() {
 	}
 }
 
+// workspacePath is the folder of a registered workspace ("" when unknown).
+func (s *Service) workspacePath(wsID string) string {
+	for _, w := range s.workspaces() {
+		if w.ID == wsID {
+			return w.Path
+		}
+	}
+	return ""
+}
+
 type seenFloor struct {
 	Name   string `json:"name"`
 	Branch string `json:"branch,omitempty"`
-	Done   bool   `json:"done,omitempty"` // last seen done or merged: it landed rather than being cancelled
+	// Tip is the commit the branch pointed at when last seen. A floor that lands and has its branch
+	// deleted at once leaves nothing but this commit to tell it was merged.
+	Tip  string `json:"tip,omitempty"`
+	Done bool   `json:"done,omitempty"` // last seen done or merged: it landed rather than being cancelled
 	// First is when the floor was first seen (epoch ms): history recorded since then, for example
 	// by the Maestro running `maestria floor land`, is not recorded a second time.
 	First int64 `json:"first,omitempty"`
@@ -245,6 +258,15 @@ func (s *Service) trackFloors(wsID string, snap *wire.FeedSnapshot) {
 	if floorsNow == nil || !snap.Workspace.IsLoaded {
 		return // an incomplete snapshot never proves a floor is gone
 	}
+	// The tip of each live floor branch, read before the lock is taken (git can be slow).
+	tips := map[string]string{}
+	if dir := s.workspacePath(wsID); dir != "" {
+		for _, f := range floorsNow {
+			if f.ID != "" && f.Branch != "" {
+				tips[f.ID] = BranchTip(dir, f.Branch)
+			}
+		}
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	seen := s.loadSeen()
@@ -259,7 +281,12 @@ func (s *Service) trackFloors(wsID string, snap *wire.FeedSnapshot) {
 		if p, ok := prev[f.ID]; ok && p.First > 0 {
 			first = p.First
 		}
-		cur[f.ID] = seenFloor{Name: f.Name, Branch: f.Branch, Done: done, First: first}
+		// Keep the last known tip when the branch cannot be read this time.
+		tip := tips[f.ID]
+		if tip == "" {
+			tip = prev[f.ID].Tip
+		}
+		cur[f.ID] = seenFloor{Name: f.Name, Branch: f.Branch, Tip: tip, Done: done, First: first}
 	}
 	changed := len(prev) != len(cur)
 	for id, p := range prev {
@@ -319,10 +346,10 @@ func (s *Service) recordGone(wsID string, f seenFloor) {
 	// is already in the default branch was landed. Otherwise fall back to what Wire last showed.
 	landed := f.Done
 	if !landed {
-		for _, w := range s.workspaces() {
-			if w.ID == wsID {
-				landed = BranchLanded(w.Path, f.Branch)
-			}
+		if dir := s.workspacePath(wsID); dir != "" {
+			// The branch may be gone already (landed with its branch deleted): then the commit
+			// recorded while the floor was alive is what git can still place in the default branch.
+			landed = BranchLanded(dir, f.Branch) || CommitLanded(dir, f.Tip)
 		}
 	}
 	outcome := "cancelled"

@@ -3,6 +3,7 @@ package activity
 import (
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -76,6 +77,81 @@ func TestBranchLandedFallsBackToTheCheckedOutBranch(t *testing.T) {
 	// No main or master any more and no remote: the checked-out branch is the default.
 	if !BranchLanded(dir, "merged") {
 		t.Error("checked-out branch should be the default")
+	}
+}
+
+func TestBranchTipAndCommitLanded(t *testing.T) {
+	dir := repoWithFloors(t)
+	tip := BranchTip(dir, "open")
+	if tip == "" || len(tip) != 40 {
+		t.Fatalf("BranchTip(open) = %q", tip)
+	}
+	if BranchTip(dir, "nope") != "" || BranchTip(dir, "-D") != "" || BranchTip("", "open") != "" || BranchTip(t.TempDir(), "main") != "" {
+		t.Error("a missing branch, an option-like name or a non-repository has no tip")
+	}
+	if CommitLanded(dir, tip) {
+		t.Error("an unmerged commit is not landed")
+	}
+	merged := BranchTip(dir, "merged")
+	if !CommitLanded(dir, merged) {
+		t.Error("a merged commit is landed")
+	}
+	for _, bad := range []string{"", "HEAD", "main", "--all", merged[:10], strings.Repeat("0", 40)} {
+		if CommitLanded(dir, bad) {
+			t.Errorf("CommitLanded(%q) should be false", bad)
+		}
+	}
+}
+
+// A floor that lands and has its branch deleted right away is recorded as landed, from the tip
+// the panel saw while the floor was alive; a deleted floor that never merged is cancelled.
+func TestFloorLandedAndBranchDeletedAtOnceIsRecordedAsLanded(t *testing.T) {
+	dir := repoWithFloors(t)
+	for _, b := range []string{"late", "abandoned"} {
+		run(t, dir, "checkout", "-q", "-b", b, "main")
+		run(t, dir, "commit", "-q", "--allow-empty", "-m", b+" work")
+		run(t, dir, "checkout", "-q", "main")
+	}
+	db, err := store.OpenPath(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	s := New(Options{
+		DB: db, ConfigDir: t.TempDir(), Now: time.Now,
+		Workspaces: func() []workspaces.Workspace { return []workspaces.Workspace{{ID: "atlas", Name: "Atlas", Path: dir}} },
+	})
+	snap := func(fl ...wire.FloorMeta) *wire.FeedSnapshot {
+		return &wire.FeedSnapshot{Workspace: wire.WorkspaceMeta{IsLoaded: true}, Floors: append([]wire.FloorMeta{{Name: "main"}}, fl...)}
+	}
+	work := &wire.FloorStatus{State: "working"}
+	// Alive: the tips are recorded. (A second snapshot with no change must keep them.)
+	alive := snap(
+		wire.FloorMeta{ID: "f1", Name: "late", Branch: "late", Status: work},
+		wire.FloorMeta{ID: "f2", Name: "abandoned", Branch: "abandoned", Status: work},
+	)
+	s.trackFloors("atlas", alive)
+	s.trackFloors("atlas", alive)
+
+	// Land "late" and delete both branches in one go, before the panel looks again.
+	run(t, dir, "merge", "-q", "--no-ff", "-m", "land late", "late")
+	run(t, dir, "branch", "-q", "-D", "late")
+	run(t, dir, "branch", "-q", "-D", "abandoned")
+	if BranchLanded(dir, "late") {
+		t.Fatal("the branch should be gone")
+	}
+	s.trackFloors("atlas", snap())
+
+	past, _ := floors.List(db, floors.ListOptions{WorkspaceID: "atlas", IncludePast: true})
+	got := map[string]string{}
+	for _, f := range past {
+		got[f.Name] = f.State
+	}
+	if got["late"] != floors.StateLanded {
+		t.Errorf("late recorded as %q, want landed (all: %v)", got["late"], got)
+	}
+	if got["abandoned"] != floors.StateCancelled {
+		t.Errorf("abandoned recorded as %q, want cancelled (all: %v)", got["abandoned"], got)
 	}
 }
 
