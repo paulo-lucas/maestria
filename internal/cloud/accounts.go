@@ -29,6 +29,8 @@ var (
 	ErrInvalid  = errors.New("invalid")
 	ErrExpired  = errors.New("expired")
 	ErrNoMailer = errors.New("email is not configured")
+	// ErrNotReady: the account has not finished sign-up (verified email and two-factor).
+	ErrNotReady = errors.New("account has not finished signing up")
 )
 
 // LockedError means a limiter refuses attempts for now.
@@ -48,6 +50,8 @@ type User struct {
 	EnrolledAt int64
 	DisabledAt int64
 	CreatedAt  int64
+	// IsAdmin is read from the users table on every request, never copied into a session.
+	IsAdmin bool
 }
 
 // CanLogin reports whether the account may sign in.
@@ -149,8 +153,8 @@ func MaskEmail(e string) string {
 func (a *Accounts) userBy(query string, args ...any) (*User, error) {
 	var u User
 	var ver, enr, dis sql.NullInt64
-	err := a.db.QueryRow("SELECT id, email, email_verified_at, totp_enrolled_at, disabled_at, created_at FROM users WHERE "+query, args...).
-		Scan(&u.ID, &u.Email, &ver, &enr, &dis, &u.CreatedAt)
+	err := a.db.QueryRow("SELECT id, email, email_verified_at, totp_enrolled_at, disabled_at, created_at, is_admin FROM users WHERE "+query, args...).
+		Scan(&u.ID, &u.Email, &ver, &enr, &dis, &u.CreatedAt, &u.IsAdmin)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -997,7 +1001,7 @@ func (a *Accounts) Purge() {
 
 // ListUsers returns every account, newest first.
 func (a *Accounts) ListUsers() ([]User, error) {
-	rows, err := a.db.Query("SELECT id, email, email_verified_at, totp_enrolled_at, disabled_at, created_at FROM users ORDER BY created_at DESC")
+	rows, err := a.db.Query("SELECT id, email, email_verified_at, totp_enrolled_at, disabled_at, created_at, is_admin FROM users ORDER BY created_at DESC")
 	if err != nil {
 		return nil, err
 	}
@@ -1006,7 +1010,7 @@ func (a *Accounts) ListUsers() ([]User, error) {
 	for rows.Next() {
 		var u User
 		var ver, enr, dis sql.NullInt64
-		if err := rows.Scan(&u.ID, &u.Email, &ver, &enr, &dis, &u.CreatedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.Email, &ver, &enr, &dis, &u.CreatedAt, &u.IsAdmin); err != nil {
 			return nil, err
 		}
 		u.VerifiedAt, u.EnrolledAt, u.DisabledAt = ver.Int64, enr.Int64, dis.Int64
@@ -1042,6 +1046,37 @@ func (a *Accounts) SetDisabled(rawEmail string, disabled bool) (*User, error) {
 		}
 		a.event(u.ID, "user_enabled", "", map[string]any{"via": "admin"})
 	}
+	return a.UserByID(u.ID)
+}
+
+// SetAdmin makes an account an administrator, or takes that away. It is only called from the
+// server's command line: no web route reaches it. Only an account that finished sign-up (email
+// verified, two-factor on, not disabled) can be promoted. Demoting takes effect on the person's
+// next request, because the flag is read from the users table every time.
+func (a *Accounts) SetAdmin(rawEmail string, admin bool) (*User, error) {
+	email, ok := NormalizeEmail(rawEmail)
+	if !ok {
+		return nil, ErrInvalid
+	}
+	u, err := a.UserByEmail(email)
+	if err != nil {
+		return nil, err
+	}
+	if u == nil {
+		return nil, ErrInvalid
+	}
+	if admin && !u.CanLogin() {
+		return nil, ErrNotReady
+	}
+	v := 0
+	event := "user_demoted"
+	if admin {
+		v, event = 1, "user_promoted"
+	}
+	if _, err := a.db.Exec("UPDATE users SET is_admin = ? WHERE id = ?", v, u.ID); err != nil {
+		return nil, err
+	}
+	a.event(u.ID, event, "", map[string]any{"via": "cli"})
 	return a.UserByID(u.ID)
 }
 

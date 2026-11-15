@@ -64,6 +64,10 @@ type Config struct {
 	// notices and password resets together). It protects the SMTP provider's quota and stops the
 	// server from being used to bomb inboxes. MAESTRIA_CLOUD_MAIL_DAILY_LIMIT overrides it.
 	MailDailyLimit int `json:"mailDailyLimit"`
+	// Signup is who may create an account: "invite" (default, needs an invitation from an
+	// administrator), "open" (anyone) or "closed" (nobody, not even with an invitation).
+	// MAESTRIA_CLOUD_SIGNUP overrides it.
+	Signup string `json:"signup"`
 	// UpdateCheck lets the server ask GitHub (at most once a day) which release is newest, so the
 	// Connectors page can say a machine is behind. false never touches the network. Browsers never
 	// make that request.
@@ -82,9 +86,17 @@ func Defaults() *Config {
 		Login:                Limits{MaxFailuresPerIP: 5, MaxFailuresPerAccount: 8, MaxFailuresGlobal: 100, WindowSeconds: 900, LockoutSeconds: 900},
 		SMTP:                 SMTP{Port: 587},
 		MailDailyLimit:       200,
+		Signup:               SignupInvite,
 		UpdateCheck:          true,
 	}
 }
+
+// Sign-up modes.
+const (
+	SignupInvite = "invite"
+	SignupOpen   = "open"
+	SignupClosed = "closed"
+)
 
 // DefaultDataDir is $MAESTRIA_CLOUD_DIR, %AppData%\maestria-cloud on Windows, or ~/.config/maestria-cloud.
 func DefaultDataDir(getenv func(string) string, home string) string {
@@ -133,6 +145,9 @@ func LoadConfig(dir string, getenv func(string) string) (*Config, error) {
 		set(&cfg.PublicURL, "PUBLIC_URL")
 		set(&cfg.TrustProxy, "TRUST_PROXY")
 		set(&cfg.DevEmail, "DEV_EMAIL")
+		if v := strings.ToLower(env("SIGNUP")); v != "" {
+			cfg.Signup = v
+		}
 		set(&cfg.SMTP.Host, "SMTP_HOST")
 		set(&cfg.SMTP.Username, "SMTP_USER")
 		set(&cfg.SMTP.Password, "SMTP_PASSWORD")
@@ -167,6 +182,11 @@ func (c *Config) Validate() error {
 	case "", "xff", "cf":
 	default:
 		return errors.New(`trustProxy must be "", "xff" or "cf"`)
+	}
+	switch c.Signup {
+	case SignupInvite, SignupOpen, SignupClosed:
+	default:
+		return errors.New(`signup (MAESTRIA_CLOUD_SIGNUP) must be "invite", "open" or "closed"`)
 	}
 	if c.ProxyHops < 1 || c.ProxyHops > 10 {
 		return errors.New("proxyHops must be between 1 and 10")

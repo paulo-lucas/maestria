@@ -123,6 +123,25 @@ var migrations = []string{
 	CREATE TRIGGER audit_no_update BEFORE UPDATE ON audit BEGIN SELECT RAISE(ABORT, 'audit log is append-only'); END;
 	CREATE TRIGGER audit_no_delete BEFORE DELETE ON audit BEGIN SELECT RAISE(ABORT, 'audit log is append-only'); END;
 	`,
+	// Administrators and sign-up invitations. is_admin is only ever set from the server's command
+	// line. An invitation is a random token stored as a hash; it is spent by the sign-up that uses
+	// it (used_at is set in the same transaction as the account change).
+	`
+	ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0;
+	CREATE TABLE invites (
+		id         TEXT PRIMARY KEY,                    -- shown to admins, used in the audit log; never the token
+		token_hash TEXT NOT NULL UNIQUE,                -- sha256 of the token in the link
+		created_by TEXT REFERENCES users(id) ON DELETE SET NULL, -- null when made from the server's command line
+		note       TEXT NOT NULL DEFAULT '',
+		email      TEXT,                                -- normalized; when set only this address can use it
+		created_at INTEGER NOT NULL,
+		expires_at INTEGER NOT NULL,
+		used_at    INTEGER,
+		used_by    TEXT REFERENCES users(id) ON DELETE SET NULL,
+		revoked_at INTEGER
+	);
+	CREATE INDEX invites_created ON invites (created_at);
+	`,
 }
 
 // OpenDB opens (creating if needed) the cloud database in dir.
