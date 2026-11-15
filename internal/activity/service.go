@@ -258,6 +258,9 @@ func (s *Service) trackFloors(wsID string, snap *wire.FeedSnapshot) {
 	if floorsNow == nil || !snap.Workspace.IsLoaded {
 		return // an incomplete snapshot never proves a floor is gone
 	}
+	// When the floors were seen: taken before git runs, so a slow git never makes a floor look
+	// newer than history recorded in the meantime.
+	seenAt := s.opts.Now().UnixMilli()
 	// The tip of each live floor branch, read before the lock is taken (git can be slow).
 	tips := map[string]string{}
 	if dir := s.workspacePath(wsID); dir != "" {
@@ -277,7 +280,7 @@ func (s *Service) trackFloors(wsID string, snap *wire.FeedSnapshot) {
 			continue
 		}
 		done := (f.Status != nil && f.Status.State == "done") || (f.PullRequest != nil && f.PullRequest.State == "merged")
-		first := s.opts.Now().UnixMilli()
+		first := seenAt
 		if p, ok := prev[f.ID]; ok && p.First > 0 {
 			first = p.First
 		}
