@@ -168,6 +168,8 @@ go build -o maestria-cloud ./cmd/maestria-cloud
 
 After changing the panel's design in `design/`, run `go generate ./internal/ui`. Release archives for all five targets, with checksums and the Homebrew formula, come from `go run ./tools/release`.
 
+Want to help? Read [CONTRIBUTING.md](CONTRIBUTING.md). Security problems go through [SECURITY.md](SECURITY.md), not public issues.
+
 More: the design of the panel is in [design/](design/README.md), the product decisions in [docs/v2-spec.md](docs/v2-spec.md), the architecture in [docs/v2-architecture.md](docs/v2-architecture.md), the Maestro protocol in [docs/protocol.md](docs/protocol.md) and the hosted protocol in [docs/hosted-protocol.md](docs/hosted-protocol.md).
 
 ## License
