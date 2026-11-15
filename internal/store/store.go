@@ -10,6 +10,8 @@ import (
 	"net/url"
 	"path/filepath"
 	"runtime"
+	"strings"
+	"time"
 
 	"github.com/paulo-lucas/maestria/internal/privfile"
 
@@ -248,7 +250,7 @@ func OpenWith(path string, migs []string) (*sql.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("store: open %s: %w", path, err)
 	}
-	if err := db.Ping(); err != nil {
+	if err := pingWhileBusy(db); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("store: open %s: %w", path, err)
 	}
@@ -259,36 +261,71 @@ func OpenWith(path string, migs []string) (*sql.DB, error) {
 	return db, nil
 }
 
-// Migrate applies pending migrations, each in its own transaction.
+// pingWhileBusy makes the first connection. Switching a brand-new database to WAL needs the file
+// to itself and, unlike other statements, does not wait for the busy timeout: when another
+// process is creating the same database at that moment, try again until it is done.
+func pingWhileBusy(db *sql.DB) error {
+	deadline := time.Now().Add(10 * time.Second)
+	for wait := 5 * time.Millisecond; ; wait = min(wait*2, 200*time.Millisecond) {
+		err := db.Ping()
+		if err == nil || !isBusy(err) || time.Now().After(deadline) {
+			return err
+		}
+		time.Sleep(wait)
+	}
+}
+
+func isBusy(err error) bool {
+	msg := err.Error()
+	return strings.Contains(msg, "SQLITE_BUSY") || strings.Contains(msg, "database is locked")
+}
+
+// Migrate applies pending migrations in one exclusive transaction.
 func Migrate(db *sql.DB) error { return MigrateWith(db, migrations) }
 
 // MigrateWith applies the given migrations (PRAGMA user_version records how many ran).
-func MigrateWith(db *sql.DB, migrations []string) error {
+//
+// Two processes can open a fresh database at the same time (`maestria serve` and an agent's
+// `maestria post`). The write lock is therefore taken first (BEGIN IMMEDIATE waits for it, up to
+// the busy timeout) and the schema version is read only after that, so the one that waited sees
+// what the other applied and runs only what is still missing. All pending migrations share the
+// transaction: a failure leaves the database as it was.
+func MigrateWith(db *sql.DB, migrations []string) (err error) {
 	ctx := context.Background()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("store: migrate: %w", err)
+	}
+	defer conn.Close()
+	if _, err := conn.ExecContext(ctx, "BEGIN IMMEDIATE"); err != nil {
+		return fmt.Errorf("store: migrate: lock the database: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			conn.ExecContext(ctx, "ROLLBACK")
+		}
+	}()
+
 	var version int
-	if err := db.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
+	if err := conn.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
 		return fmt.Errorf("store: read schema version: %w", err)
 	}
 	if version > len(migrations) {
 		return fmt.Errorf("store: database schema version %d is newer than this build (%d); upgrade maestria", version, len(migrations))
 	}
 	for i := version; i < len(migrations); i++ {
-		tx, err := db.BeginTx(ctx, nil)
-		if err != nil {
-			return err
-		}
-		if _, err := tx.ExecContext(ctx, migrations[i]); err != nil {
-			tx.Rollback()
+		if _, err := conn.ExecContext(ctx, migrations[i]); err != nil {
 			return fmt.Errorf("store: migration %d: %w", i+1, err)
 		}
-		if _, err := tx.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", i+1)); err != nil {
-			tx.Rollback()
-			return fmt.Errorf("store: migration %d: %w", i+1, err)
-		}
-		if err := tx.Commit(); err != nil {
+		if _, err := conn.ExecContext(ctx, fmt.Sprintf("PRAGMA user_version = %d", i+1)); err != nil {
 			return fmt.Errorf("store: migration %d: %w", i+1, err)
 		}
 	}
+	if _, err := conn.ExecContext(ctx, "COMMIT"); err != nil {
+		return fmt.Errorf("store: migrate: commit: %w", err)
+	}
+	committed = true
 	return nil
 }
 

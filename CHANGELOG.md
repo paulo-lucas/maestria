@@ -21,6 +21,7 @@ All notable changes to Maestria are listed here. The format follows [Keep a Chan
 - The **Later** menu was clipped by the card on the last item. It is now a popover that opens upward when there is no room below, and a bottom sheet on a phone.
 - Long code or commands in an inbox item no longer widen the card or push the time and buttons out of view.
 - A floor that landed and had its branch deleted at once was recorded as cancelled. The panel now remembers the branch tip while the floor is alive and uses that commit to tell it was merged. (A floor that never made a commit of its own still reads as landed, as before: git cannot tell the two apart.)
+- Two commands opening a brand-new database at the same moment (the panel and an agent's `maestria post` on a fresh config dir) could fail with "table sessions already exists" or "database is locked". The first open now takes the write lock before reading the schema version and applies the missing migrations in one transaction, and waits while another process creates the file.
 - On a phone, the Security audit log's date no longer overlaps the event text.
 - A one-line notice longer than the title limit shows its full text under the shortened title.
 - After **Got it**, **Mark all as read** or an answer removes an item, keyboard focus moves to that list's heading instead of being lost.
