@@ -5,7 +5,13 @@
 #
 # Usage (as root, from the folder holding the maestria-cloud binary):
 #   sudo ./setup-cloud.sh --public-url https://maestria.example.com \
-#        [--binary ./maestria-cloud] [--tunnel-token <token>] [--dev-email]
+#        [--binary ./maestria-cloud] [--tunnel-token <token>] [--dev-email] [--no-auto-update]
+#
+# Updates: by default a systemd timer runs `maestria-cloud update --yes` every ~15 minutes, so
+# pushing a release tag updates this machine (root is needed to replace the binary; the service
+# itself keeps running as the maestria user). Pass --no-auto-update to skip it, or to turn it
+# off on a machine that has it. Releases are checksum-verified; a new version that does not
+# answer /healthz within 30 s is rolled back.
 #
 # Safe to re-run: it updates the binary and unit, and keeps existing settings and data.
 set -euo pipefail
@@ -14,6 +20,7 @@ PUBLIC_URL=""
 BINARY="./maestria-cloud"
 TUNNEL_TOKEN=""
 DEV_EMAIL=0
+AUTO_UPDATE=1
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -21,7 +28,8 @@ while [ $# -gt 0 ]; do
     --binary) BINARY="$2"; shift 2 ;;
     --tunnel-token) TUNNEL_TOKEN="$2"; shift 2 ;;
     --dev-email) DEV_EMAIL=1; shift ;;
-    -h|--help) sed -n '2,10p' "$0"; exit 0 ;;
+    --no-auto-update) AUTO_UPDATE=0; shift ;;
+    -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
     *) echo "Unknown option: $1" >&2; exit 2 ;;
   esac
 done
@@ -146,8 +154,58 @@ Persistent=true
 WantedBy=timers.target
 UNIT
 
+if [ "$AUTO_UPDATE" -eq 1 ]; then
+  step "Automatic updates (every ~15 minutes, from GitHub releases)"
+  # Runs as root: replacing /usr/local/bin/maestria-cloud needs it. The server itself keeps
+  # running as the maestria user. The update command verifies the release checksum, backs up
+  # the database, restarts the service and rolls back if /healthz does not answer.
+  cat > /etc/systemd/system/maestria-cloud-update.service <<'UNIT'
+[Unit]
+Description=Update maestria-cloud from the latest GitHub release
+Documentation=https://github.com/paulo-lucas/maestria/blob/main/docs/releasing.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/maestria-cloud/env
+ExecStart=/usr/local/bin/maestria-cloud update --yes
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+LockPersonality=true
+RestrictSUIDSGID=true
+UNIT
+  cat > /etc/systemd/system/maestria-cloud-update.timer <<'UNIT'
+[Unit]
+Description=Look for a new maestria-cloud release every 15 minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=15min
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=timers.target
+UNIT
+else
+  step "Automatic updates: off (--no-auto-update)"
+  if [ -f /etc/systemd/system/maestria-cloud-update.timer ]; then
+    systemctl disable --now maestria-cloud-update.timer >/dev/null 2>&1 || true
+    rm -f /etc/systemd/system/maestria-cloud-update.timer /etc/systemd/system/maestria-cloud-update.service
+    echo "Removed the update timer."
+  fi
+  echo "Update by hand with: sudo maestria-cloud update"
+fi
+
 systemctl daemon-reload
 systemctl enable --now maestria-cloud maestria-cloud-backup.timer >/dev/null
+if [ "$AUTO_UPDATE" -eq 1 ]; then
+  systemctl enable --now maestria-cloud-update.timer >/dev/null
+fi
 systemctl restart maestria-cloud
 
 step "Health check"
@@ -175,3 +233,8 @@ step "Done"
 echo "Public address: $PUBLIC_URL"
 echo "Logs:           journalctl -u maestria-cloud -f"
 echo "Settings:       $ENVFILE (then: systemctl restart maestria-cloud)"
+if [ "$AUTO_UPDATE" -eq 1 ]; then
+  echo "Updates:        automatic (journalctl -u maestria-cloud-update -n 20; opt out: re-run with --no-auto-update)"
+else
+  echo "Updates:        manual (sudo maestria-cloud update)"
+fi
