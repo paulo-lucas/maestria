@@ -84,8 +84,10 @@
         {{icon "i-overview" "scope__all-icon"}}<span class="truncate" id="scope-label">All workspaces</span>
         {{icon "i-chevron-down"}}
       </summary>
-      <div class="menu__panel" id="scope-panel">
+      <div class="menu__panel" id="scope-panel"{{if .ServerVersion}} data-version="Server {{.ServerVersion}}"{{if .ServerUpdate}} data-update="{{.ServerUpdate}}"{{end}}{{end}}>
         <a class="menu__item" href="/" aria-current="page">{{icon "i-overview"}} All workspaces</a>
+        {{if .ServerVersion}}<div class="menu__sep"></div>
+        <div class="menu__meta"><span>Server {{.ServerVersion}}</span>{{if .ServerUpdate}}<a class="ver-dot" data-status="info" href="/connectors" aria-label="{{.ServerUpdate}} is available" title="{{.ServerUpdate}} is available"></a>{{end}}</div>{{end}}
       </div>
     </details>
     <div class="topbar__end">

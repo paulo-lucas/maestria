@@ -7,6 +7,7 @@ All notable changes to Maestria are listed here. The format follows [Keep a Chan
 ### Added
 
 - **Overview shows every update.** Notices from all workspaces now sit in an **Updates** card under Needs you, newest first, with workspace filter chips, **Got it** on each one and a **Mark all as read** button that acts on the chosen workspace (or all of them). Local panel and hosted site.
+- **The version on a phone.** The scope menu ends with the version (`maestria vX` locally, `Server vX` on the hosted site) and Security has an **About** line with it, both with the same "newer release" dot as the desktop sidebar.
 - **`setup-cloud.sh` installs cosign** (a pinned release, its SHA-256 checked) so the VM's automatic updates verify who built each release. Skip it with `--no-cosign`; an existing cosign is kept.
 
 ### Changed

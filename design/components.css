@@ -889,6 +889,18 @@ a.agent-line:hover { background: var(--surface-2); }
 .menu__item[aria-current="page"] { background: var(--surface-2); font-weight: var(--fw-medium); }
 .menu__item .count, .menu__item .status { margin-left: auto; }
 .menu__sep { height: 1px; margin: var(--space-1) 0; background: var(--line); }
+/* The version at the foot of the scope menu (the sidebar footer that shows it is desktop only). */
+.menu__meta, .about-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--text-3);
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+}
+.menu__meta { padding: var(--space-2) var(--space-3) var(--space-1); }
+.menu__meta > span:first-child, .about-line > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Floating menu: a button that opens a native popover. The panel lives in the top layer, so no
    ancestor (a card with overflow: hidden, a scroll area) can clip it. app.js anchors it to the

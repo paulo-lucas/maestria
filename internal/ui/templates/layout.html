@@ -133,6 +133,8 @@
         {{range .Workspaces}}
           <a class="menu__item" href="/workspaces/{{.ID}}/tasks" data-ws="{{.Tone}}"{{if eq $.Scope .ID}} aria-current="page"{{end}}><span class="swatch swatch--lg"></span> {{.Name}}{{if .NeedsCount}} <span class="count">{{.NeedsCount}}</span>{{end}}</a>
         {{end}}
+        {{if .Version}}<div class="menu__sep"></div>
+        <div class="menu__meta"><span>maestria {{.Version}}</span>{{if .UpdateVersion}}<a class="ver-dot" data-status="info" href="/security" aria-label="{{.UpdateVersion}} is available" title="{{.UpdateVersion}} is available"></a>{{end}}</div>{{end}}
       </div>
     </details>
     <div class="topbar__end">

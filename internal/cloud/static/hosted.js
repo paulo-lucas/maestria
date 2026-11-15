@@ -388,6 +388,8 @@
       wss.forEach(function (w) {
         ph += '<a class="menu__item" href="' + esc(wsHref(w.cid, w.id, 'tasks')) + '" data-ws="' + esc(w.tone) + '"' + (cur && cur.cid === w.cid && cur.id === w.id ? ' aria-current="page"' : '') + '><span class="swatch swatch--lg"></span> ' + esc(wname(w)) + (w.needs ? ' <span class="count">' + w.needs + '</span>' : '') + '</a>';
       });
+      var ver = panel.getAttribute('data-version');
+      if (ver) ph += '<div class="menu__sep"></div><div class="menu__meta"><span>' + esc(ver) + '</span>' + versionDot(panel.getAttribute('data-update'), '/connectors') + '</div>';
       panel.innerHTML = ph;
     }
 
@@ -757,6 +759,20 @@
 
   function describeDevice(label) { return label || 'Browser'; }
 
+  // The server's build and its "newer release" dot, from the data the server put on the scope menu.
+  function versionDot(update, href) {
+    if (!update) return '';
+    var t = esc(update) + ' is available';
+    return (href ? '<a class="ver-dot" data-status="info" href="' + esc(href) + '"' : '<span class="ver-dot" data-status="info" role="img"') + ' aria-label="' + t + '" title="' + t + '">' + (href ? '</a>' : '</span>');
+  }
+
+  function aboutHtml() {
+    var p = $('#scope-panel');
+    var ver = p && p.getAttribute('data-version');
+    if (!ver) return '';
+    return '<section class="section" aria-labelledby="about-title"><div class="section__head"><h2 class="section__title" id="about-title">About</h2></div><p class="about-line"><span>' + esc(ver) + '</span>' + versionDot(p.getAttribute('data-update')) + '</p></section>';
+  }
+
   async function securityHtml() {
     var ready = readyConnectors();
     var infos = {}, policies = {}, errors = [];
@@ -835,7 +851,7 @@
       '<dialog class="dialog" id="kill-dialog" aria-labelledby="kill-d-title"><form method="dialog" id="kill-form"><div class="dialog__body" data-status="danger"><span class="dialog__icon">' + icon('i-power', 'icon--lg') + '</span><h2 class="dialog__title" id="kill-d-title">Turn on the kill switch?</h2>' +
       '<p class="dialog__text">' + esc(names.join(' and ') || 'Your machines') + ' will reject every command from Maestria right away. Agents keep running. It can only be turned off on each machine, in a terminal you type in:</p>' + cmdBlock('maestria tunnel on') +
       '<label class="check"><input type="checkbox" id="kill-confirm"> I understand this can’t be undone from the web</label><p class="field__error" id="kill-error" hidden></p></div>' +
-      '<div class="dialog__foot"><button class="btn" type="button" data-close-dialog>Cancel</button><button class="btn btn--danger" type="submit" data-requires="kill-confirm">' + icon('i-power') + 'Turn on kill switch</button></div></form></dialog></div>';
+      '<div class="dialog__foot"><button class="btn" type="button" data-close-dialog>Cancel</button><button class="btn btn--danger" type="submit" data-requires="kill-confirm">' + icon('i-power') + 'Turn on kill switch</button></div></form></dialog>' + aboutHtml() + '</div>';
   }
 
   document.addEventListener('click', async function (ev) {

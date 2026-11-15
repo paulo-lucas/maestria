@@ -78,5 +78,10 @@
         </div>
         <p class="field__hint">The audit log is append-only: the database refuses edits and deletes.</p>
       </section>
+
+      {{if .Version}}<section class="section" aria-labelledby="about-title">
+        <div class="section__head"><h2 class="section__title" id="about-title">About</h2></div>
+        <p class="about-line"><span>maestria {{.Version}}</span>{{if .UpdateVersion}}<span class="ver-dot" data-status="info" role="img" aria-label="{{.UpdateVersion}} is available" title="{{.UpdateVersion}} is available"></span>{{end}}</p>
+      </section>{{end}}
     </div>
 {{end}}
