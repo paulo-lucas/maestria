@@ -649,3 +649,45 @@ func TestSocketURLRules(t *testing.T) {
 		}
 	}
 }
+
+// A hostile cloud controls the strings the CLI prints while linking; none of them may carry a
+// terminal control sequence.
+func TestLinkAPIStripsControlSequencesFromCloudStrings(t *testing.T) {
+	evil := "x\x1b]52;c;ZXZpbA==\x07\x1b[2K\ry"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/link/redeem":
+			_ = json.NewEncoder(w).Encode(relay.RedeemResponse{AccountHint: "a***@" + evil, DefaultName: evil, Token: "t"})
+		case "/api/link/start":
+			_ = json.NewEncoder(w).Encode(relay.StartResponse{Code: evil, PollToken: "p", URL: "https://x/" + evil})
+		case "/api/link/poll":
+			_ = json.NewEncoder(w).Encode(relay.PollResponse{Status: "claimed", AccountHint: evil, DefaultName: evil, Linked: &relay.Linked{Name: evil}})
+		default:
+			w.WriteHeader(http.StatusTeapot)
+			_ = json.NewEncoder(w).Encode(relay.ErrorBody{Error: evil})
+		}
+	}))
+	defer srv.Close()
+	api := &API{Cloud: srv.URL, Machine: relay.Machine{Version: "t"}, HTTP: srv.Client()}
+	ctx := context.Background()
+	bad := func(what string, vals ...string) {
+		t.Helper()
+		for _, v := range vals {
+			if strings.ContainsAny(v, "\x1b\x07\r\n") {
+				t.Errorf("%s: control characters survived: %q", what, v)
+			}
+		}
+	}
+	red, _ := api.Redeem(ctx, "ABCD-EFGH")
+	bad("redeem", red.AccountHint, red.DefaultName)
+	st, _ := api.Start(ctx)
+	bad("start", st.Code, st.URL)
+	p, _ := api.Poll(ctx, "p", false, "")
+	bad("poll", p.AccountHint, p.DefaultName, p.Linked.Name)
+	_, err := api.Confirm(ctx, "c", "t", "n")
+	if err == nil {
+		t.Fatal("expected the teapot refusal")
+	}
+	bad("error", err.Error())
+}
