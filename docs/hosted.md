@@ -23,7 +23,8 @@ New words? See [Concepts](concepts.md).
 
 ## 1. Create your account
 
-1. Open `https://maestria.example.com` and choose **Create an account**.
+1. **Open the invitation link** the server's administrator sent you (it looks like `https://maestria.example.com/signup?invite=…`). Most servers are by invitation only: without a link the sign-up page just says so. A link works once and expires (7 days unless they chose otherwise). If it says "invalid or expired", ask for a new one. If your invitation was for one email address, use that address.
+   *If you run the server yourself:* [make the first invitation on the VM](deploy-cloud.md#8-first-steps-as-administrator). On a server set to `signup: open`, just open the address and choose **Create an account**.
 2. Enter your **email** and a **password** (at least 12 characters).
 3. **What you should see:** a "Check your email" page. It looks the same whether or not the address is already registered, on purpose.
 4. Open the email and click the link. A page asks you to type your password once more to confirm. Do that.

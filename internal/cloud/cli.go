@@ -15,6 +15,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/paulo-lucas/maestria/internal/termsafe"
 	"github.com/paulo-lucas/maestria/internal/update"
 )
 
@@ -25,6 +26,12 @@ Usage:
   maestria-cloud user list           List accounts
   maestria-cloud user disable EMAIL  Disable an account and end its sessions and connector links
   maestria-cloud user enable EMAIL   Enable it again
+  maestria-cloud user promote EMAIL  Make an account an administrator (the only way to make the first one)
+  maestria-cloud user demote EMAIL   Take administrator rights away
+  maestria-cloud invite create [--email ADDRESS] [--expires 7d] [--note TEXT]
+                                     Make a sign-up invitation and print its link (shown once)
+  maestria-cloud invite list         List invitations (never their links)
+  maestria-cloud invite revoke ID    Withdraw an invitation
   maestria-cloud version             Print the version
 
 Config: <data dir>/config.json and MAESTRIA_CLOUD_* variables. Data dir: $MAESTRIA_CLOUD_DIR,
@@ -35,6 +42,7 @@ Settings (config.json key / environment variable):
   listen     MAESTRIA_CLOUD_LISTEN        address to bind (default 127.0.0.1:8080)
   trustProxy MAESTRIA_CLOUD_TRUST_PROXY   "", "xff" or "cf": trust the proxy's client address header
   smtp.*     MAESTRIA_CLOUD_SMTP_HOST, _PORT, _USER, _PASSWORD, _FROM, _TLS
+  signup     MAESTRIA_CLOUD_SIGNUP        "invite" (default: needs an invitation), "open" or "closed"
   devEmail   MAESTRIA_CLOUD_DEV_EMAIL     "stdout" or "file:<path>": print emails instead of sending them
 `
 
@@ -135,6 +143,8 @@ func run(args []string, env *Env) error {
 		return cmdServe(args[1:], env)
 	case "user":
 		return cmdUser(args[1:], env)
+	case "invite":
+		return cmdInvite(args[1:], env)
 	}
 	return fmt.Errorf("unknown command %q\n\n%s", args[0], help)
 }
@@ -155,6 +165,14 @@ func cmdServe(args []string, env *Env) error {
 	}
 	if !cfg.mailConfigured() {
 		fmt.Fprintln(env.Stderr, `warning: no email configured (smtp.* or devEmail); sign-up and password reset cannot send mail`)
+	}
+	switch cfg.Signup {
+	case SignupOpen:
+		fmt.Fprintln(env.Stderr, "warning: signup is \"open\": anyone who can reach this address can create an account. Set signup to \"invite\" (the default) unless that is what you want")
+	case SignupClosed:
+		fmt.Fprintln(env.Stderr, "info: signup is \"closed\": nobody can create an account, not even with an invitation")
+	default:
+		fmt.Fprintln(env.Stderr, "info: signup is \"invite\": new accounts need an invitation from an administrator")
 	}
 	ln, err := listen(cfg.Listen)
 	if err != nil {
@@ -200,7 +218,7 @@ func cmdServe(args []string, env *Env) error {
 
 func cmdUser(args []string, env *Env) error {
 	if len(args) == 0 {
-		return errors.New("usage: maestria-cloud user list | disable EMAIL | enable EMAIL")
+		return errors.New("usage: maestria-cloud user list | disable EMAIL | enable EMAIL | promote EMAIL | demote EMAIL")
 	}
 	_, srv, closeAll, err := openAll(env)
 	if err != nil {
@@ -215,7 +233,7 @@ func cmdUser(args []string, env *Env) error {
 			return err
 		}
 		tw := tabwriter.NewWriter(env.Stdout, 0, 4, 2, ' ', 0)
-		fmt.Fprintln(tw, "EMAIL\tSTATE\tCREATED")
+		fmt.Fprintln(tw, "EMAIL\tSTATE\tROLE\tCREATED")
 		for _, u := range users {
 			state := "active"
 			switch {
@@ -226,9 +244,30 @@ func cmdUser(args []string, env *Env) error {
 			case u.EnrolledAt == 0:
 				state = "no 2fa yet"
 			}
-			fmt.Fprintf(tw, "%s\t%s\t%s\n", u.Email, state, time.UnixMilli(u.CreatedAt).Format("2006-01-02"))
+			role := "user"
+			if u.IsAdmin {
+				role = "admin"
+			}
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", termsafe.Clean(u.Email, 254), state, role, time.UnixMilli(u.CreatedAt).Format("2006-01-02"))
 		}
 		return tw.Flush()
+	case "promote", "demote":
+		if len(args) != 2 {
+			return fmt.Errorf("usage: maestria-cloud user %s EMAIL", args[0])
+		}
+		u, err := acc.SetAdmin(strings.TrimSpace(args[1]), args[0] == "promote")
+		switch {
+		case errors.Is(err, ErrNotReady):
+			return errors.New("that account has not finished signing up (verified email and two-factor); promote it afterwards")
+		case err != nil:
+			return fmt.Errorf("no such account")
+		}
+		if args[0] == "promote" {
+			fmt.Fprintf(env.Stdout, "%s is now an administrator: they can invite people from the web. It applies on their next request.\n", termsafe.Clean(u.Email, 254))
+		} else {
+			fmt.Fprintf(env.Stdout, "%s is no longer an administrator. It applies on their next request.\n", termsafe.Clean(u.Email, 254))
+		}
+		return nil
 	case "disable", "enable":
 		if len(args) != 2 {
 			return fmt.Errorf("usage: maestria-cloud user %s EMAIL", args[0])

@@ -105,6 +105,9 @@ type pageData struct {
 	Error   string
 	Info    string
 	Token   string
+	// Invite is the invitation token carried by the sign-up form (a hidden field, never the action URL); InviteBound says the invitation is for one address.
+	Invite      string
+	InviteBound bool
 
 	Heading                       string
 	PrimaryHref, PrimaryLabel     string
@@ -115,6 +118,13 @@ type pageData struct {
 	Secret      string
 	Codes       []string
 	UseRecovery bool
+
+	// Admin shows the administrator pages in the menu. Invites, SignupMode and CanEmail are for the
+	// invitations page.
+	Admin      bool
+	Invites    []invitePage
+	SignupMode string
+	CanEmail   bool
 
 	Connectors []connectorPage
 	PublicURL  string

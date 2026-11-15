@@ -475,7 +475,7 @@ func TestBodiesAreNeverLoggedOrStored(t *testing.T) {
 	}
 	rows.Close()
 	allowed := map[string]bool{"users": true, "recovery_codes": true, "sessions": true, "pending_logins": true, "email_tokens": true, "setup_sessions": true,
-		"connectors": true, "paired_devices": true, "link_codes": true, "audit": true}
+		"connectors": true, "paired_devices": true, "link_codes": true, "audit": true, "invites": true}
 	for _, tb := range tables {
 		if !allowed[tb] {
 			t.Errorf("unexpected cloud table %q: the cloud must not keep workspace data", tb)

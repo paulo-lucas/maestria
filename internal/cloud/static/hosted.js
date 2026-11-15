@@ -276,6 +276,7 @@
     if (p === '/') return { name: 'overview' };
     if (p === '/connectors') return { name: 'connectors', server: true };
     if (p === '/connectors/link') return { name: 'link', server: true };
+    if (p === '/admin/invites') return { name: 'invites', server: true };
     if (p === '/security') return { name: 'security' };
     if (p === '/usage') return { name: 'usage' };
     if ((m = p.match(/^\/c\/(cn_[0-9a-f]{32})\/usage$/))) return { name: 'usage', cid: m[1] };
@@ -387,7 +388,8 @@
         bn.innerHTML = '<a class="bottomnav__item" href="/"' + cur2('overview') + '>' + icon('i-overview') + 'Overview' + (needs ? ' <span class="count" data-status="needs">' + needs + '</span>' : '') + '</a>' +
           '<a class="bottomnav__item" href="/usage"' + cur2('usage') + '>' + icon('i-gauge') + 'Usage</a>' +
           '<a class="bottomnav__item" href="/connectors"' + cur2('connectors') + '>' + icon('i-plug') + 'Connectors</a>' +
-          '<a class="bottomnav__item" href="/security"' + cur2('security') + '>' + icon('i-shield') + 'Security</a>';
+          '<a class="bottomnav__item" href="/security"' + cur2('security') + '>' + icon('i-shield') + 'Security</a>' +
+          (body.dataset.admin === '1' ? '<a class="bottomnav__item" href="/admin/invites"' + cur2('invites') + '>' + icon('i-user') + 'Invite</a>' : '');
       }
     }
 
@@ -406,7 +408,7 @@
     if (dot) dot.setAttribute('data-status', tone);
     if (cdot) { cdot.setAttribute('aria-label', 'Machines: ' + txt); cdot.setAttribute('title', 'Machines: ' + txt); }
     var tabTitle = ({ tasks: 'Human tasks', chat: 'Chat', activity: 'Activity', floors: 'Floors', docs: 'Docs' })[r.tab];
-    document.title = (cur ? cur.name + ' · ' + (tabTitle || 'Workspace') : ({ overview: 'Overview', security: 'Devices & security', usage: 'Usage & standby', connectors: 'Connectors', link: 'Link a machine' })[r.name] || 'Maestria') + ' · Maestria';
+    document.title = (cur ? cur.name + ' · ' + (tabTitle || 'Workspace') : ({ overview: 'Overview', security: 'Devices & security', usage: 'Usage & standby', connectors: 'Connectors', link: 'Link a machine', invites: 'Invite someone' })[r.name] || 'Maestria') + ' · Maestria';
   }
 
   // ---- page content ----

@@ -103,34 +103,7 @@ func (s *Server) notice(w http.ResponseWriter, code int, d *pageData) {
 	s.render(w, "notice", d)
 }
 
-// ---- sign-up ----
-
-func (s *Server) getSignup(w http.ResponseWriter, r *http.Request) {
-	if sessionFrom(r) != nil {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
-		return
-	}
-	s.render(w, "signup", &pageData{Title: "Sign up", CSRF: s.loginCSRF(w, r)})
-}
-
-func (s *Server) postSignup(w http.ResponseWriter, r *http.Request) {
-	email := r.PostForm.Get("email")
-	err := s.acc.Signup(ipOf(r), email, r.PostForm.Get("password"))
-	var le *LockedError
-	var pe *PasswordError
-	switch {
-	case errors.As(err, &le):
-		s.locked(w, "signup", le, &pageData{Title: "Sign up", Email: email})
-	case errors.As(err, &pe):
-		w.WriteHeader(http.StatusUnprocessableEntity)
-		s.render(w, "signup", &pageData{Title: "Sign up", CSRF: s.freshLoginCSRF(w), Email: email, Error: pe.Msg})
-	case err != nil:
-		s.serverError(w, r, err)
-	default:
-		norm, _ := NormalizeEmail(email)
-		s.render(w, "signup-sent", &pageData{Title: "Check your email", CSRF: s.loginCSRF(w, r), Email: norm})
-	}
-}
+// ---- sign-up (getSignup and postSignup are in handlers_signup.go) ----
 
 func (s *Server) postResend(w http.ResponseWriter, r *http.Request) {
 	email := r.PostForm.Get("email")
