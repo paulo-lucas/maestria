@@ -214,7 +214,12 @@ func (s *session) send(f relay.Frame) error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(s.ctx, 30*time.Second)
+	// The write's context must NOT be derived from the session's: the websocket library closes
+	// the whole connection at once when a write's context ends, so a frame being written at the
+	// moment of shutdown would tear the socket down before the close handshake (the peer then
+	// sees an abnormal closure). A stuck write is bounded by this timeout and, at shutdown, by
+	// closeGracefully, which force-closes the socket after a second.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	return s.ws.Write(ctx, websocket.MessageText, b)
 }
@@ -248,11 +253,15 @@ func (s *session) pinger() {
 		case <-s.ctx.Done():
 			return
 		case <-t.C:
-			pctx, cancel := context.WithTimeout(s.ctx, 15*time.Second)
+			// Not derived from s.ctx, for the reason given in send. A ping that fails because the
+			// session is shutting down must not force-close a socket that is closing politely.
+			pctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			err := s.ws.Ping(pctx)
 			cancel()
 			if err != nil {
-				s.ws.CloseNow()
+				if s.ctx.Err() == nil {
+					s.ws.CloseNow()
+				}
 				return
 			}
 		}

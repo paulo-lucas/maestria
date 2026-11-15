@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -690,4 +691,57 @@ func TestLinkAPIStripsControlSequencesFromCloudStrings(t *testing.T) {
 		t.Fatal("expected the teapot refusal")
 	}
 	bad("error", err.Error())
+}
+
+// The close handshake must survive replies being written at the very moment of shutdown: a write
+// whose context is cancelled makes the websocket library tear the connection down at once, which
+// the peer sees as an abnormal closure (StatusCode -1) instead of a normal one.
+func TestCleanShutdownWhileRepliesAreBeingWritten(t *testing.T) {
+	for i := 0; i < 25; i++ {
+		r := newRig(t, api())
+		stop := make(chan struct{})
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() { // the cloud keeps asking for pairings, so the connector keeps answering
+			defer wg.Done()
+			for n := 0; ; n++ {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				p := r.browser.StartPairing(t)
+				_ = writeFrameE(r.conn, relay.Frame{T: relay.TypePairOffer, Pair: "stress-" + strings.Repeat("a", 4) + strconv.Itoa(i) + "-" + strconv.Itoa(n), Commit: p.Commit, Label: "x"})
+			}
+		}()
+		closed := make(chan websocket.StatusCode, 1)
+		go func() {
+			defer wg.Done()
+			for {
+				if _, _, err := r.conn.Read(context.Background()); err != nil {
+					closed <- websocket.CloseStatus(err)
+					return
+				}
+			}
+		}()
+		time.Sleep(time.Duration(i%5) * time.Millisecond)
+		r.cancel()
+		select {
+		case <-r.done:
+		case <-time.After(5 * time.Second):
+			t.Fatal("did not stop")
+		}
+		close(stop)
+		if got := <-closed; got != websocket.StatusNormalClosure {
+			t.Fatalf("round %d: the connector must close with a normal closure, got %v", i, got)
+		}
+		wg.Wait()
+	}
+}
+
+func writeFrameE(c *websocket.Conn, f relay.Frame) error {
+	b, _ := json.Marshal(f)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	return c.Write(ctx, websocket.MessageText, b)
 }
