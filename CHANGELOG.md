@@ -4,6 +4,25 @@ All notable changes to Maestria are listed here. The format follows [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+
+- **Overview shows every update.** Notices from all workspaces now sit in an **Updates** card under Needs you, newest first, with workspace filter chips, **Got it** on each one and a **Mark all as read** button that acts on the chosen workspace (or all of them). Local panel and hosted site.
+- **`setup-cloud.sh` installs cosign** (a pinned release, its SHA-256 checked) so the VM's automatic updates verify who built each release. Skip it with `--no-cosign`; an existing cosign is kept.
+
+### Changed
+
+- **Inbox actions answer once.** Approve, Reject, Send, a choice, Later and Got it disable the item on the first click and show a spinner until the server answers; a failure re-enables the item and says why. A second submit of an answered item is refused (409), which is now covered by tests.
+- A fenced command of one shell line in a Maestro's message (inbox and chat) is shown as the panel's command block with a **Copy** button; longer code stays a scrollable block.
+- GitHub Actions use their Node 24 releases (`checkout` v7.0.1, `setup-go` v7.0.0, `action-gh-release` v3.0.4), pinned by commit SHA.
+
+### Fixed
+
+- The **Later** menu was clipped by the card on the last item. It is now a popover that opens upward when there is no room below, and a bottom sheet on a phone.
+- Long code or commands in an inbox item no longer widen the card or push the time and buttons out of view.
+- A floor that landed and had its branch deleted at once was recorded as cancelled. The panel now remembers the branch tip while the floor is alive and uses that commit to tell it was merged.
+- The hosted sidebar's machine card no longer ends with a bare "·" ("offline ·") when the last-seen time is unknown.
+- The systemd environment file example, the `smtp.from` documentation and the start-up error now say to put a `Name <address>` From value in double quotes.
+
 ## [0.1.0] - 2026-11-15
 
 First public release. Same contents as 0.1.0-rc.1, checked by hand: signed checksums verified with cosign, a clean install through `install.sh` with the signature required, and the updater.
