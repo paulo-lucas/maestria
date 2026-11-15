@@ -7,7 +7,8 @@
   let pendingRefresh = false;
   let refreshTimer = null;
   let refreshing = false;
-  let overviewFilter = 'all';
+  // The workspace chosen in each overview list's filter chips ("needs-list", "updates-list").
+  const overviewFilters = { 'needs-list': 'all', 'updates-list': 'all' };
   let agentsFilter = 'all';
 
   function draftStorageKey(el) {
@@ -72,19 +73,19 @@
   }
 
   function applyOverviewFilter(root = document) {
-    const row = root.querySelector('.chip-row[data-filter="needs-list"]');
-    const list = root.querySelector('#needs-list');
-    if (!row || !list) return;
-
-    const chips = [...row.querySelectorAll('.chip')];
-    const hasMatch = chips.some((c) => c.dataset.value === overviewFilter);
-    if (!hasMatch) overviewFilter = 'all';
-
-    chips.forEach((c) => {
-      c.setAttribute('aria-pressed', c.dataset.value === overviewFilter ? 'true' : 'false');
-    });
-    list.querySelectorAll('.task').forEach((item) => {
-      item.hidden = overviewFilter !== 'all' && item.dataset.key !== overviewFilter;
+    Object.keys(overviewFilters).forEach((name) => {
+      const row = root.querySelector('.chip-row[data-filter="' + name + '"]');
+      const list = root.querySelector('#' + name);
+      if (!row || !list) return;
+      const chips = [...row.querySelectorAll('.chip')];
+      if (!chips.some((c) => c.dataset.value === overviewFilters[name])) overviewFilters[name] = 'all';
+      const cur = overviewFilters[name];
+      chips.forEach((c) => {
+        c.setAttribute('aria-pressed', c.dataset.value === cur ? 'true' : 'false');
+      });
+      list.querySelectorAll('.task').forEach((item) => {
+        item.hidden = cur !== 'all' && item.dataset.key !== cur;
+      });
     });
   }
 
@@ -597,10 +598,13 @@
   });
 
   document.addEventListener('click', async (e) => {
-    const chip = e.target.closest('.chip-row[data-filter="needs-list"] .chip');
+    const chip = e.target.closest('.chip-row[data-filter$="-list"] .chip');
     if (chip) {
-      overviewFilter = chip.dataset.value || 'all';
-      applyOverviewFilter(document);
+      const name = chip.closest('.chip-row').dataset.filter;
+      if (name in overviewFilters) {
+        overviewFilters[name] = chip.dataset.value || 'all';
+        applyOverviewFilter(document);
+      }
       return;
     }
 
@@ -689,6 +693,40 @@
         const host = head && head.parentElement;
         if (host) showError(taskErrorEl(host), friendlyError(err));
       }
+      return;
+    }
+
+    if (action === 'dismiss-updates') {
+      // Mark every update as read: all workspaces, or just the one chosen in the filter.
+      if (btn.getAttribute('aria-busy') === 'true') return;
+      const row = document.querySelector('.chip-row[data-filter="updates-list"]');
+      const cur = overviewFilters['updates-list'];
+      const targets = cur !== 'all' ? [cur] : [...(row ? row.querySelectorAll('.chip') : [])].map((c) => c.dataset.value).filter((v) => v && v !== 'all');
+      if (!targets.length) return;
+      btn.disabled = true;
+      btn.setAttribute('aria-busy', 'true');
+      const spin = document.createElement('span');
+      spin.className = 'spinner';
+      spin.setAttribute('aria-hidden', 'true');
+      btn.prepend(spin);
+      const stop = () => { btn.disabled = false; btn.removeAttribute('aria-busy'); spin.remove(); };
+      const failures = [];
+      for (const ws of targets) {
+        try {
+          await api(`/api/workspaces/${encodeURIComponent(ws)}/inbox/dismiss-notices`, { method: 'POST', body: {} });
+        } catch (err) {
+          failures.push(friendlyError(err));
+        }
+      }
+      if (failures.length) stop();
+      await refreshNow(true);
+      if (failures.length) {
+        // The page was just redrawn: put the reason on the new panel.
+        const panel = document.getElementById('updates-title');
+        const host = panel && panel.closest('.panel');
+        if (host) showError(taskErrorEl(host), failures[0]);
+      }
+      setTimeout(() => { if (btn.isConnected && btn.getAttribute('aria-busy') === 'true') stop(); }, 8000);
       return;
     }
 

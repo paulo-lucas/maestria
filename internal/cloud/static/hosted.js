@@ -566,6 +566,35 @@
     }
     needsPanel += '</section>';
 
+    // Updates: the connectors' notices, merged and sorted like Needs you.
+    var updates = [];
+    ready.forEach(function (c) {
+      $('#updates-list > li.task', state.data[c.id].doc).forEach(function (li) {
+        var clone = li.cloneNode(true);
+        var comp = c.id + ':' + (li.getAttribute('data-ws-id') || '');
+        clone.setAttribute('data-ws-id', comp);
+        clone.setAttribute('data-key', comp);
+        clone.setAttribute('data-cid', c.id);
+        uniquify(clone, c.id.slice(3, 11) + '-');
+        rewriteLinks(clone, c.id);
+        updates.push({ at: timeOf(li), html: clone.outerHTML });
+      });
+    });
+    updates.sort(function (a, b) { return b.at - a.at; });
+    var updatesTotal = updates.length;
+    var uchips = wss.filter(function (w) { return w.updates; }).map(function (w) {
+      return '<button class="chip" type="button" aria-pressed="false" data-value="' + esc(w.cid + ':' + w.id) + '" data-ws="' + esc(w.tone) + '"><span class="swatch"></span>' + esc(w.name) + ' <span class="count">' + w.updates + '</span></button>';
+    }).join('');
+    var updatesPanel = '<section class="card panel" aria-labelledby="updates-title"><header class="panel__head"><h2 class="panel__title" id="updates-title">' + icon('i-bell') + ' Updates <span class="count">' + updatesTotal + '</span></h2>' +
+      (updatesTotal ? '<div class="panel__aside"><button class="btn btn--ghost btn--sm" type="button" data-action="dismiss-updates">Mark all as read</button></div>' : '<div class="panel__aside">Newest first</div>') + '</header>';
+    if (updatesTotal) {
+      updatesPanel += '<div class="panel__tools"><div class="chip-row" data-filter="updates-list" role="group" aria-label="Filter updates by workspace"><button class="chip" type="button" aria-pressed="true" data-value="all">All <span class="count">' + updatesTotal + '</span></button>' + uchips + '</div></div>' +
+        '<ul class="list" id="updates-list">' + updates.map(function (t) { return t.html; }).join('') + '</ul>';
+    } else {
+      updatesPanel += '<div class="empty empty--compact"><span class="empty__icon">' + icon('i-bell') + '</span><p class="empty__title">No unread updates</p><p class="empty__text">Status notices from your agents will appear here.</p></div>';
+    }
+    updatesPanel += '</section>';
+
     // Agents at work.
     var agents = [], agentNeeds = 0, wireEmpty = null;
     ready.forEach(function (c) {
@@ -632,7 +661,7 @@
 
     return '<div class="page" data-live-root="overview"><header class="page-head"><div class="page-head__title"><h1>Overview</h1><p class="page-head__sub">' + esc(sub) + ' · updated <time datetime="' + new Date().toISOString() + '">' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) + '</time></p></div></header>' +
       banners + '<section class="section" aria-labelledby="ws-title"><h2 class="sr-only" id="ws-title">Workspaces</h2>' + strip + '</section>' +
-      '<div class="overview-cols">' + needsPanel + '<div class="overview-side">' + agentsPanel + usagePanel + floorsPanel + '</div></div></div>' + (firstReady ? '' : '');
+      '<div class="overview-cols"><div class="overview-main">' + needsPanel + updatesPanel + '</div><div class="overview-side">' + agentsPanel + usagePanel + floorsPanel + '</div></div></div>' + (firstReady ? '' : '');
   }
 
   // ---- workspace and usage views (a machine's own HTML) ----
