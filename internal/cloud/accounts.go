@@ -32,7 +32,11 @@ var (
 )
 
 // LockedError means a limiter refuses attempts for now.
-type LockedError struct{ RetryAfter time.Duration }
+type LockedError struct {
+	RetryAfter time.Duration
+	// Reason is "mail" when the limit is on emails sent (the page says so); empty otherwise.
+	Reason string
+}
 
 func (e *LockedError) Error() string { return "too many attempts" }
 
@@ -220,6 +224,11 @@ func (a *Accounts) Signup(ip, rawEmail, password string) error {
 	if !a.rate.Allow("signup:ip:"+ip, 10, time.Hour) || !a.rate.Allow("signup:email:"+email, 5, time.Hour) {
 		return &LockedError{RetryAfter: time.Hour}
 	}
+	// Whatever the sign-up turns out to send (a verification link, or a notice to an existing
+	// account), it is limited like a resend, and the same for new and existing addresses.
+	if err := a.mailGate(mailVerify, ip, email); err != nil {
+		return err
+	}
 	release, err := a.guard(ip)
 	if err != nil {
 		return err
@@ -269,7 +278,7 @@ func (a *Accounts) Signup(ip, rawEmail, password string) error {
 		return a.sendVerify(u.ID, email)
 	default:
 		a.event(u.ID, "signup_existing", ip, nil)
-		a.mail(Message{To: email, Subject: "Maestria: you already have an account", Body: "Someone tried to create a Maestria account with this address, but one already exists.\n\nIf it was you, log in at " + a.url + "/login (use \"Forgot password?\" if needed).\nIf it was not, you can ignore this email."})
+		a.sendMail(mailNotice, Message{To: email, Subject: "Maestria: you already have an account", Body: "Someone tried to create a Maestria account with this address, but one already exists.\n\nIf it was you, log in at " + a.url + "/login (use \"Forgot password?\" if needed).\nIf it was not, you can ignore this email."})
 		return nil
 	}
 }
@@ -279,7 +288,7 @@ func (a *Accounts) sendVerify(userID, email string) error {
 	if err != nil {
 		return err
 	}
-	a.mail(Message{To: email, Subject: "Verify your email for Maestria",
+	a.sendMail(mailVerify, Message{To: email, Subject: "Verify your email for Maestria",
 		Body: "Confirm your email to finish creating your Maestria account:\n\n" + a.url + "/verify/" + tok + "\n\nThe link expires in 30 minutes. If you did not sign up, ignore this email."})
 	return nil
 }
@@ -795,29 +804,31 @@ func (a *Accounts) RecoveryLeft(userID string) int { return a.recoveryLeft(userI
 
 // ---- password reset ----
 
-// RequestReset emails a reset link if the account can use one. It always returns nil (the caller
-// shows the same page): rate limits are silent too.
-func (a *Accounts) RequestReset(ip, rawEmail string) {
+// RequestReset emails a reset link if the account can use one. The caller shows the same page
+// whether or not the account exists; the only other answer is a *LockedError when the email
+// limits are reached, which depends on how often the address was asked for, not on the account.
+func (a *Accounts) RequestReset(ip, rawEmail string) error {
 	email, ok := NormalizeEmail(rawEmail)
 	if !ok {
-		return
+		return nil
 	}
-	if !a.rate.Allow("reset:ip:"+ip, 10, time.Hour) || !a.rate.Allow("reset:email:"+email, 3, time.Hour) {
-		return
+	if err := a.mailGate(mailReset, ip, email); err != nil {
+		return err
 	}
 	u, err := a.UserByEmail(email)
 	if err != nil || u == nil || !u.CanLogin() {
 		a.event("", "reset_requested_unknown", ip, nil)
-		return
+		return nil
 	}
 	tok, err := a.newEmailToken(u.ID, "reset")
 	if err != nil {
-		return
+		return nil
 	}
 	a.event(u.ID, "reset_requested", ip, nil)
-	a.mail(Message{To: email, Subject: "Reset your Maestria password",
+	a.sendMail(mailReset, Message{To: email, Subject: "Reset your Maestria password",
 		Body: "Someone asked to reset the password of your Maestria account.\n\n" + a.url + "/reset/" + tok +
 			"\n\nYou will still need your authenticator app or a recovery code. The link expires in 30 minutes. If it was not you, ignore this email: nothing changes."})
+	return nil
 }
 
 // PeekReset reports whether a reset link is live and for whom, without using it.
@@ -1041,19 +1052,22 @@ func clip(s string, n int) string {
 	return s
 }
 
-// ResendVerify emails a fresh verification link to an unverified account. It answers nothing:
-// the caller shows the same page whether or not the address exists.
-func (a *Accounts) ResendVerify(ip, rawEmail string) {
+// ResendVerify emails a fresh verification link to an unverified account. The caller shows the
+// same page whether or not the address exists. The only difference a person can see is a
+// *LockedError when the email limits are reached, and that depends on how often the address was
+// asked for, never on whether it has an account.
+func (a *Accounts) ResendVerify(ip, rawEmail string) error {
 	email, ok := NormalizeEmail(rawEmail)
 	if !ok {
-		return
+		return nil
 	}
-	if !a.rate.Allow("verify:ip:"+ip, 10, time.Hour) || !a.rate.Allow("verify:email:"+email, 3, time.Hour) {
-		return
+	if err := a.mailGate(mailVerify, ip, email); err != nil {
+		return err
 	}
 	u, err := a.UserByEmail(email)
 	if err != nil || u == nil || u.DisabledAt != 0 || u.EnrolledAt != 0 {
-		return
+		return nil
 	}
 	_ = a.sendVerify(u.ID, email)
+	return nil
 }

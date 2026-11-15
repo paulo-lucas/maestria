@@ -155,6 +155,7 @@ Each setting can be an environment variable or a key in `/var/lib/maestria-cloud
 | `proxyHops` | none | `1` | How many trusted proxies sit in front (only for `xff`). |
 | `sessionIdleMinutes` | none | `720` (12 h) | Sign-out after this long without use. |
 | `sessionAbsoluteHours` | none | `168` (7 days) | Sign-out after this long in total. |
+| `mailDailyLimit` | `MAESTRIA_CLOUD_MAIL_DAILY_LIMIT` | `200` | The most emails the server sends in any 24 hours (verification, sign-up notices and password resets together). Keep it under your SMTP provider's free daily quota. Once reached, the sign-up, resend and reset pages answer "try again in N hours" (HTTP `429` with `Retry-After`). Besides this, an address gets at most one email of a kind a minute and 5 an hour, and one client address may ask for 10 an hour. Hitting a limit is written to the audit log (`mail_limit`). |
 | `login.maxFailuresPerIp` | none | `5` | Failed sign-ins per address before a lockout. |
 | `login.maxFailuresPerAccount` | none | `8` | Failed sign-ins per account. |
 | `login.maxFailuresGlobal` | none | `100` | Failed sign-ins for the whole server. |

@@ -41,6 +41,34 @@ func (s *Server) render(w http.ResponseWriter, page string, d *pageData) {
 	}
 }
 
+// retryIn says when to try again in plain words: seconds up to two minutes, then minutes, then
+// hours (an email limit can ask for a long wait).
+func retryIn(retry time.Duration) string {
+	plural := func(n int, unit string) string {
+		if n == 1 {
+			return "1 " + unit
+		}
+		return strconv.Itoa(n) + " " + unit + "s"
+	}
+	switch {
+	case retry <= 2*time.Minute:
+		s := int((retry + time.Second - 1) / time.Second)
+		if s < 1 {
+			s = 1
+		}
+		return plural(s, "second")
+	case retry < 2*time.Hour:
+		return plural(int((retry+time.Minute-1)/time.Minute), "minute")
+	}
+	return plural(int((retry+time.Hour-1)/time.Hour), "hour")
+}
+
+// mailLockedMessage is shown when an email limit is reached. It is the same for an address with
+// an account and one without.
+func mailLockedMessage(retry time.Duration) string {
+	return "We can't send another email right now. You can try again in " + retryIn(retry) + "."
+}
+
 func lockedMessage(retry time.Duration) string {
 	m := int((retry + time.Minute - 1) / time.Minute)
 	if m < 1 {
@@ -54,8 +82,15 @@ func lockedMessage(retry time.Duration) string {
 }
 
 func (s *Server) locked(w http.ResponseWriter, page string, le *LockedError, d *pageData) {
-	w.Header().Set("Retry-After", strconv.Itoa(int(le.RetryAfter.Seconds())))
+	secs := int((le.RetryAfter + time.Second - 1) / time.Second)
+	if secs < 1 {
+		secs = 1
+	}
+	w.Header().Set("Retry-After", strconv.Itoa(secs))
 	d.CSRF, d.Error = s.freshLoginCSRF(w), lockedMessage(le.RetryAfter)
+	if le.Reason == "mail" {
+		d.Error = mailLockedMessage(le.RetryAfter)
+	}
 	w.WriteHeader(http.StatusTooManyRequests)
 	s.render(w, page, d)
 }
@@ -99,8 +134,15 @@ func (s *Server) postSignup(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) postResend(w http.ResponseWriter, r *http.Request) {
 	email := r.PostForm.Get("email")
-	s.acc.ResendVerify(ipOf(r), email)
 	norm, _ := NormalizeEmail(email)
+	var le *LockedError
+	if err := s.acc.ResendVerify(ipOf(r), email); errors.As(err, &le) {
+		s.locked(w, "signup-sent", le, &pageData{Title: "Check your email", Email: norm})
+		return
+	} else if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
 	s.render(w, "signup-sent", &pageData{Title: "Check your email", CSRF: s.loginCSRF(w, r), Email: norm, Info: "If that address can still be verified, a new link is on its way."})
 }
 
@@ -341,7 +383,14 @@ func (s *Server) getResetRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) postResetRequest(w http.ResponseWriter, r *http.Request) {
-	s.acc.RequestReset(ipOf(r), r.PostForm.Get("email"))
+	var le *LockedError
+	if err := s.acc.RequestReset(ipOf(r), r.PostForm.Get("email")); errors.As(err, &le) {
+		s.locked(w, "reset-request", le, &pageData{Title: "Reset your password"})
+		return
+	} else if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
 	s.notice(w, http.StatusOK, &pageData{Title: "Check your email", Heading: "Check your email",
 		Info: "If an account exists for that address, we sent a reset link. It expires in 30 minutes.", PrimaryHref: "/login", PrimaryLabel: "Back to log in"})
 }

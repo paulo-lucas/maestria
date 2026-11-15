@@ -89,6 +89,7 @@ func TestSignupDoesNotRevealExistingAccounts(t *testing.T) {
 
 	other := b.browser("10.0.0.9")
 	other.get("/signup")
+	b.clock.advance(2 * MailCooldown) // the owner's own sign-up mail is not part of what is compared
 	again := other.form("/signup", url.Values{"email": {"ann@example.com"}, "password": {"another long password!"}})
 	fresh := other.form("/signup", url.Values{"email": {"new@example.com"}, "password": {"another long password!"}})
 	if again.StatusCode != fresh.StatusCode {
@@ -502,6 +503,7 @@ func TestUnverifiedAddressCannotBeSquatted(t *testing.T) {
 	squatter.form("/signup", url.Values{"email": {"victim@example.com"}, "password": {"the squatter's long password"}})
 	squatterLink := b.link(b.waitMail("victim@example.com", "Verify"))
 
+	b.clock.advance(2 * MailCooldown) // one email per address per minute
 	owner := b.browser("10.5.0.2")
 	owner.get("/signup")
 	owner.form("/signup", url.Values{"email": {"victim@example.com"}, "password": {testPassword}})

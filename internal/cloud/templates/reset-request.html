@@ -5,6 +5,7 @@
       <h1 id="t">Reset your password</h1>
       <p>We'll email you a link. You will still need your authenticator app or a recovery code.</p>
     </div>
+    {{if .Error}}<div class="banner" data-status="warn" role="alert">{{icon "i-alert"}}<div class="banner__body"><p class="banner__text">{{.Error}}</p></div></div>{{end}}
     <form method="post" action="/reset">
       <input type="hidden" name="_csrf" value="{{.CSRF}}">
       <div class="field">

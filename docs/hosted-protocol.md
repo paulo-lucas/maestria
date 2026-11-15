@@ -62,6 +62,10 @@ Same shape as local mode. Step 1 `POST /login` (email + password) always runs on
 
 Rate limiting and lockout use three scopes: per IP, per account key (a hash of the claimed email, applied to non-existent emails too), and global. While a scope is locked even correct credentials are refused (`429`, `Retry-After`).
 
+### 3.2.1 Email limits
+
+Anything that makes the server send an email (sign-up, "resend the verification email", "forgot password") is limited so it cannot burn the SMTP quota or bomb an inbox: per address one email of a kind per 60 seconds and 5 per hour in total (an account has exactly one address), per client address 10 per hour, and for the whole server `mailDailyLimit` (default 200, `MAESTRIA_CLOUD_MAIL_DAILY_LIMIT`) per 24 hours, counted from the audit log (`mail_sent`, never the address or content) so a restart does not reset it. A refusal is `429` with `Retry-After` and a page that says when to try again, and every limit hit is audited (`mail_limit`, scope and kind only). The request is counted, not only the email that went out, so an address with no account is limited exactly like one with an account and the answers never tell them apart.
+
 ### 3.3 Password reset
 
 `POST /reset` (email) always answers "If an account exists we sent a link", and sends the mail only if it does. The link `GET /reset/<token>` shows the form (token not consumed). `POST /reset/<token>` takes the new password **and a TOTP or recovery code**. Both must be valid or the attempt counts as a failure. On success the token is consumed, the password is replaced, every session of the user is destroyed, and the connectors of the user are told to forget their paired devices (section 6.5). Reset never disables or weakens 2FA.
