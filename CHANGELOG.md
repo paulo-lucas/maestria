@@ -4,6 +4,12 @@ All notable changes to Maestria are listed here. The format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-11-15
+
+### Fixed
+
+- **The chat jumped to its first messages** while you were reading older ones, typically after switching back to the tab. When a redraw came while the chat was briefly empty (reconnecting), the saved place read as the very top. The chat now remembers the message you were reading, not a pixel offset, and puts you back on it.
+
 ## [0.1.2] - 2026-11-15
 
 ### Fixed

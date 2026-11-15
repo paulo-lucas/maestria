@@ -224,6 +224,9 @@
       const prevKeys = chatKeys(curChat);
       const prevScrollY = window.scrollY;
       const prevChatScroll = chatScroller() ? chatScroller().scrollTop : 0;
+      // Where the reader is, by message. A log without messages (still connecting, say) keeps
+      // the last known place instead of forgetting it.
+      if (curChat && !chatPinned && prevKeys.length) chatAnchor = captureChatAnchor(curChat) || chatAnchor;
 
       const swap = (sel) => {
         const cur = document.querySelector(sel);
@@ -251,9 +254,12 @@
         scrollChatToLatest();
       } else {
         if (newChat) {
-          // Reading older messages: keep the place and count what arrived below.
-          chatUnseen += countNewKeys(prevKeys, chatKeys(newChat));
-          newChat.scrollTop = prevChatScroll;
+          // Reading older messages: keep the place and count what arrived below. Pixels are not
+          // enough: the log may have been empty for a moment (reconnecting after the tab was in
+          // the background), and its scroll position then reads 0, the very first message.
+          const newKeys = chatKeys(newChat);
+          if (prevKeys.length) chatUnseen += countNewKeys(prevKeys, newKeys);
+          if (newKeys.length && !restoreChatAnchor(newChat, chatAnchor) && prevKeys.length) newChat.scrollTop = prevChatScroll;
         } else {
           window.scrollTo(0, prevScrollY);
         }
@@ -301,9 +307,35 @@
     return after.filter((k) => !seen.has(k)).length;
   }
 
+  // chatAnchor is the message at the top of the reader's view and how far below the log's top
+  // edge it sits, kept while the chat is unpinned so a redraw can put the reader back on it.
+  let chatAnchor = null;
+
+  function captureChatAnchor(log) {
+    if (!log) return null;
+    const top = log.getBoundingClientRect().top;
+    for (const el of log.querySelectorAll('[data-msg-key], [data-msg-id]')) {
+      const r = el.getBoundingClientRect();
+      if (r.bottom > top) return { key: el.dataset.msgKey || el.dataset.msgId, offset: r.top - top };
+    }
+    return null;
+  }
+
+  // restoreChatAnchor scrolls log so the anchored message sits where it was. It returns false
+  // when that message is not in the log.
+  function restoreChatAnchor(log, anchor) {
+    if (!log || !anchor) return false;
+    const el = Array.from(log.querySelectorAll('[data-msg-key], [data-msg-id]'))
+      .find((m) => (m.dataset.msgKey || m.dataset.msgId) === anchor.key);
+    if (!el) return false;
+    log.scrollTop += el.getBoundingClientRect().top - log.getBoundingClientRect().top - anchor.offset;
+    return true;
+  }
+
   function scrollChatToLatest() {
     chatPinned = true;
     chatUnseen = 0;
+    chatAnchor = null;
     const el = chatScroller();
     if (el) el.scrollTop = el.scrollHeight;
   }
@@ -327,6 +359,7 @@
   document.addEventListener('scroll', (e) => {
     if (!e.target || e.target.id !== 'chat-log') return;
     const atBottom = chatAtBottom();
+    if (!atBottom && chatKeys(e.target).length) chatAnchor = captureChatAnchor(e.target);
     if (atBottom !== chatPinned || (atBottom && chatUnseen)) {
       chatPinned = atBottom;
       if (atBottom) chatUnseen = 0;
