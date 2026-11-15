@@ -18,6 +18,7 @@
       <button class="btn btn--primary btn--block" type="submit">Log in</button>
     </form>
     {{end}}
-    <p class="auth-card__alt">Forgot your password? Run <code>maestria auth setup --force</code> on this machine.</p>
+    <p class="auth-card__alt">Forgot your password? Run this on this machine, in a terminal you type in:</p>
+    {{cmd "maestria auth setup --force"}}
   </section>
 {{end}}

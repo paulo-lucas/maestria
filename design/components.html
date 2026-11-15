@@ -75,7 +75,7 @@
   </header>
 
   <nav class="sheet-toc" aria-label="Sections">
-    <a href="#colors">Colors</a><a href="#type">Type</a><a href="#buttons">Buttons</a><a href="#tags">Tags &amp; status</a>
+    <a href="#colors">Colors</a><a href="#type">Type</a><a href="#buttons">Buttons</a><a href="#commands">Commands</a><a href="#tags">Tags &amp; status</a>
     <a href="#chips">Chips &amp; counts</a><a href="#cards">Workspace cards</a><a href="#gauges">Gauges</a><a href="#tasks">Human tasks</a>
     <a href="#agents">Agents</a><a href="#floors">Floors</a><a href="#chat">Chat</a><a href="#banners">Banners</a>
     <a href="#forms">Forms</a><a href="#nav">Navigation</a><a href="#data">Tables</a><a href="#empty">Empty states</a><a href="#prose">Markdown</a>
@@ -179,6 +179,19 @@
         </div>
       </div>
       <div class="spec__pane theme-dark" data-clone-from="s-buttons"></div>
+    </div>
+  </section>
+
+  <!-- Command blocks -->
+  <section class="spec" id="commands">
+    <h2 class="spec__title">Command block</h2>
+    <p class="spec__note">Every command a person has to run is a command block, never a code span inside a sentence: the whole line, with its arguments filled in (the pairing code, the link code), and a Copy button that copies exactly that line. Long commands wrap instead of scrolling sideways. One markup everywhere; the Copy click is handled by a script file.</p>
+    <div class="spec__panes">
+      <div class="spec__pane theme-light" id="s-commands">
+        <div class="code-inline"><code><span class="cmd-t">maestria</span> <span class="cmd-t">devices</span> <span class="cmd-t">approve</span> <span class="cmd-t">47128659</span></code><button class="btn btn--ghost btn--sm" type="button" data-copy aria-label="Copy command" title="Copy command"><svg class="icon" aria-hidden="true"><use href="#i-copy"/></svg><span data-copy-label>Copy</span></button></div>
+        <div class="code-inline"><code><span class="cmd-t">maestria</span> <span class="cmd-t">connect</span> <span class="cmd-t">--link</span> <span class="cmd-t">ABCD-EFGH</span> <span class="cmd-t">--cloud</span> <span class="cmd-t">https://maestria.example.com</span></code><button class="btn btn--ghost btn--sm" type="button" data-copy aria-label="Copy command" title="Copy command"><svg class="icon" aria-hidden="true"><use href="#i-copy"/></svg><span data-copy-label>Copy</span></button></div>
+      </div>
+      <div class="spec__pane theme-dark" data-clone-from="s-commands"></div>
     </div>
   </section>
 

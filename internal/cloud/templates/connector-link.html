@@ -22,7 +22,7 @@
           <span class="checklist__title">Run this on the machine</span>
           <span class="checklist__text" id="link-expiry">The code works once and expires in <span class="num" data-countdown>10:00</span>.</span>
           <div class="code-display" aria-label="Link code" id="link-code" data-cloud="{{.PublicURL}}">––––-––––</div>
-          <div class="code-inline"><code id="link-command">maestria connect --link ––––-––––{{if .PublicURL}} --cloud {{.PublicURL}}{{end}}</code><button class="btn btn--ghost btn--icon btn--sm" type="button" data-copy aria-label="Copy command" title="Copy command">{{icon "i-copy"}}</button></div>
+          <div class="code-inline"><code id="link-command">maestria connect --link ––––-––––{{if .PublicURL}} --cloud {{.PublicURL}}{{end}}</code><button class="btn btn--ghost btn--sm" type="button" id="link-copy" data-copy disabled aria-label="Copy command" title="Copy command">{{icon "i-copy"}}<span data-copy-label>Copy</span></button></div>
         </li>
         <li>
           <span class="checklist__title">Confirm on the machine</span>

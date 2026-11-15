@@ -476,17 +476,7 @@
       return;
     }
 
-    const copyBtn = e.target.closest('[data-copy]');
-    if (copyBtn) {
-      const code = copyBtn.parentElement && copyBtn.parentElement.querySelector('code');
-      if (code && navigator.clipboard) {
-        navigator.clipboard.writeText(code.textContent).then(() => {
-          copyBtn.setAttribute('title', 'Copied');
-          setTimeout(() => copyBtn.setAttribute('title', 'Copy command'), 1500);
-        }).catch(() => {});
-      }
-      return;
-    }
+    // Copy buttons ([data-copy]) are handled by copy.js, for every page that shows a command.
 
     const btn = e.target.closest('[data-action]');
     if (!btn || btn.tagName === 'FORM') return;

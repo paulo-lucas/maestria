@@ -37,12 +37,7 @@
       return;
     }
 
-    var copy = ev.target.closest('[data-copy]');
-    if (copy) {
-      var code = copy.parentElement && copy.parentElement.querySelector('code');
-      if (code) copyText(code.textContent.replace(/\s+/g, ''), copy);
-      return;
-    }
+    // [data-copy] (a command or a key with a Copy button) is handled by copy.js.
 
     var gated = ev.target.closest('a[data-requires-link]');
     if (gated) {

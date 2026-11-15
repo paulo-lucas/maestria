@@ -167,7 +167,9 @@ func (c *client) do(method, path string, body io.Reader, hdr map[string]string) 
 	res := rec.Result()
 	c.jar.SetCookies(u, res.Cookies())
 	b, _ := io.ReadAll(res.Body)
-	return resp{ResponseRecorder: rec, body: string(b)}
+	// Command blocks wrap each word in a span (so a line never breaks inside "--link"); the tests
+	// look for the commands as a person reads them.
+	return resp{ResponseRecorder: rec, body: cmdWords.Replace(string(b))}
 }
 
 func (c *client) cookie(name string) string {
@@ -1171,3 +1173,6 @@ func TestServerAnswersOverARealSocket(t *testing.T) {
 		t.Fatalf("real socket: %d", res.StatusCode)
 	}
 }
+
+// cmdWords removes the per-word spans of command blocks (see ui.CommandBlock).
+var cmdWords = strings.NewReplacer(`<span class="cmd-t">`, "", `</span>`, "")

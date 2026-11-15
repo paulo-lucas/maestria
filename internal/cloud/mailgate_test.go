@@ -256,3 +256,24 @@ func TestRetryInSaysWhenToTryAgain(t *testing.T) {
 		}
 	}
 }
+
+// The pairing and link pages load the script that handles the Copy buttons (no inline script),
+// and the link command cannot be copied before it holds a real code.
+func TestCommandPagesLoadTheCopyScript(t *testing.T) {
+	b := newBed(t)
+	br := b.browser("10.30.0.1")
+	br.signup("ann@example.com", testPassword)
+	for _, path := range []string{"/pair", "/connectors/link", "/"} {
+		r := br.get(path)
+		if r.StatusCode != 200 || !strings.Contains(r.body, "/static/copy.js") {
+			t.Errorf("%s: %d, copy.js is not loaded", path, r.StatusCode)
+		}
+		if strings.Contains(r.body, "onclick=") || strings.Contains(strings.ToLower(r.body), "<script>") {
+			t.Errorf("%s has an inline script or handler", path)
+		}
+	}
+	link := br.get("/connectors/link")
+	if !strings.Contains(link.body, `id="link-copy" data-copy disabled`) || !strings.Contains(link.body, `<span data-copy-label>Copy</span>`) {
+		t.Fatal("the link command's Copy button must start disabled and say Copy")
+	}
+}

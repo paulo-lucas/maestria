@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="{{asset "components.css"}}">
   <link rel="stylesheet" href="{{asset "shell.css"}}">
   <script src="{{asset "app.js"}}"></script>
+  <script src="{{asset "copy.js"}}" defer></script>
   <script src="{{asset "panel.js"}}" defer></script>
 </head>{{end}}
 
@@ -146,7 +147,8 @@
       <div class="dialog__body" data-status="danger">
         <span class="dialog__icon">{{icon "i-power" "icon--lg"}}</span>
         <h2 class="dialog__title" id="kill-d-title">Turn on the kill switch?</h2>
-        <p class="dialog__text">This signs out every session right away, stops the tunnel with your configured stop command, and blocks all logins. It can only be turned off on this machine: run <code>maestria tunnel on</code>.</p>
+        <p class="dialog__text">This signs out every session right away, stops the tunnel with your configured stop command, and blocks all logins. It can only be turned off on this machine, in a terminal you type in:</p>
+        {{cmd "maestria tunnel on"}}
         <label class="check"><input type="checkbox" id="kill-confirm"> I understand this can't be undone from the web</label>
       </div>
       <div class="dialog__foot">
@@ -172,7 +174,7 @@
           <span class="empty__icon">{{icon .Icon "icon--lg"}}</span>
           <p class="empty__title">{{.Heading}}</p>
           <p class="empty__text">{{.Steps}}</p>
-          {{range .Commands}}<div class="code-inline"><code>{{.}}</code><button class="btn btn--ghost btn--icon btn--sm" type="button" data-copy aria-label="Copy command" title="Copy command">{{icon "i-copy"}}</button></div>{{end}}
+          {{range .Commands}}{{cmd .}}{{end}}
           {{if .Retry}}<p class="empty__text">{{.Retry}}</p>{{end}}
         </div>
       </div>{{end}}{{end}}

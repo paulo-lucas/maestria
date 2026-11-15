@@ -19,6 +19,8 @@
   var $ = function (sel, root) { return (root || document).querySelector(sel); };
   var $$ = function (sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); };
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  // A command the person runs in a terminal, with a Copy button (copy.js builds and handles it).
+  function cmdBlock(command) { return window.MaestriaCmd.html(command); }
   function icon(id, cls) { return '<svg class="icon' + (cls ? ' ' + cls : '') + '" aria-hidden="true"><use href="#' + id + '"/></svg>'; }
   function plural(n, one, many) { return n === 1 ? one : many; }
   function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
@@ -421,9 +423,9 @@
     $$('time[datetime]', root).forEach(function () { /* times are already relative text */ });
   }
 
-  function banner(tone, ic, title, text, extra) {
+  function banner(tone, ic, title, text, extra, command) {
     return '<div class="banner" data-status="' + tone + '" role="status">' + icon(ic) + '<div class="banner__body"><p class="banner__title">' + esc(title) + '</p>' +
-      (text ? '<p class="banner__text">' + text + '</p>' : '') + '</div>' + (extra ? '<div class="banner__actions">' + extra + '</div>' : '') + '</div>';
+      (text ? '<p class="banner__text">' + text + '</p>' : '') + (command ? cmdBlock(command) : '') + '</div>' + (extra ? '<div class="banner__actions">' + extra + '</div>' : '') + '</div>';
   }
 
   function machineList(list) {
@@ -436,8 +438,8 @@
   function startConnectorCard() {
     return '<section class="section" aria-labelledby="start-title"><h2 class="section__title" id="start-title">Start the connector</h2><ol class="card checklist">' +
       '<li><span class="checklist__title">Wake the machine</span><span class="checklist__text">A sleeping or disconnected machine can’t reach Maestria. Check its network.</span></li>' +
-      '<li><span class="checklist__title">Run the connector</span><span class="checklist__text">In a terminal on that machine:</span><div class="code-inline"><code>maestria connect</code><button class="btn btn--ghost btn--icon btn--sm" type="button" data-copy aria-label="Copy command" title="Copy command">' + icon('i-copy') + '</button></div></li>' +
-      '<li><span class="checklist__title">Keep it running</span><span class="checklist__text">Install it as a service so it starts with your session:</span><div class="code-inline"><code>maestria service install</code><button class="btn btn--ghost btn--icon btn--sm" type="button" data-copy aria-label="Copy command" title="Copy command">' + icon('i-copy') + '</button></div></li>' +
+      '<li><span class="checklist__title">Run the connector</span><span class="checklist__text">In a terminal on that machine:</span>' + cmdBlock('maestria connect') + '</li>' +
+      '<li><span class="checklist__title">Keep it running</span><span class="checklist__text">Install it as a service so it starts with your session:</span>' + cmdBlock('maestria service install') + '</li>' +
       '</ol><p class="field__hint">Manage or revoke machines in <a href="/connectors">Connectors</a>.</p></section>';
   }
 
@@ -447,8 +449,8 @@
     return '<div class="page page--narrow"><header class="page-head"><div class="page-head__title"><h1>Welcome to Maestria</h1><p class="page-head__sub">' + (linked ? 'One more step and your Maestros show up here.' : 'Two more steps and your Maestros show up here.') + '</p></div></header>' +
       '<ol class="card checklist"><li class="is-done"><span class="checklist__title">Create your account</span><span class="checklist__text">Password and two-factor are set.</span></li>' +
       '<li class="' + (linked ? 'is-done' : '') + '"' + (linked ? '' : ' aria-current="step"') + '><span class="checklist__title">Link a machine</span><span class="checklist__text">' + (linked ? '<span class="status" data-status="ok">' + esc(online[0] ? online[0].name + ' is online' : 'Linked') + '</span> · <a href="/connectors/link">Link another</a>' : 'The connector runs next to Maestri and opens an outbound connection here.') + '</span>' + (linked ? '' : '<div class="btn-row"><a class="btn btn--primary btn--sm" href="/connectors/link">Link a machine</a></div>') + '</li>' +
-      '<li' + (linked ? ' aria-current="step"' : '') + '><span class="checklist__title">Add a workspace</span><span class="checklist__text">In Maestri, open a workspace and run this in its folder. It installs the Maestria skill, so the workspace’s Maestro can post tasks and chat here.</span><div class="code-inline"><code>maestria init</code><button class="btn btn--ghost btn--icon btn--sm" type="button" data-copy aria-label="Copy command" title="Copy command">' + icon('i-copy') + '</button></div>' + (linked ? '<p class="status status--quiet"><span class="spinner"></span>Looking for workspaces on ' + esc(online[0] ? online[0].name : 'your machine') + '…</p>' : '') + '</li></ol>' +
-      banner('info', 'i-lock', 'What leaves your machine', 'To show them here, the connector sends chats, project docs, agent briefs and the last lines of agent terminals. They pass through Maestria encrypted and are never stored there. Code, secrets and Maestri tokens never leave the machine. Prefer to keep everything local? Run <code>maestria serve</code> instead.') + '</div>';
+      '<li' + (linked ? ' aria-current="step"' : '') + '><span class="checklist__title">Add a workspace</span><span class="checklist__text">In Maestri, open a workspace and run this in its folder. It installs the Maestria skill, so the workspace’s Maestro can post tasks and chat here.</span>' + cmdBlock('maestria init') + '' + (linked ? '<p class="status status--quiet"><span class="spinner"></span>Looking for workspaces on ' + esc(online[0] ? online[0].name : 'your machine') + '…</p>' : '') + '</li></ol>' +
+      banner('info', 'i-lock', 'What leaves your machine', 'To show them here, the connector sends chats, project docs, agent briefs and the last lines of agent terminals. They pass through Maestria encrypted and are never stored there. Code, secrets and Maestri tokens never leave the machine. Prefer to keep everything local? Run this instead:', null, 'maestria serve') + '</div>';
   }
 
   function stateNoMachine() {
@@ -475,7 +477,7 @@
   }
 
   function stateKilled(names) {
-    return banner('danger', 'i-power', 'Kill switch is on', esc(names.join(', ')) + ' ' + plural(names.length, 'rejects', 'reject') + ' every command from this site. Turn it off on ' + plural(names.length, 'that machine', 'each machine') + ' with <code>maestria tunnel on</code>.');
+    return banner('danger', 'i-power', 'Kill switch is on', esc(names.join(', ')) + ' ' + plural(names.length, 'rejects', 'reject') + ' every command from this site. Turn it off on ' + plural(names.length, 'that machine', 'each machine') + ', in a terminal you type in:', null, 'maestria tunnel on');
   }
 
   // ---- aggregated overview ----
@@ -522,7 +524,7 @@
           '<div class="ws-card__meta">' + esc(w.machine) + '</div></a>';
       }).join('') + '</div>';
     } else {
-      strip = '<div class="card empty empty--compact"><span class="empty__icon">' + icon('i-folder') + '</span><p class="empty__title">No workspaces registered yet</p><p class="empty__text">Run <code>maestria init</code> inside a Maestri workspace on a linked machine.</p></div>';
+      strip = '<div class="card empty empty--compact"><span class="empty__icon">' + icon('i-folder') + '</span><p class="empty__title">No workspaces registered yet</p><p class="empty__text">Inside a Maestri workspace on a linked machine, run:</p>' + cmdBlock('maestria init') + '</div>';
     }
 
     // Needs you: the connectors' own task markup, merged and sorted.
@@ -756,7 +758,7 @@
       polHtml = '<div class="card"><div class="setting"><dl class="kv"><dt>Approval length</dt><dd>' + p.approvalAbsoluteDays + ' ' + plural(p.approvalAbsoluteDays, 'day', 'days') + '</dd><dt>Idle sign-out</dt><dd>after ' + p.idleDays + ' ' + plural(p.idleDays, 'day', 'days') + '</dd>' +
         '<dt>Allowed commands</dt><dd>prompt the Maestro, answer tasks and Y/n, pause and resume, standby settings, revoke devices</dd><dt>Rate limit</dt><dd>' + p.ratePerMinute + ' requests per minute per device</dd></dl></div>' +
         '<div class="setting"><p class="setting__desc">These are set on each machine, not here, so a compromised website can’t loosen them. To change them, edit the <code>relay</code> section of <code>config.json</code> on the machine.</p>' +
-        '<div class="code-inline"><code>maestria devices list</code><button class="btn btn--ghost btn--icon btn--sm" type="button" data-copy aria-label="Copy command" title="Copy command">' + icon('i-copy') + '</button></div>' +
+        '' + cmdBlock('maestria devices list') + '' +
         '<p class="field__hint">Showing ' + esc(firstPol.name) + '.' + (same.length > 1 ? ' ' + esc(same.filter(function (n) { return n !== firstPol.name; }).join(', ')) + ' ' + plural(same.length - 1, 'reports', 'report') + ' the same policy.' : '') + (diff.length ? ' ' + esc(diff.map(function (c) { return c.name; }).join(', ')) + ' ' + plural(diff.length, 'has', 'have') + ' a different policy.' : '') + '</p></div></div>';
     } else {
       polHtml = '<div class="card"><div class="setting"><p class="setting__desc">No machine is reachable with this browser yet, so there is no policy to show.</p></div></div>';
@@ -777,7 +779,7 @@
       '<section class="section" aria-labelledby="pol-title"><div class="section__head"><h2 class="section__title" id="pol-title">Session policy</h2><span class="label">' + icon('i-lock') + 'Enforced by the connector</span></div>' + polHtml + '</section>' +
       '<section class="section" aria-labelledby="kill-title"><div class="section__head"><h2 class="section__title" id="kill-title">Kill switch</h2><span class="status" data-status="' + (killed.length ? 'danger' : 'ok') + '">' + (killed.length ? 'On' : 'Off') + '</span></div>' + killBlock + '</section>' +
       '<dialog class="dialog" id="kill-dialog" aria-labelledby="kill-d-title"><form method="dialog" id="kill-form"><div class="dialog__body" data-status="danger"><span class="dialog__icon">' + icon('i-power', 'icon--lg') + '</span><h2 class="dialog__title" id="kill-d-title">Turn on the kill switch?</h2>' +
-      '<p class="dialog__text">' + esc(names.join(' and ') || 'Your machines') + ' will reject every command from Maestria right away. Agents keep running. It can only be turned off on each machine: run <code>maestria tunnel on</code>.</p>' +
+      '<p class="dialog__text">' + esc(names.join(' and ') || 'Your machines') + ' will reject every command from Maestria right away. Agents keep running. It can only be turned off on each machine, in a terminal you type in:</p>' + cmdBlock('maestria tunnel on') +
       '<label class="check"><input type="checkbox" id="kill-confirm"> I understand this can’t be undone from the web</label><p class="field__error" id="kill-error" hidden></p></div>' +
       '<div class="dialog__foot"><button class="btn" type="button" data-close-dialog>Cancel</button><button class="btn btn--danger" type="submit" data-requires="kill-confirm">' + icon('i-power') + 'Turn on kill switch</button></div></form></dialog></div>';
   }
@@ -797,10 +799,6 @@
       if (mine) { await K.forget(); state.key = null; location.href = '/pair?new=1'; return; }
       renderCurrent(false);
       return;
-    }
-    var copy = ev.target.closest('[data-copy]');
-    if (copy && !copy.closest('#main [data-panel-copy]')) {
-      // panel.js also handles [data-copy]; nothing to do here.
     }
   });
 
@@ -876,13 +874,15 @@
       var c = await cloud('POST', '/api/link/codes');
       codeEl.textContent = c.code;
       var cmd = $('#link-command');
-      if (cmd) cmd.textContent = 'maestria connect --link ' + c.code + ' --cloud ' + location.origin;
+      if (cmd) cmd.innerHTML = window.MaestriaCmd.words('maestria connect --link ' + c.code + ' --cloud ' + location.origin);
+      var copyBtn = $('#link-copy'); // only copyable once the command holds the real code
+      if (copyBtn) copyBtn.disabled = false;
       var status = $('#link-status');
       var left = $('[data-countdown]');
       var tick = function () {
         var s = Math.max(0, Math.round((c.expiresAt - Date.now()) / 1000));
         if (left) left.textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
-        if (!s) { clearInterval(linkTimer); if (status) status.innerHTML = 'The code expired. <a href="/connectors/link">Get a new one</a>.'; }
+        if (!s) { clearInterval(linkTimer); if (copyBtn) copyBtn.disabled = true; if (status) status.innerHTML = 'The code expired. <a href="/connectors/link">Get a new one</a>.'; }
       };
       tick();
       linkTimer = setInterval(async function () {
