@@ -123,6 +123,7 @@ func TestValidation(t *testing.T) {
 		`{"usage":{"pollSeconds":1}}`,
 		`{"standby":{"thresholds":{"claude":{"session":101}}}}`, `{"standby":{"thresholds":{"bad key!":{}}}}`,
 		`{"standby":{"resumeBelowPercent":100}}`,
+		`{"updates":{"check":"no"}}`, `{"updates":true}`,
 		`{"tunnel":{"stopCommand":"pkill cloudflared"}}`, `{"tunnel":{"stopCommand":[""]}}`,
 		`{"tunnel":{"stopCommand":["a","a","a","a","a","a","a","a","a","a","a","a","a","a","a","a","a"]}}`,
 	}
@@ -283,5 +284,17 @@ func TestStandbyActionsWakeAndSave(t *testing.T) {
 	}
 	if _, err := Parse([]byte(`{"standby":{"actions":{"claude":{"session":"bogus"}}}}`), dir, env); err == nil {
 		t.Fatal("invalid action should fail parse")
+	}
+}
+
+func TestUpdatesCheckDefaultsOnAndCanBeTurnedOff(t *testing.T) {
+	env := testEnv(t.TempDir(), nil)
+	cfg, err := Parse([]byte(`{}`), t.TempDir(), env)
+	if err != nil || !cfg.Updates.Check {
+		t.Fatalf("default: %+v %v", cfg.Updates, err)
+	}
+	cfg, err = Parse([]byte(`{"updates":{"check":false}}`), t.TempDir(), env)
+	if err != nil || cfg.Updates.Check {
+		t.Fatalf("off: %+v %v", cfg.Updates, err)
 	}
 }

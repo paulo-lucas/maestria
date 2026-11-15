@@ -11,6 +11,19 @@
 
       {{template "banner" .Banner}}
 
+      {{with .Update}}<div class="banner" data-status="review" role="status">
+        {{icon "i-sparkle"}}
+        <div class="banner__body">
+          <p class="banner__title">Maestria {{.Version}} is available</p>
+          <p class="banner__text">Update on this machine with <code>maestria update</code>.{{if .URL}} <a href="{{.URL}}" rel="noopener noreferrer">Release notes</a>{{end}}</p>
+        </div>
+        <form class="banner__actions" method="post" action="/updates/dismiss">
+          <input type="hidden" name="_csrf" value="{{$.CSRF}}">
+          <input type="hidden" name="version" value="{{.Version}}">
+          <button class="btn btn--sm" type="submit">Dismiss</button>
+        </form>
+      </div>{{end}}
+
       <section class="section" aria-labelledby="pol-title">
         <div class="section__head">
           <h2 class="section__title" id="pol-title">Sessions</h2>

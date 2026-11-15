@@ -28,6 +28,7 @@ import (
 	"github.com/paulo-lucas/maestria/internal/floors"
 	"github.com/paulo-lucas/maestria/internal/tunnel"
 	"github.com/paulo-lucas/maestria/internal/ui"
+	"github.com/paulo-lucas/maestria/internal/update"
 )
 
 // CSP is the Content-Security-Policy sent on every response: no inline script or style.
@@ -68,9 +69,18 @@ type Deps struct {
 	Devices *devices.Manager
 	// ConnectorName is this machine's name in the cloud (hosted mode), shown in /api/relay/info.
 	ConnectorName string
+	// Updates supplies the "newer release" note on the Security page. nil hides it.
+	Updates UpdateNotes
 	// Env overrides OS environment lookup (used in tests).
 	Env config.Env
 	Now func() time.Time
+}
+
+// UpdateNotes is what the panel needs from the release notifier: a cached answer (never a network
+// call from a page view) and a way to close the note.
+type UpdateNotes interface {
+	Cached() *update.Notice
+	Dismiss(version string)
 }
 
 // Server is the panel's http.Handler.
@@ -161,6 +171,7 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /workspaces/{id}/docs/asset", s.getWorkspaceDocsAsset)
 	m.HandleFunc("GET /usage", s.getUsage)
 	m.HandleFunc("GET /security", s.getSecurity)
+	m.HandleFunc("POST /updates/dismiss", s.postUpdateDismiss)
 
 	m.HandleFunc("GET /api/session", s.apiSession)
 	m.HandleFunc("GET /api/tunnel", s.apiTunnel)

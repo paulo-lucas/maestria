@@ -269,7 +269,27 @@ func (s *Server) getSecurity(w http.ResponseWriter, r *http.Request) {
 		}
 		d.Audit = append(d.Audit, row)
 	}
+	if s.Updates != nil {
+		if n := s.Updates.Cached(); n != nil {
+			d.Update = &ui.UpdateNote{Version: n.Version}
+			if strings.HasPrefix(n.URL, "https://github.com/") {
+				d.Update.URL = n.URL
+			}
+		}
+	}
 	s.render(w, ui.PageSecurity, d)
+}
+
+// postUpdateDismiss closes the "newer release" note for one version. It changes nothing but a cache
+// file, and like every write it is session-, origin- and CSRF-checked and audited.
+func (s *Server) postUpdateDismiss(w http.ResponseWriter, r *http.Request) {
+	if s.Updates != nil {
+		if v := strings.TrimSpace(r.PostFormValue("version")); v != "" && len(v) <= 64 {
+			s.Updates.Dismiss(v)
+			_ = s.Audit.Write("update_dismiss", ipOf(r), map[string]any{"version": v, "via": "web"})
+		}
+	}
+	http.Redirect(w, r, "/security", http.StatusSeeOther)
 }
 
 // ---- JSON API ----

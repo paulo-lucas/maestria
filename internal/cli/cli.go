@@ -17,6 +17,7 @@ import (
 
 	"github.com/paulo-lucas/maestria/internal/config"
 	"github.com/paulo-lucas/maestria/internal/service"
+	"github.com/paulo-lucas/maestria/internal/update"
 )
 
 const help = `maestria: control panel for Maestri workspaces
@@ -42,6 +43,7 @@ Usage:
   maestria auth reset-sessions       Sign out every browser session
   maestria tunnel on|off|status      Turn the kill switch off (locally) or on, or show its state
   maestria config allow-host <host>  Let the panel answer to a public host name (also: hosts, disallow-host)
+  maestria update [--check] [--yes]  Update to the latest release (--channel prerelease, --force, --version TAG)
   maestria version                   Print the version
 
 Config directory: $MAESTRIA_CONFIG_DIR, %AppData%\maestria (Windows), or ~/.config/maestria
@@ -64,6 +66,8 @@ type Env struct {
 	ServiceRunner       service.CommandRunner
 	ServiceBinaryPath   string
 	ServiceReachability func(host string, port int) service.Reachability
+	// UpdateHook adjusts the release updater (tests point it at a fake GitHub).
+	UpdateHook func(*update.Updater)
 	// Version, Commit, and Date are injected at build time via -ldflags.
 	Version string
 	Commit  string
@@ -144,6 +148,8 @@ func run(args []string, env *Env) error {
 		return cmdDevices(rest, env)
 	case "service":
 		return cmdService(rest, env)
+	case "update":
+		return cmdUpdate(rest, env)
 	case "auth":
 		if len(rest) == 0 {
 			return usagef("Usage: maestria auth setup [--force] | reset-sessions")

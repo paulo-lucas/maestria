@@ -88,6 +88,13 @@ type Relay struct {
 	RatePerMinute int `json:"ratePerMinute"`
 }
 
+// Updates controls the connector's own update notices. Installing an update is always an explicit
+// command (`maestria update`); this only decides whether Maestria may look for one.
+type Updates struct {
+	// Check lets the panel ask GitHub (at most once a day) whether a newer release exists.
+	Check bool `json:"check"`
+}
+
 // Config is the validated configuration.
 type Config struct {
 	ConfigDir           string
@@ -103,6 +110,7 @@ type Config struct {
 	Standby             Standby
 	Tunnel              Tunnel
 	Relay               Relay
+	Updates             Updates
 	// Cloud is the hosted Maestria URL for `maestria connect` (the --cloud flag overrides it).
 	Cloud string
 }
@@ -216,8 +224,9 @@ func Defaults(configDir string, env Env) (*Config, error) {
 			ResumeBelowPercent: &resume,
 			WakeOnReset:        true,
 		},
-		Tunnel: Tunnel{StopCommand: []string{}, StartCommand: []string{}, StatusCommand: []string{}},
-		Relay:  Relay{Enabled: true, ApprovalAbsoluteDays: 30, IdleDays: 7, RatePerMinute: 120},
+		Tunnel:  Tunnel{StopCommand: []string{}, StartCommand: []string{}, StatusCommand: []string{}},
+		Relay:   Relay{Enabled: true, ApprovalAbsoluteDays: 30, IdleDays: 7, RatePerMinute: 120},
+		Updates: Updates{Check: true},
 	}, nil
 }
 
@@ -229,7 +238,7 @@ var (
 	knownTopKey = map[string]bool{
 		"maestriDir": true, "port": true, "cookieSecure": true, "allowedHosts": true,
 		"trustCfConnectingIp": true, "session": true, "login": true, "cloudflareAccess": true,
-		"usage": true, "standby": true, "tunnel": true, "relay": true, "cloud": true,
+		"usage": true, "standby": true, "tunnel": true, "relay": true, "cloud": true, "updates": true,
 	}
 )
 
@@ -435,6 +444,17 @@ func Parse(data []byte, configDir string, env Env) (*Config, error) {
 			return nil, errorf("config: \"cloud\" must be an https URL like https://maestria.example (http is only allowed for localhost)")
 		}
 		cfg.Cloud = strings.TrimRight(u, "/")
+	}
+	if raw, ok := top["updates"]; ok {
+		o, err := decodeObj(raw, "updates")
+		if err != nil {
+			return nil, err
+		}
+		if v, ok := o["check"]; ok {
+			if cfg.Updates.Check, err = boolField(v, "updates.check"); err != nil {
+				return nil, err
+			}
+		}
 	}
 	if raw, ok := top["relay"]; ok {
 		o, err := decodeObj(raw, "relay")

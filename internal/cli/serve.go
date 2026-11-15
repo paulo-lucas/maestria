@@ -18,6 +18,7 @@ import (
 	"github.com/paulo-lucas/maestria/internal/runlock"
 	"github.com/paulo-lucas/maestria/internal/store"
 	"github.com/paulo-lucas/maestria/internal/tunnel"
+	"github.com/paulo-lucas/maestria/internal/update"
 	"github.com/paulo-lucas/maestria/internal/web"
 	"github.com/paulo-lucas/maestria/internal/workspaces"
 )
@@ -32,7 +33,9 @@ type built struct {
 	DB    *sql.DB
 	Tun   *tunnel.Controller
 	Audit *audit.Log
-	Close func()
+	// Updates tells the panel (and the startup line) that a newer release exists.
+	Updates *update.Notifier
+	Close   func()
 }
 
 type buildOpts struct {
@@ -93,12 +96,14 @@ func buildServer(env *Env, o buildOpts) (*built, error) {
 	if o.Devices != nil {
 		deps.Devices = o.Devices(db, cfg)
 	}
+	notifier := env.updateNotifier(cfg)
+	deps.Updates = notifier
 	srv, err := web.New(deps)
 	if err != nil {
 		db.Close()
 		return nil, err
 	}
-	return &built{Srv: srv, Cfg: cfg, DB: db, Tun: tun, Audit: aud, Close: func() { db.Close() }}, nil
+	return &built{Srv: srv, Cfg: cfg, DB: db, Tun: tun, Audit: aud, Updates: notifier, Close: func() { db.Close() }}, nil
 }
 
 // BuildServer wires the panel from the config directory. The caller closes the returned DB.
@@ -188,6 +193,11 @@ func cmdServe(args []string, env *Env) error {
 	defer stop()
 	srv.StartBackground(ctx) // once: shared by the panel and the relay
 	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		watchForUpdates(ctx, b.Updates, env)
+	}()
 	if conn != nil {
 		fmt.Fprintf(env.Stdout, "Also connecting to %s as %q. Approve browsers with \"maestria devices\".\n", link.Cloud, link.Name)
 		wg.Add(1)

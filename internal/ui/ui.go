@@ -232,6 +232,12 @@ type Banner struct {
 	Text   string
 }
 
+// UpdateNote is the "a newer release exists" note.
+type UpdateNote struct {
+	Version string
+	URL     string // release page, https only
+}
+
 // AuditRow is one audit entry shown on the security page.
 type AuditRow struct {
 	When   string
@@ -420,6 +426,9 @@ type Data struct {
 	SubTitle   string
 	NowISO     string
 	NowLabel   string
+
+	// Update is a pending "new release" note (Security page); nil when there is none.
+	Update *UpdateNote
 
 	// Security page.
 	Listen            string

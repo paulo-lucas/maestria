@@ -59,7 +59,9 @@ type harness struct {
 
 type opts struct {
 	mutate func(*config.Config)
-	access *auth.AccessVerifier
+	// updates supplies the "newer release" note.
+	updates UpdateNotes
+	access  *auth.AccessVerifier
 	// activity builds the Wire service once the database, audit log and config exist.
 	activity func(cfg *config.Config, db *sql.DB, aud *audit.Log) *activity.Service
 }
@@ -82,12 +84,14 @@ func newHarness(t *testing.T, o ...opts) *harness {
 	cfg.Tunnel.StartCommand = []string{"start-tunnel"}
 	var access *auth.AccessVerifier
 	var actFn func(cfg *config.Config, db *sql.DB, aud *audit.Log) *activity.Service
+	var updates UpdateNotes
 	if len(o) > 0 {
 		if o[0].mutate != nil {
 			o[0].mutate(cfg)
 		}
 		access = o[0].access
 		actFn = o[0].activity
+		updates = o[0].updates
 	}
 
 	secret, _ := auth.GenerateTOTPSecret()
@@ -116,7 +120,7 @@ func newHarness(t *testing.T, o ...opts) *harness {
 	}
 	srv, err := New(Deps{
 		Config: cfg, DB: db, Secrets: &auth.Secrets{PasswordHash: hash, TOTPSecret: secret, CreatedAt: "now"},
-		Audit: aud, Sessions: sessions, Limiter: limiter, Tunnel: tun, Access: access, Activity: act, Now: clock.now,
+		Audit: aud, Sessions: sessions, Limiter: limiter, Tunnel: tun, Access: access, Activity: act, Updates: updates, Now: clock.now,
 	})
 	if err != nil {
 		t.Fatal(err)
