@@ -334,6 +334,10 @@ func TestOnlyTheRealLocalOwnerGetsTheLoopbackAddress(t *testing.T) {
 		"loopback Host, X-Real-Ip":   req("127.0.0.1:4777", map[string]string{"X-Real-Ip": "203.0.113.9"}),
 		"loopback Host, Cloudflare":  req("127.0.0.1:4777", map[string]string{"Cf-Ray": "abc"}),
 		"loopback Host, Via":         req("127.0.0.1:4777", map[string]string{"Via": "1.1 proxy"}),
+		"loopback Host, X-Client-Ip": req("127.0.0.1:4777", map[string]string{"X-Client-Ip": "203.0.113.9"}),
+		"loopback Host, X-Cluster":   req("127.0.0.1:4777", map[string]string{"X-Cluster-Client-Ip": "203.0.113.9"}),
+		"loopback Host, Fastly":      req("127.0.0.1:4777", map[string]string{"Fastly-Client-Ip": "203.0.113.9"}),
+		"loopback Host, X-Original":  req("127.0.0.1:4777", map[string]string{"X-Original-Forwarded-For": "203.0.113.9"}),
 		"loopback Host, wrong port":  req("127.0.0.1:9999", nil),
 	} {
 		if got := h.srv.clientIP(r); got != tunnelClient {

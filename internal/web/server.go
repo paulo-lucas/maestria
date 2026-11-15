@@ -417,6 +417,7 @@ const tunnelClient = "tunnel"
 var proxyHeaders = []string{
 	"Cf-Connecting-Ip", "Cf-Ray", "Cf-Visitor", "Cf-Ipcountry", "True-Client-Ip", "X-Forwarded-For",
 	"X-Forwarded-Host", "X-Forwarded-Proto", "X-Forwarded-Port", "X-Real-Ip", "Forwarded", "Via",
+	"X-Client-Ip", "X-Cluster-Client-Ip", "Fastly-Client-Ip", "X-Original-Forwarded-For",
 }
 
 // directLocal reports whether a request over loopback is the person at this machine: the Host is
