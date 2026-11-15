@@ -32,6 +32,7 @@
     access: {},          // connector id -> { state: ok|pair|revoked|killed|disabled|offline|clock|error, reason }
     data: {},            // connector id -> { at, doc, workspaces: [...] } (parsed overview)
     streams: {},         // connector id -> AbortController
+    retries: {},         // connector id -> { timer, delay }: the next probe after one that failed
     key: null,
     loaded: false,
     route: null,
@@ -113,7 +114,11 @@
       noteAccess(cid, code);
       throw new RelayError(code, res.status);
     }
-    if (!o.stream && !(state.access[cid] && state.access[cid].state === 'ok')) noteAccess(cid, null);
+    if (!o.stream && !(state.access[cid] && state.access[cid].state === 'ok')) {
+      noteAccess(cid, null);
+      // The machine answers again: bring back the overview data a failed probe dropped.
+      if (!state.data[cid] && path !== '/') probeSoon(cid, 0);
+    }
     return res;
   }
 
@@ -172,14 +177,28 @@
       var doc = new DOMParser().parseFromString(html, 'text/html');
       state.data[cid] = { at: Date.now(), doc: doc, workspaces: parseWorkspaces(doc, cid) };
       noteAccess(cid, null);
+      delete state.retries[cid];
       startStream(cid);
     } catch (e) {
       delete state.data[cid];
       if (!(e instanceof RelayError)) state.access[cid] = { state: 'error', reason: String(e.message || e) };
       stopStream(cid);
+      // A timeout or a dropped connection passes: try again, waiting longer each time. Refusals
+      // that need the person (approval, kill switch, remote access off) wait for them instead.
+      if (['error', 'clock'].indexOf((state.access[cid] || {}).state) >= 0) {
+        var prev = state.retries[cid];
+        probeSoon(cid, prev ? Math.min(prev.delay * 2, 60000) : 2000);
+      }
     }
     renderShell();
     softRender();
+  }
+
+  // probeSoon schedules one probe of a machine, replacing any that is already scheduled.
+  function probeSoon(cid, delay) {
+    var prev = state.retries[cid];
+    if (prev) clearTimeout(prev.timer);
+    state.retries[cid] = { delay: delay || 2000, timer: setTimeout(function () { probe(cid); }, delay) };
   }
 
   function parseWorkspaces(doc, cid) {
@@ -497,6 +516,19 @@
       }).join('') + '</ul></div></div>';
   }
 
+  // The machine is online but did not answer this browser (a timeout, a dropped connection, a
+  // clock that is off, remote access turned off). Approving again would not help, so say so.
+  function stateUnreachable(list) {
+    return '<div class="page page--narrow"><header class="page-head"><div class="page-head__title"><h1>Overview</h1></div></header>' +
+      '<div class="card"><div class="empty"><span class="empty__icon">' + icon('i-offline', 'icon--lg') + '</span><p class="empty__title">Could not reach your machine</p>' +
+      '<p class="empty__text">It is online, but it did not answer this browser. This is usually a slow or dropped connection. Maestria tries again by itself.</p>' +
+      '<button class="btn btn--primary btn--sm" type="button" data-action="retry-probe">Try again</button></div>' +
+      '<ul class="list machine-list">' + list.map(function (c) {
+        var a = state.access[c.id] || {};
+        return '<li class="device"><span class="device__icon">' + icon('i-laptop') + '</span><span class="device__name">' + esc(c.name) + ' <span class="status" data-status="warn">Not answering</span></span><span class="device__meta">' + esc(ERROR_TEXT[a.reason] || a.reason || '') + '</span></li>';
+      }).join('') + '</ul></div></div>';
+  }
+
   function stateMachineGone(c) {
     return '<div class="page page--narrow"><div class="card"><div class="empty"><span class="empty__icon">' + icon('i-offline', 'icon--lg') + '</span><p class="empty__title">' + esc(c ? c.name : 'This machine') + ' went offline</p>' +
       '<p class="empty__text">This workspace runs on ' + esc(c ? c.name : 'a machine that is offline') + ', so it is hidden until that machine reconnects. Nothing you send is kept for later. Your other workspaces are still live.</p>' +
@@ -585,7 +617,7 @@
     // Updates: the connectors' notices, merged and sorted like Needs you.
     var updates = [];
     ready.forEach(function (c) {
-      $('#updates-list > li.task', state.data[c.id].doc).forEach(function (li) {
+      $$('#updates-list > li.task', state.data[c.id].doc).forEach(function (li) {
         var clone = li.cloneNode(true);
         var comp = c.id + ':' + (li.getAttribute('data-ws-id') || '');
         clone.setAttribute('data-ws-id', comp);
@@ -856,6 +888,13 @@
       '<div class="dialog__foot"><button class="btn" type="button" data-close-dialog>Cancel</button><button class="btn btn--danger" type="submit" data-requires="kill-confirm">' + icon('i-power') + 'Turn on kill switch</button></div></form></dialog>' + aboutHtml() + '</div>';
   }
 
+  document.addEventListener('click', function (ev) {
+    var b = ev.target.closest('[data-action="retry-probe"]');
+    if (!b) return;
+    b.disabled = true;
+    onlineConnectors().forEach(function (c) { if (!state.data[c.id] && !c.killSwitch) probeSoon(c.id, 0); });
+  });
+
   document.addEventListener('click', async function (ev) {
     var b = ev.target.closest('[data-action="revoke-device"]');
     if (b) {
@@ -1021,14 +1060,17 @@
         if (!onlineConnectors().length) return stateNoMachine();
         var ready = readyConnectors();
         if (!ready.length) {
-          var waiting = onlineConnectors().filter(function (c) { return !state.access[c.id] || state.access[c.id].state === 'ok'; });
-          if (waiting.length && !state.loaded) return '<div class="page"><p class="status status--quiet"><span class="spinner"></span>Connecting to your machines…</p></div>';
           var live = onlineConnectors();
-          if (live.every(function (c) { return (state.access[c.id] || {}).state === 'killed'; })) {
+          var accessOf = function (c) { return (state.access[c.id] || {}).state; };
+          // No answer yet (a probe is on its way, which can take a while on a slow connection).
+          if (live.some(function (c) { return !accessOf(c) || accessOf(c) === 'ok'; })) return '<div class="page"><p class="status status--quiet"><span class="spinner"></span>Connecting to your machines…</p></div>';
+          if (live.every(function (c) { return accessOf(c) === 'killed'; })) {
             return '<div class="page page--narrow"><header class="page-head"><div class="page-head__title"><h1>Overview</h1></div></header>' +
               stateKilled(live.map(function (c) { return c.name; })) + '<div class="card">' + machineList(state.connectors) + '</div></div>';
           }
-          return stateNeedsApproval(live);
+          var needPair = live.filter(function (c) { return ['pair', 'revoked'].indexOf(accessOf(c)) >= 0; });
+          if (needPair.length) return stateNeedsApproval(needPair);
+          return stateUnreachable(live);
         }
         if (!allWorkspaces().length) return stateOnboarding();
         return renderOverview();
@@ -1152,7 +1194,16 @@
         try { applyConnectors(JSON.parse(ev.data).connectors || []); } catch (e) { /* ignore */ }
       });
     }
-    document.addEventListener('visibilitychange', function () { if (!document.hidden) refreshData(); });
+    var wake = function () {
+      if (document.hidden) return;
+      refreshData();
+      // A machine that did not answer earlier gets a fresh try now, not at the end of its backoff.
+      onlineConnectors().forEach(function (c) {
+        if (!state.data[c.id] && !c.killSwitch && ['error', 'clock'].indexOf((state.access[c.id] || {}).state) >= 0) probeSoon(c.id, 0);
+      });
+    };
+    document.addEventListener('visibilitychange', wake);
+    window.addEventListener('online', wake);
     void pre;
   }
 
