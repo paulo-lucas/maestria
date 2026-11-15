@@ -394,11 +394,12 @@
     if (!el) {
       el = document.createElement('p');
       el.className = 'field__error';
-      el.setAttribute('role', 'alert');
       el.hidden = true;
       el.setAttribute('data-task-error', '');
       task.append(el);
     }
+    // The line may come from the template (no role) or be new: either way it is announced.
+    el.setAttribute('role', 'alert');
     return el;
   }
 
