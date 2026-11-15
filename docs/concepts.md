@@ -32,7 +32,7 @@ A feature of Maestri that lets other programs read what is happening (agents, ch
 The project in this repository. It is one program, `maestria`, plus an optional server, `maestria-cloud`.
 
 ### The panel
-The web page Maestria shows you. It has an **Overview**, and for each workspace: **Activity**, **Human tasks**, **Chat**, **Floors** and **Docs**. It also has **Usage & standby** and **Security**.
+The web page Maestria shows you. It has an **Overview**, and for each workspace: **Activity**, **Human tasks**, **Chat**, **Floors** and **Docs**. It also has **Usage & standby**, **Insights** and **Security**.
 
 ### The connector
 The part of Maestria that runs **on your machine**. It reads Maestri, keeps your data in a small local database, and decides what is allowed. Whatever happens, the connector has the last word. In the hosted setup it is started with `maestria connect`. In the self-hosted setup it is the same program, started with `maestria serve`.
@@ -54,6 +54,9 @@ Tasks that need you are listed under **Needs you**. You can also postpone one wi
 
 ### Standby
 A safety brake for your AI usage. Each AI provider has limits (for example a session limit and a weekly limit). Maestria watches them. When you get close to a limit that you set, it puts the workspace on **standby**: either it tells the Maestro, or it interrupts the agents. When the limit resets, it wakes the Maestro up again. Maestria only *reads* Maestri's usage files. It never changes them.
+
+### Insights
+A rating from 1 to 7 of how well agent work on a machine turns usage into landed floors, over the last 30 days: how fast floors land, how much of the work holds, how much usage went to floors that landed, and how fast you answer. Each area shows its measure and what to try next. See [Insights](insights.md).
 
 ### The kill switch
 One button (and one command, `maestria tunnel off`) that cuts off every remote way in. It can be turned on from anywhere. It can only be turned off **on the machine itself**. See [Security](security.md).

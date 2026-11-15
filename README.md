@@ -54,6 +54,7 @@ When agents work for hours on several projects, they stop and ask: *"Can I merge
 - **Live activity and chat:** which agent does what, and a chat with your Maestro (through Maestri Wire).
 - **Floors:** what is planned, what is in progress, what landed.
 - **Usage and standby:** your AI limits, and an automatic pause before you hit them.
+- **Insights:** a 1 to 7 rating of how your agent work turns usage into landed floors, with what to try next.
 - **A kill switch** that cuts off remote access in one click.
 
 ## Choose your setup

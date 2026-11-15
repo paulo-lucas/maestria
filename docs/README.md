@@ -23,6 +23,7 @@ Pick the guide that matches what you want to do. If you are new, read the first 
 | Guide | Who it is for | You will learn |
 | --- | --- | --- |
 | [For Maestro agents](for-agents.md) | Agents, and people who script | The `maestria` command line: post, inbox, answers, say, wait, status, floors, briefs, standby. |
+| [Insights](insights.md) | Anyone who wants to get more out of their agents | What the 1 to 7 rating measures, every threshold, where the data comes from and its limits. |
 | [Security](security.md) | Everyone who wants to know how it is protected | The model in plain words, then local mode, hosted mode and the threat model. |
 | [FAQ](faq.md) | Everyone | Short answers to common questions. |
 | [Troubleshooting](troubleshooting.md) | Anyone who sees an error | Real error messages and how to fix each one. |
