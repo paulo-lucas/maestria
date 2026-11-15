@@ -53,8 +53,28 @@ uname -m
 
 ```sh
 cd /tmp
-curl -fsSLO https://github.com/paulo-lucas/maestria/releases/download/vVERSION/maestria-cloud_VERSION_linux_ARCH.tar.gz
-curl -fsSLO https://github.com/paulo-lucas/maestria/releases/download/vVERSION/SHA256SUMS
+BASE=https://github.com/paulo-lucas/maestria/releases/download/vVERSION
+curl --proto '=https' --tlsv1.2 -fsSLO "$BASE/maestria-cloud_VERSION_linux_ARCH.tar.gz"
+curl --proto '=https' --tlsv1.2 -fsSLO "$BASE/SHA256SUMS"
+curl --proto '=https' --tlsv1.2 -fsSLO "$BASE/SHA256SUMS.sigstore.json"
+```
+
+This machine holds your users' accounts, so check **who built the file**, not only that it is intact. You need [cosign](https://docs.sigstore.dev/cosign/system_config/installation/). Use the same `VERSION` as above, with the `v`:
+
+```sh
+cosign verify-blob --bundle SHA256SUMS.sigstore.json \
+  --certificate-identity "https://github.com/paulo-lucas/maestria/.github/workflows/release.yml@refs/tags/vVERSION" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-github-workflow-repository paulo-lucas/maestria \
+  --certificate-github-workflow-trigger push \
+  SHA256SUMS
+```
+
+**What you should see:** `Verified OK`. If it says anything else, stop: the checksum list was not made by this project's release process for that version. (Instead of cosign, `gh attestation verify maestria-cloud_VERSION_linux_ARCH.tar.gz -R paulo-lucas/maestria --signer-workflow paulo-lucas/maestria/.github/workflows/release.yml` checks the archive directly. More in [Verify a download](security.md#verify-a-download).)
+
+Then check the archive against the list you just verified:
+
+```sh
 grep " maestria-cloud_VERSION_linux_ARCH.tar.gz" SHA256SUMS | sha256sum -c -
 ```
 
@@ -332,7 +352,7 @@ sudo maestria-cloud update --check     # is there a newer release?
 sudo maestria-cloud update             # download it, check it, replace it, restart
 ```
 
-It verifies the release's SHA-256 against its `SHA256SUMS`, runs the backup script if it is there (see [10. Back up](#10-back-up)), keeps the old program as `/usr/local/bin/maestria-cloud.previous`, restarts `maestria-cloud` and waits up to 30 seconds for `/healthz`. If the new version does not answer, it puts the old one back and restarts that. Without a terminal (a script, cron) add `--yes`. A server built from source (`maestria-cloud version` shows `dev`) never updates itself; rebuild it instead.
+It verifies the release's SHA-256 against its `SHA256SUMS` (and, if cosign is installed, the signature on that file: see below), runs the backup script if it is there (see [10. Back up](#10-back-up)), keeps the old program as `/usr/local/bin/maestria-cloud.previous`, restarts `maestria-cloud` and waits up to 30 seconds for `/healthz`. If the new version does not answer, it puts the old one back and restarts that. Without a terminal (a script, cron) add `--yes`. A server built from source (`maestria-cloud version` shows `dev`) never updates itself; rebuild it instead.
 
 **Automatically.** If you set the VM up with `packaging/linux/setup-cloud.sh`, a systemd timer does this for you about every 15 minutes. It needs root to replace the program; the server itself keeps running as the `maestria` user.
 
@@ -342,6 +362,14 @@ journalctl -u maestria-cloud-update -n 30
 ```
 
 Pushing a release tag is enough: the server picks it up on its own ([Releasing](releasing.md)). GitHub holds no keys to your server; the server asks GitHub. To turn it off, re-run the script with `--no-auto-update`, or `sudo systemctl disable --now maestria-cloud-update.timer`. To add the timer to a VM you set up by hand, run `setup-cloud.sh` once; it keeps your settings and data.
+
+**Check who built each update (recommended).** Install [cosign](https://docs.sigstore.dev/cosign/system_config/installation/) on the VM. From then on every update, including the timer's, verifies the signature on `SHA256SUMS` against this project's release workflow and the exact tag, and stops if it is missing or wrong. To make sure a cosign that later goes missing is an error and not a quiet return to checksum-only, add this line to `/etc/maestria-cloud/env` (the update unit reads that file):
+
+```text
+MAESTRIA_REQUIRE_SIGNATURE=1
+```
+
+cosign needs to reach `tuf-repo-cdn.sigstore.dev` to fetch Sigstore's trusted root, and keeps a cache of it. The update unit gives it `/var/lib/maestria-cloud-update` for that (`StateDirectory`, with `HOME` and `TUF_ROOT` pointing there), because the unit cannot write to root's home. A VM set up before this existed needs `setup-cloud.sh` run once more to get that unit. After installing cosign, run `sudo systemctl start maestria-cloud-update.service` and read `journalctl -u maestria-cloud-update -n 30`: you should see `Verified the release signature`.
 
 **An older version, or a rollback:** `sudo maestria-cloud update --yes --force --version v0.2.0` installs a specific release, even an older one ([how to roll back](releasing.md#roll-back)).
 

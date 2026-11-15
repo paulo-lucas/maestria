@@ -169,6 +169,12 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 EnvironmentFile=/etc/maestria-cloud/env
+# If cosign is installed, the update checks the release signature with it. cosign keeps the
+# Sigstore trusted root (a TUF cache) in $TUF_ROOT, by default under $HOME/.sigstore, and
+# ProtectHome=true hides /root: give it a state directory instead, or every run would fail.
+StateDirectory=maestria-cloud-update
+Environment=HOME=/var/lib/maestria-cloud-update
+Environment=TUF_ROOT=/var/lib/maestria-cloud-update/sigstore
 ExecStart=/usr/local/bin/maestria-cloud update --yes
 NoNewPrivileges=true
 PrivateTmp=true

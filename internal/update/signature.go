@@ -7,7 +7,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
+
+	"github.com/paulo-lucas/maestria/internal/termsafe"
 )
 
 // SignatureFile is the release asset holding the cosign (sigstore) bundle for SHA256SUMS:
@@ -93,10 +94,9 @@ func (u *Updater) verifySignature(ctx context.Context, rel Release, sums []byte)
 	}
 	out, err := run(ctx, cosign, CosignArgs(u.repo(), rel.Tag, bundlePath, sumsPath))
 	if err != nil {
-		msg := strings.TrimSpace(string(out))
-		if len(msg) > 2000 {
-			msg = msg[len(msg)-2000:]
-		}
+		// cosign's message can echo text parsed from the (untrusted) bundle: strip anything a
+		// terminal would act on.
+		msg := termsafe.Clean(string(out), 2000)
 		return fmt.Errorf("the signature on %s for %s did not verify (%v); refusing to install. If cosign reports an unreadable bundle, upgrade cosign (releases are signed with cosign v3). %s", ChecksumsFile, rel.Tag, err, msg)
 	}
 	u.logf("Verified the release signature (%s)", SignerIdentity(u.repo(), rel.Tag))

@@ -80,11 +80,14 @@ func TestApplyVerifiesSignatureWithCosign(t *testing.T) {
 func TestApplyFailsClosedWithCosign(t *testing.T) {
 	t.Run("signature does not verify", func(t *testing.T) {
 		u, ins := signedUpdater(t, true, func([]string) ([]byte, error) {
-			return []byte("Error: none of the expected identities matched"), errors.New("exit status 1")
+			return []byte("Error: none of the expected identities matched\x1b[2J\x07"), errors.New("exit status 1")
 		})
 		_, err := u.Apply(context.Background(), latest(t, u, ChannelStable))
 		if err == nil || !strings.Contains(err.Error(), "did not verify") || !strings.Contains(err.Error(), "none of the expected identities") {
 			t.Fatalf("err = %v", err)
+		}
+		if strings.ContainsAny(err.Error(), "\x1b\x07") {
+			t.Fatalf("control characters from cosign reached the error: %q", err)
 		}
 		if ins.read(t) != "OLD BINARY" {
 			t.Fatal("binary replaced despite a failed signature")
