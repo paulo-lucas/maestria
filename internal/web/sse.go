@@ -89,12 +89,18 @@ func (s *Server) apiStream(w http.ResponseWriter, r *http.Request) {
 		return true
 	}
 
+	// Subscribe and take the baseline signature BEFORE announcing "ready": a client
+	// that writes as soon as it sees "ready" must never land in the gap between the
+	// announcement and the baseline, or its change would be folded into the baseline
+	// and never reported.
+	ch := s.broker.subscribe()
+	defer s.broker.unsubscribe(ch)
+
+	lastSig := dbChangeSignature(s.DB)
+
 	if !writeEvent("ready", map[string]any{"ts": s.Now().UnixMilli()}) {
 		return
 	}
-
-	ch := s.broker.subscribe()
-	defer s.broker.unsubscribe(ch)
 
 	pollInterval := s.ssePollInterval
 	if pollInterval <= 0 {
@@ -105,8 +111,6 @@ func (s *Server) apiStream(w http.ResponseWriter, r *http.Request) {
 
 	pingTicker := time.NewTicker(20 * time.Second)
 	defer pingTicker.Stop()
-
-	lastSig := dbChangeSignature(s.DB)
 
 	for {
 		select {
