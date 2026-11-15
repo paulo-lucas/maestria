@@ -5,22 +5,30 @@ on:
     tags:
       - "v*"
 
-permissions:
-  contents: write
+# Nothing is writable unless a job asks for it.
+permissions: {}
 
 jobs:
   release:
-    name: Build and publish release
+    name: Build, sign and publish release
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the release and upload its assets
+      id-token: write # the OIDC token that provenance and keyless signing exchange for a certificate
+      attestations: write # store the provenance attestations
     steps:
       - name: Check out repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
       - name: Set up Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
-          cache: true
+          # No cache in the job that produces the release: a cache restored from another ref
+          # must not be able to influence what gets shipped.
+          cache: false
 
       - name: Use the toolchain go.mod pins
         shell: bash
@@ -40,6 +48,46 @@ jobs:
           -homebrew-template packaging/homebrew/maestria.rb
           -homebrew-out dist/release/maestria.rb
 
+      - name: Attest build provenance
+        # Records, in GitHub's attestation store, that these exact files (by digest) were built by
+        # this workflow from this commit. Check with `gh attestation verify <file> -R <repo>`.
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/release/*.tar.gz
+            dist/release/*.zip
+            dist/release/SHA256SUMS
+            dist/release/maestria.rb
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+        with:
+          cosign-release: v3.1.4
+
+      - name: Sign SHA256SUMS (keyless)
+        shell: bash
+        # Keyless: Fulcio issues a short-lived certificate for this workflow's OIDC identity and
+        # the signature is logged in Rekor. The bundle holds signature, certificate and log proof,
+        # so a consumer needs only the bundle, SHA256SUMS and the identity it expects.
+        run: |
+          cosign sign-blob --yes \
+            --bundle dist/release/SHA256SUMS.sigstore.json \
+            dist/release/SHA256SUMS
+
+      - name: Verify the signature just made
+        shell: bash
+        # The same check the installer runs, against what is about to be published. It fails the
+        # release here, not on a user's machine, if the identity or the format is not what the
+        # consumers expect.
+        env:
+          IDENTITY: ^https://github\.com/${{ github.repository }}/\.github/workflows/release\.yml@refs/tags/v.+$
+        run: |
+          cosign verify-blob \
+            --bundle dist/release/SHA256SUMS.sigstore.json \
+            --certificate-identity-regexp "${IDENTITY}" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            dist/release/SHA256SUMS
+
       - name: Attach release assets
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
@@ -51,4 +99,5 @@ jobs:
             dist/release/*.tar.gz
             dist/release/*.zip
             dist/release/SHA256SUMS
+            dist/release/SHA256SUMS.sigstore.json
             dist/release/maestria.rb
