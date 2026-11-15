@@ -145,11 +145,38 @@ func (c *Connectors) WebCodeStatus(userID, id string) (*CodeStatus, error) {
 	return st, nil
 }
 
+// Link-code limits. Codes have 31^8 (about 8.5·10^11) values and live 10 minutes, so a per-address
+// limit on every call, plus a global limit on FAILED lookups only, bounds guessing for everyone.
+// A valid code with its confirmation token is never counted against the global budget: otherwise
+// 15 addresses sending junk could stop every user from linking a machine.
+const (
+	linkIPMax       = 20  // calls per address per window
+	linkFailGlobal  = 300 // failed lookups per window, all addresses
+	linkWindow      = 10 * time.Minute
+	maxOpenCLICodes = 5000 // unclaimed codes made by `connect` with no code (they expire in 10 minutes)
+)
+
 func (c *Connectors) throttle(ip string) error {
-	if !c.a.rate.Allow("link:ip:"+ip, 20, 10*time.Minute) || !c.a.rate.Allow("link:global", 300, 10*time.Minute) {
-		return &LockedError{RetryAfter: 10 * time.Minute}
+	if !c.a.rate.Allow("link:ip:"+ip, linkIPMax, linkWindow) {
+		return &LockedError{RetryAfter: linkWindow}
 	}
 	return nil
+}
+
+// invalidCode records a refused code (audited at most once a minute per address) and answers it.
+func (c *Connectors) invalidCode(ip, userID string) error {
+	_ = c.a.audit.WriteThrottled("link_invalid:"+ip, time.Minute, "link_code_invalid", ip, map[string]any{"user": userID})
+	return c.rejectCode(ip)
+}
+
+// rejectCode counts a failed lookup against the global budget of failures and returns what the
+// caller should answer: the plain refusal, or a 429 once the budget is gone.
+func (c *Connectors) rejectCode(ip string) error {
+	if !c.a.rate.Allow("link:fail:global", linkFailGlobal, linkWindow) {
+		_ = c.a.audit.WriteThrottled("link:fail:global", time.Minute, "link_code_flood", ip, nil)
+		return &LockedError{RetryAfter: linkWindow}
+	}
+	return ErrInvalid
 }
 
 type linkRow struct {
@@ -189,8 +216,7 @@ func (c *Connectors) Redeem(ip, code string, m relay.Machine) (*relay.RedeemResp
 		return nil, err
 	}
 	if !c.live(r) || r.kind != "web" || !r.userID.Valid {
-		c.a.event("", "link_code_invalid", ip, nil)
-		return nil, ErrInvalid
+		return nil, c.invalidCode(ip, "")
 	}
 	u, err := c.a.UserByID(r.userID.String)
 	if err != nil || u == nil || u.DisabledAt != 0 {
@@ -241,8 +267,7 @@ func (c *Connectors) Confirm(ip, code, token, name string) (*relay.Linked, error
 	}
 	if !c.live(r) || r.kind != "web" || !r.userID.Valid || !r.confirm.Valid ||
 		subtle.ConstantTimeCompare([]byte(r.confirm.String), []byte(sha256Hex(token))) != 1 {
-		c.a.event("", "link_code_invalid", ip, nil)
-		return nil, ErrInvalid
+		return nil, c.invalidCode(ip, "")
 	}
 	var m relay.Machine
 	_ = json.Unmarshal([]byte(r.machine), &m)
@@ -298,6 +323,15 @@ func (c *Connectors) StartCLI(ip string, m relay.Machine, baseURL string) (*rela
 	if !c.a.rate.Allow("link:start:ip:"+ip, 10, 10*time.Minute) {
 		return nil, &LockedError{RetryAfter: 10 * time.Minute}
 	}
+	// No global rate here (it would let a few addresses stop everyone from linking); the number of
+	// codes waiting to be claimed is capped instead, and they expire in 10 minutes.
+	var open int
+	if err := c.db().QueryRow("SELECT COUNT(*) FROM link_codes WHERE kind = 'cli' AND used_at IS NULL AND claimed_at IS NULL AND expires_at > ?", c.a.now().UnixMilli()).Scan(&open); err != nil {
+		return nil, err
+	}
+	if open >= maxOpenCLICodes {
+		return nil, &LockedError{RetryAfter: time.Minute}
+	}
 	code, id, exp, err := c.createCode("cli", "")
 	if err != nil {
 		return nil, err
@@ -320,8 +354,7 @@ func (c *Connectors) Claim(ip, userID, code string) error {
 		return err
 	}
 	if !c.live(r) || r.kind != "cli" || r.claimedAt.Valid {
-		c.a.event(userID, "link_code_invalid", ip, nil)
-		return ErrInvalid
+		return c.invalidCode(ip, userID)
 	}
 	res, err := c.db().Exec("UPDATE link_codes SET user_id = ?, claimed_at = ? WHERE id = ? AND claimed_at IS NULL AND used_at IS NULL AND expires_at > ?",
 		userID, c.a.now().UnixMilli(), r.id, c.a.now().UnixMilli())

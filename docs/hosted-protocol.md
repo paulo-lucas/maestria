@@ -72,7 +72,7 @@ Opaque random cookie token, only its sha256 stored, idle and absolute expiry, `H
 
 ## 4. Linking a connector
 
-A link code has 8 symbols from `abcdefghjkmnpqrstuvwxyz23456789` (no look-alikes), shown uppercase as `XXXX-XXXX`, valid **10 minutes**, usable **once**. The cloud stores `sha256(normalized code)` only. Redemption attempts are rate limited per IP and globally.
+A link code has 8 symbols from `abcdefghjkmnpqrstuvwxyz23456789` (no look-alikes), shown uppercase as `XXXX-XXXX`, valid **10 minutes**, usable **once**. The cloud stores `sha256(normalized code)` only. Every link call is rate limited per IP (20 per 10 minutes). Globally only *failed* lookups are counted (300 per 10 minutes, then failed lookups get `429`), so junk from many addresses cannot stop a valid code and its confirmation token from working; the number of unclaimed CLI-shown codes is capped instead.
 
 ### 4.1 Web shows the code
 

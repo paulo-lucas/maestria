@@ -279,3 +279,59 @@ func TestUnlinkNeedsTheCredential(t *testing.T) {
 		t.Fatalf("browser origin: %d", res.StatusCode)
 	}
 }
+
+// apiFrom is apiAs from a given client address (the test bed trusts one X-Forwarded-For hop).
+func apiFrom(b *bed, ip, method, path string, body any) (int, string) {
+	bs, _ := json.Marshal(body)
+	req, _ := http.NewRequest(method, b.ts.URL+path, bytes.NewReader(bs))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Forwarded-For", ip)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		b.t.Fatal(err)
+	}
+	defer res.Body.Close()
+	var buf bytes.Buffer
+	_, _ = buf.ReadFrom(res.Body)
+	return res.StatusCode, buf.String()
+}
+
+// Junk from many addresses must not stop a person from linking a machine: only failed lookups
+// count against the global budget, and a valid code is never refused because of it.
+func TestLinkingSurvivesAFloodOfJunkCodesFromManyAddresses(t *testing.T) {
+	b := newBed(t)
+	br := b.browser("10.0.0.1")
+	br.signup("ann@example.com", testPassword)
+
+	// 20 junk lookups from each of 20 addresses (400 failures, more than the global budget of 300).
+	limited := 0
+	for a := 0; a < 20; a++ {
+		ip := "198.51.100." + string(rune('1'+a%9)) + string(rune('0'+a/9))
+		for i := 0; i < 20; i++ {
+			st, _ := apiFrom(b, ip, "POST", "/api/link/redeem", relay.RedeemRequest{Code: "ZZZZ-" + string(rune('A'+a)) + string(rune('A'+i)) + "BB"})
+			if st == 429 {
+				limited++
+			}
+		}
+	}
+	if limited == 0 {
+		t.Fatal("a flood of junk codes was never limited")
+	}
+
+	// A real code redeemed and confirmed from a clean address still works.
+	code := newWebCode(t, br)
+	m := relay.RedeemRequest{Code: code, Machine: relay.Machine{Host: "box", OS: "linux", Arch: "amd64", Version: "1"}}
+	st, body := apiFrom(b, "203.0.113.7", "POST", "/api/link/redeem", m)
+	if st != 200 {
+		t.Fatalf("a valid code was refused during a flood of junk: %d %s", st, body)
+	}
+	var red relay.RedeemResponse
+	_ = json.Unmarshal([]byte(body), &red)
+	if st, body := apiFrom(b, "203.0.113.7", "POST", "/api/link/confirm", relay.ConfirmRequest{Code: code, Token: red.Token, Name: "box"}); st != 200 {
+		t.Fatalf("confirm during a flood of junk: %d %s", st, body)
+	}
+	// And the CLI-code flow can still start.
+	if st, body := apiFrom(b, "203.0.113.8", "POST", "/api/link/start", relay.StartRequest{Machine: relay.Machine{Host: "x"}}); st != 200 {
+		t.Fatalf("start during a flood of junk: %d %s", st, body)
+	}
+}
