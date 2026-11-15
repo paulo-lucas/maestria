@@ -118,6 +118,7 @@ Through the relay, the web app can read the panel's pages and data, answer tasks
 ### Account security (server)
 
 - Sign-up and sign-in require **two-factor**. An account without it cannot sign in.
+- Sign-up is **by invitation** by default (`signup: invite`; `open` and `closed` exist). An invitation is a random 256-bit token, stored only as a hash, that works once, expires in 1 hour to 30 days, can be bound to one email address, and is spent by the sign-up that uses it. Every way it can fail (unknown, expired, used, revoked, wrong address) shows the same page, and a token is spent on every accepted sign-up (a new address, a pending one or an existing one), so holding one reveals nothing about who has an account. Administrators are made only from the server's command line (`maestria-cloud user promote`), never from the web; the web checks it on every request and shows the invitation pages to nobody else (404). Invitation emails are fixed text, link to the configured public URL, and are limited per address, per administrator and by the daily cap.
 - The sign-up page answers the same whether or not an email is already used.
 - Password reset needs the email link **and** a 2FA or recovery code. It never turns 2FA off. A reset signs out every session and makes every machine forget its approved browsers.
 - Sign-in limits apply per address, per account and for the whole server, even for accounts that do not exist.

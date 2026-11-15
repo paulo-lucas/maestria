@@ -51,6 +51,8 @@ Hosted accounts reuse `internal/auth` primitives: argon2id hashes, RFC 6238 TOTP
 
 ### 3.1 Sign-up
 
+**Who may sign up** is the server's `signup` setting: `invite` (default), `open` or `closed` (`MAESTRIA_CLOUD_SIGNUP`). In `closed`, `POST /signup` is refused whatever it carries. In `invite`, every `POST /signup` must carry a live invitation token (the hidden `invite` form field; the link is `GET /signup?invite=<token>`), whatever it would do (a new account, a repeat for a pending address, a notice to an existing one), and the token is spent **in the same transaction** as that write (`UPDATE invites SET used_at … WHERE token_hash = ? AND used_at IS NULL AND revoked_at IS NULL AND expires_at > now AND (email IS NULL OR email = ?)`, one row or nothing). So one token makes at most one sign-up even under a race, and a token that is still live after a submission says nothing about the address. A token that is unknown, expired, used, revoked or bound to another address gets one page and one status (`403`), and an address mismatch does not spend it. Tokens are `RandomToken` (256 bits), stored as sha256 only, and never appear in the audit log (events carry the invitation id). `/signup/resend` and `/signup/continue` need no invitation: they create nothing and change no password. Wrong tokens are limited to 20 an hour per client address.
+
 1. `POST /signup` (email, password ≥ 12 chars). The response is always the same "Check your email" page, whether or not the address is already registered (no enumeration). A new account is stored unverified with an argon2id hash and a verification token (30 min, single use, stored as sha256). An existing verified account gets a notice email instead. An existing account whose email was never verified gets the **new** password and a fresh verification email, and its older verification links stop working (the newest sign-up wins, so someone who typed an address before its owner cannot keep it); an unverified account is removed after 24 hours. A verified account with unfinished 2FA keeps its password.
 2. The email link is `GET /verify/<token>`. It renders a confirmation form and **consumes nothing** (mail scanners prefetch links). `POST /verify/<token>` with the password consumes the token, marks the email verified and issues a short-lived **setup cookie** (30 min, bound to the user) that is valid only for step 3.
 3. `GET /signup/2fa` generates a TOTP secret (held encrypted in the setup record) and shows a QR code and the key. `POST /signup/2fa` with a correct code stores the secret (AES-256-GCM under the server key), creates 10 recovery codes, creates the real session and shows the codes **once** in that response. **An account without 2FA can never log in**: login requires a stored TOTP secret.
@@ -61,6 +63,12 @@ Hosted accounts reuse `internal/auth` primitives: argon2id hashes, RFC 6238 TOTP
 Same shape as local mode. Step 1 `POST /login` (email + password) always runs one argon2id verification (a dummy hash if the email is unknown), stores the verdict server-side in a pending login bound to the IP, and always moves on to the 2FA page. Step 2 `POST /login/2fa` (TOTP) or `/login/recovery` succeeds only if the remembered password verdict **and** the code are good. Every other combination fails identically, ends the pending login and counts as one failed attempt. A disabled or unverified account fails exactly like a wrong password.
 
 Rate limiting and lockout use three scopes: per IP, per account key (a hash of the claimed email, applied to non-existent emails too), and global. While a scope is locked even correct credentials are refused (`429`, `Retry-After`).
+
+### 3.1.1 Administrators and invitations
+
+An account has an `is_admin` flag, set only by `maestria-cloud user promote|demote EMAIL` on the server (audited as `user_promoted` / `user_demoted`); nothing in the HTTP surface can set it, and only an account that finished sign-up can be promoted. It is read from the users table on every request. Administrators make invitations (`POST /api/invites`: optional bound `email`, `note` up to 200 characters, `expires` from `1h` to `30d`, default `7d`, optional `sendEmail`) and withdraw them (`POST /api/invites/<id>/revoke`, idempotent). Both are session-and-CSRF routes like every write, and answer `404` to anyone who is not an administrator, as does the page `GET /admin/invites`. The link in the response is built from `publicUrl`, shown once, and never listed again. Creation is limited to 20 an hour per administrator. The same actions exist on the server's command line (`maestria-cloud invite create|list|revoke`). Audit events: `invite_created`, `invite_used`, `invite_revoked` (invitation id, never the token or the address).
+
+An invitation email is fixed text with the link, an expiry, and the note only when there is one, labelled as written by the inviter. It goes through the mail gate below and also a limit of 10 an hour per administrator and 3 a day per recipient address; the limits are checked before the invitation is created, so a refusal leaves nothing behind.
 
 ### 3.2.1 Email limits
 
@@ -272,8 +280,8 @@ One JS layer chooses the transport. Local mode calls `/api/...` with the session
 
 Browser (cookie session, CSRF on writes):
 
-`GET /signup /login /login/2fa /reset /verify/<t> /reset/<t> /signup/2fa /signup/continue`, matching `POST`s, `POST /logout`.
-App shell (the same HTML for each, the app routes on the client): `/ /connectors /connectors/link /security /pair /c/<id>/...` (page navigations of workspace views).
+`GET /signup /login /login/2fa /reset /verify/<t> /reset/<t> /signup/2fa /signup/continue`, matching `POST`s, `POST /logout`. Administrators only: `GET /admin/invites`, `POST /api/invites`, `POST /api/invites/<id>/revoke`.
+App shell (the same HTML for each, the app routes on the client): `/ /connectors /connectors/link /admin/invites /security /pair /c/<id>/...` (page navigations of workspace views).
 JSON: `GET /api/me`, `GET /api/connectors`, `POST /api/connectors/<id>/rename`, `POST /api/connectors/<id>/revoke`, `POST /api/link/codes`, `GET /api/link/codes/<id>`, `POST /api/link/claim`, `POST /api/pair`, `GET /api/pair/<id>`, `POST /api/pair/<id>/reveal`, `GET /api/presence` (SSE: connector online/offline, pairing state).
 Relay: `GET|POST /c/<id>/<path>`.
 

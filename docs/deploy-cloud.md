@@ -111,7 +111,7 @@ sudo install -d -m 0755 /etc/maestria-cloud
 
 ## 4. Set up email
 
-The server sends mail for **email verification** and **password resets**. Without mail, nobody can sign up.
+The server sends mail for **email verification**, **invitations** (only when an administrator chooses to email one) and **password resets**. Without mail, nobody can verify an account, so nobody can sign up.
 
 Many providers have a free plan with an SMTP login. Examples (check their current limits):
 
@@ -175,7 +175,8 @@ Each setting can be an environment variable or a key in `/var/lib/maestria-cloud
 | `proxyHops` | none | `1` | How many trusted proxies sit in front (only for `xff`). |
 | `sessionIdleMinutes` | none | `720` (12 h) | Sign-out after this long without use. |
 | `sessionAbsoluteHours` | none | `168` (7 days) | Sign-out after this long in total. |
-| `mailDailyLimit` | `MAESTRIA_CLOUD_MAIL_DAILY_LIMIT` | `200` | The most emails the server sends in any 24 hours (verification, sign-up notices and password resets together). Keep it under your SMTP provider's free daily quota. Once reached, the sign-up, resend and reset pages answer "try again in N hours" (HTTP `429` with `Retry-After`). Besides this, an address gets at most one email of a kind a minute and 5 an hour, and one client address may ask for 10 an hour. Hitting a limit is written to the audit log (`mail_limit`). |
+| `signup` | `MAESTRIA_CLOUD_SIGNUP` | `invite` | Who can create an account. `invite`: only people with an invitation from an administrator ([step 8](#8-first-steps-as-administrator)). `open`: anyone who can reach the address (the server prints a warning at start-up). `closed`: nobody, not even with an invitation. Existing accounts always keep working. |
+| `mailDailyLimit` | `MAESTRIA_CLOUD_MAIL_DAILY_LIMIT` | `200` | The most emails the server sends in any 24 hours (verification, invitations, sign-up notices and password resets together). Keep it under your SMTP provider's free daily quota. Once reached, the sign-up, resend and reset pages answer "try again in N hours" (HTTP `429` with `Retry-After`). Besides this, an address gets at most one email of a kind a minute and 5 an hour, and one client address may ask for 10 an hour. Hitting a limit is written to the audit log (`mail_limit`). |
 | `login.maxFailuresPerIp` | none | `5` | Failed sign-ins per address before a lockout. |
 | `login.maxFailuresPerAccount` | none | `8` | Failed sign-ins per account. |
 | `login.maxFailuresGlobal` | none | `100` | Failed sign-ins for the whole server. |
@@ -312,34 +313,82 @@ curl -s https://maestria.example.com/healthz
 
 ## 8. First steps as administrator
 
-There is no separate administrator account. The server has accounts, and you manage them from the command line **on the VM**.
+Sign-up is **by invitation** unless you change `signup` (see the settings table). An *administrator* is an account that can invite people from the web. The first administrator is always made **on the VM**, never from the web, so nobody can talk their way into it. Every command below runs on the VM:
 
-1. **Create your own account** in the browser: **Create an account**, verify your email, set up two-factor, save your recovery codes. (Steps in [Use a hosted Maestria](hosted.md#1-create-your-account).)
-2. **Check it** on the VM:
+```sh
+alias mcloud='sudo -u maestria env MAESTRIA_CLOUD_DIR=/var/lib/maestria-cloud maestria-cloud'
+```
+
+### Your own account
+
+**Starting fresh** (nobody has an account yet, so you need an invitation for yourself):
+
+1. Make one on the VM:
 
    ```sh
-   sudo -u maestria env MAESTRIA_CLOUD_DIR=/var/lib/maestria-cloud maestria-cloud user list
+   mcloud invite create --email you@example.com --note "me"
    ```
 
-   **What you should see:**
+   **What you should see:** the invitation's id and a link (`/signup?invite=…`). **It is shown only now.** Put your server's address in front of it if it starts with a slash.
 
-   ```text
-   EMAIL              STATE   CREATED
-   you@example.com    active  2026-11-14
+2. Open the link in a browser, **Create your account**, verify your email, set up two-factor, save your recovery codes. (Steps in [Use a hosted Maestria](hosted.md#1-create-your-account).) The invitation works once.
+3. Make yourself an administrator:
+
+   ```sh
+   mcloud user promote you@example.com
    ```
 
-   The states are `unverified` (email not confirmed), `no 2fa yet` (confirmed but not enrolled), `active` and `disabled`.
+**You already have an account** (you ran an earlier version, or `signup` was open): nothing breaks when you update, and you keep logging in. Run the `user promote` command above once. It takes effect on your next click. Without it the web has no **Invite someone** page for you, but `mcloud invite create` still works.
 
-3. **Link your first machine** and approve your browser: [hosted.md, steps 2 and 3](hosted.md#2-link-your-machine).
+Check it:
+
+```sh
+mcloud user list
+```
+
+**What you should see:**
+
+```text
+EMAIL              STATE   ROLE   CREATED
+you@example.com    active  admin  2026-11-14
+```
+
+The states are `unverified` (email not confirmed), `no 2fa yet` (confirmed but not enrolled), `active` and `disabled`. Only an `active` account can be promoted. To take the rights away: `mcloud user demote you@example.com`.
+
+**Link your first machine** and approve your browser: [hosted.md, steps 2 and 3](hosted.md#2-link-your-machine).
+
+### Invite someone
+
+As an administrator, open **Invite someone** in the menu (or `/admin/invites`).
+
+1. Optionally type their **email** (then only that address can use the link), a **note** for your own list, and how long it lasts (1 day to 30 days, 7 by default).
+2. Choose **Create invitation**. **The link appears once**, with a **Copy** button. Send it to them yourself, or tick **Email the invitation to this address** and the server sends it (it counts against `mailDailyLimit`, an administrator may create 20 invitations and email 10 an hour, and one address gets at most 3 a day).
+3. The list shows each invitation as *Waiting*, *Used*, *Revoked* or *Expired*. **Revoke** withdraws one that has not been used. Revoking twice is harmless.
+
+The same from the VM, for when the web is not an option:
+
+```sh
+mcloud invite create --email friend@example.com --expires 3d --note "Sam"
+mcloud invite list
+mcloud invite revoke inv_0123456789ab
+```
+
+An invitation works **once**. The person's sign-up spends it, even if they never verify the email, so if they lose the verification email they can use **Resend email** on the "Check your email" page, or you make them a new one. An invitation bound to an email address is refused (and not spent) when someone types another address. Wrong, used, expired, revoked and "for another address" all give the same page, on purpose: the page never says which. Invitations and their use are in the audit log by id, never with the link.
+
+Lifetimes outside 1 hour to 30 days are refused, not rounded.
+
+### Other things you can do
 
 To block an account (it ends its sessions and disconnects its machines within about 15 seconds):
 
 ```sh
-sudo -u maestria env MAESTRIA_CLOUD_DIR=/var/lib/maestria-cloud maestria-cloud user disable someone@example.com
-sudo -u maestria env MAESTRIA_CLOUD_DIR=/var/lib/maestria-cloud maestria-cloud user enable someone@example.com
+mcloud user disable someone@example.com
+mcloud user enable someone@example.com
 ```
 
-> **Sign-up is open.** Anyone who can reach your address can create an account. Accounts are isolated from each other, and a stranger's account cannot see or reach your machines, because machines are linked per account and approved on the machine. But they could use your server, and your mail provider sends their verification mails. For a private server, **keep the address to yourself** and use `user list` to watch for accounts you do not know.
+> **Choosing `signup: open`** lets anyone who can reach your address create an account. Accounts are isolated from each other, and a stranger's account cannot see or reach your machines, because machines are linked per account and approved on the machine. But they could use your server, and your mail provider sends their verification mails. The server prints a warning at every start. Prefer the default (`invite`), or `closed` once everyone you want is in.
+
+> **Where the link goes.** An invitation link is a secret until it is used: send it over a channel you trust. It stays out of the page's links to other sites (there are none), but a reverse proxy in front of the server may log the address of every request, including `?invite=…`, so treat its logs as sensitive, or use `--email` so the link only works for one address.
 
 ## 9. Update
 
