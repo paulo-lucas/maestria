@@ -63,7 +63,7 @@ The panel has **one owner**: one password, one authenticator. It is built for a 
 
 ### How do I update?
 
-Run the install command again, then `maestria service restart`. See [Self-host: update](self-host.md#5-update).
+Run `maestria update` (it restarts the service and rolls back if the new version does not start). See [Self-host: update](self-host.md#5-update).
 
 ### How do I remove it?
 

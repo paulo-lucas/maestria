@@ -322,16 +322,29 @@ sudo -u maestria env MAESTRIA_CLOUD_DIR=/var/lib/maestria-cloud maestria-cloud u
 
 ## 9. Update
 
-1. Download the new release as in step 2 (or `git pull` and rebuild).
-2. [Back up](#10-back-up) first.
-3. Replace the program and restart:
+The server can update itself from GitHub releases, and so can you by hand.
 
-   ```sh
-   sudo systemctl stop maestria-cloud
-   sudo install -m 0755 maestria-cloud /usr/local/bin/maestria-cloud
-   sudo systemctl start maestria-cloud
-   maestria-cloud version
-   ```
+**By hand** (this is all you need, on any VM):
+
+```sh
+sudo maestria-cloud update --check     # is there a newer release?
+sudo maestria-cloud update             # download it, check it, replace it, restart
+```
+
+It verifies the release's SHA-256 against its `SHA256SUMS`, runs the backup script if it is there (see [10. Back up](#10-back-up)), keeps the old program as `/usr/local/bin/maestria-cloud.previous`, restarts `maestria-cloud` and waits up to 30 seconds for `/healthz`. If the new version does not answer, it puts the old one back and restarts that. Without a terminal (a script, cron) add `--yes`. A server built from source (`maestria-cloud version` shows `dev`) never updates itself; rebuild it instead.
+
+**Automatically.** If you set the VM up with `packaging/linux/setup-cloud.sh`, a systemd timer does this for you about every 15 minutes. It needs root to replace the program; the server itself keeps running as the `maestria` user.
+
+```sh
+systemctl list-timers maestria-cloud-update.timer
+journalctl -u maestria-cloud-update -n 30
+```
+
+Pushing a release tag is enough: the server picks it up on its own ([Releasing](releasing.md)). GitHub holds no keys to your server; the server asks GitHub. To turn it off, re-run the script with `--no-auto-update`, or `sudo systemctl disable --now maestria-cloud-update.timer`. To add the timer to a VM you set up by hand, run `setup-cloud.sh` once; it keeps your settings and data.
+
+**An older version, or a rollback:** `sudo maestria-cloud update --yes --force --version v0.2.0` installs a specific release, even an older one ([how to roll back](releasing.md#roll-back)).
+
+**Replacing the program yourself** still works: download the release as in step 2, then `sudo systemctl stop maestria-cloud`, `sudo install -m 0755 maestria-cloud /usr/local/bin/maestria-cloud`, `sudo systemctl start maestria-cloud`.
 
 Connected machines reconnect on their own, within about a minute.
 

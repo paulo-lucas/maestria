@@ -239,22 +239,30 @@ These commands run **without a shell**, so nothing in them is interpreted.
 
 ## 5. Update
 
-Run the same install command you used first. It replaces the program and checks the checksum.
-
-| How you installed | Update with |
-| --- | --- |
-| install script | `curl -fsSL https://raw.githubusercontent.com/paulo-lucas/maestria/main/install.sh \| sh` |
-| Homebrew | `brew upgrade maestria` |
-| Windows | `irm https://raw.githubusercontent.com/paulo-lucas/maestria/main/install.ps1 \| iex` |
-
-Then **restart the service** so the running panel picks up the new version:
+One command updates Maestria:
 
 ```sh
-maestria service restart
-maestria version
+maestria update --check     # is there a newer release?
+maestria update             # download it, check it, replace it, restart the service
 ```
 
-Your settings and data are kept. To install a specific version with the script, set `MAESTRIA_VERSION` (for example `MAESTRIA_VERSION=v0.2.0`).
+It finds the newest release on GitHub, **checks its SHA-256 against the published `SHA256SUMS`** (and stops if anything differs), replaces the program atomically, keeps the old one as `maestria.previous` next to it, and restarts the background service if you have one. If the panel does not come back within 30 seconds, it puts the old version back. Without a terminal (a script) add `--yes`.
+
+A few more things you can do:
+
+- `maestria update --channel prerelease` follows prereleases too.
+- `maestria update --force --version v0.2.0` installs a specific version, even an older one.
+- A development build (`maestria version` shows `dev` or `-dev`) never updates itself. Install a release instead.
+
+**You are told, not surprised.** When the panel starts it prints `Maestria vX is available: maestria update` if there is a newer release, and the Security page shows a dismissible note. Maestria asks GitHub at most once a day and never installs anything on its own. To switch the check off, add this to `config.json`:
+
+```json
+{ "updates": { "check": false } }
+```
+
+If you installed with Homebrew, update with `brew upgrade maestria` so Homebrew keeps track. The install scripts (`install.sh`, `install.ps1`) still work for a first install or to repair one; to pick a version with `install.sh`, set `MAESTRIA_VERSION` (for example `MAESTRIA_VERSION=v0.2.0`).
+
+Your settings and data are kept. Check with `maestria version`.
 
 ## 6. Back up
 

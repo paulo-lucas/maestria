@@ -1,6 +1,6 @@
 # Maestria
 
-Control panel and protocol add-on for Maestri, written in Go. One `maestria` binary is the connector: it serves the panel locally (`maestria serve`) and/or links to a hosted server (`maestria connect`, server in `cmd/maestria-cloud`). `docs/v2-spec.md` is the product spec, `docs/v2-architecture.md` the architecture, `docs/protocol.md` the Maestro-side CLI protocol, `docs/hosted-protocol.md` the hosted relay protocol, and `skills/maestria-maestro/SKILL.md` the skill `maestria init` installs.
+Control panel and protocol add-on for Maestri, written in Go. One `maestria` binary is the connector: it serves the panel locally (`maestria serve`) and/or links to a hosted server (`maestria connect`, server in `cmd/maestria-cloud`). `docs/releasing.md` how to ship a release (machines then update themselves), `docs/v2-spec.md` is the product spec, `docs/v2-architecture.md` the architecture, `docs/protocol.md` the Maestro-side CLI protocol, `docs/hosted-protocol.md` the hosted relay protocol, and `skills/maestria-maestro/SKILL.md` the skill `maestria init` installs.
 
 ## Before declaring work done
 

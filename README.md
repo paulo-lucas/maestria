@@ -113,6 +113,8 @@ Using a hosted server? Link your machine instead, with the code the server shows
 maestria connect --link XXXX-XXXX --cloud https://maestria.example.com
 ```
 
+**Stay current:** `maestria update` installs the latest release (checksum-verified, and it rolls back if the new version does not start). See [Self-host](docs/self-host.md#5-update).
+
 New to the terminal? [Getting started](docs/getting-started.md) walks through every step and shows what you should see.
 
 ## Guides

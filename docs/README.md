@@ -38,6 +38,7 @@ For contributors and the curious.
 | [maestri-wire.md](maestri-wire.md) | Notes on Maestri Wire and how Maestria uses it. |
 | [v2-spec.md](v2-spec.md) | The product decisions. |
 | [v2-architecture.md](v2-architecture.md) | How it is built. |
+| [releasing.md](releasing.md) | Cutting a release or prerelease, how machines update, rolling back. |
 | [../design/README.md](../design/README.md) | The panel's design system and screens. |
 | [announcement.md](announcement.md) | A draft launch post. |
 
