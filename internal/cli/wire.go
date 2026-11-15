@@ -138,6 +138,9 @@ func askWirePin(in *bufio.Reader, host string, env *Env) (wire.Pin, error) {
 			found = &p
 			fmt.Fprintf(env.Stdout, "    Wire on this machine presents this key:\n      %s\n", wire.FormatPin(p))
 			fmt.Fprintln(env.Stdout, "    It should match the \"Security key\" in Maestri's \"Manual\" tab. Press Enter to trust it.")
+			fmt.Fprintln(env.Stdout, "    Careful: any program on this computer (another user's, or one started while Maestri is closed) can")
+			fmt.Fprintln(env.Stdout, "    answer on this port and show a key of its own. Press Enter only if Maestri is open and the key above")
+			fmt.Fprintln(env.Stdout, "    is the same as in its Manual tab; the pairing code or password you type next goes to whatever answered.")
 		}
 	}
 	if found == nil {

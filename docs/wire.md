@@ -63,10 +63,13 @@ This key proves that you are talking to your own Maestri and not to something pr
     Wire on this machine presents this key:
       3F:A2:09:…
     It should match the "Security key" in Maestri's "Manual" tab. Press Enter to trust it.
+    Careful: any program on this computer (another user's, or one started while Maestri is closed) can
+    answer on this port and show a key of its own. Press Enter only if Maestri is open and the key above
+    is the same as in its Manual tab; the pairing code or password you type next goes to whatever answered.
     Security key [Enter = trust the key above]:
 ```
 
-Compare the first characters with the **Manual** tab in Maestri. If they match, **press Enter**.
+Compare the first characters with the **Manual** tab in Maestri, with Maestri open. If they match, **press Enter**. If Maestri is closed, or the key differs, do not: another program may be answering on that port, and it would receive the code or password you type next.
 
 *On another machine*, Maestria cannot check for you, so you type it. Copy the **Security key** from the Manual tab and paste it.
 
