@@ -22,6 +22,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/paulo-lucas/maestria/internal/update"
 )
 
 type target struct {
@@ -194,10 +196,7 @@ func runRelease(opts releaseOpts, stdout io.Writer) error {
 	var artifacts []artifact
 	for _, bin := range binaries {
 		for _, tgt := range opts.Targets {
-			binName := bin
-			if tgt.OS == "windows" {
-				binName += ".exe"
-			}
+			binName := update.BinaryFile(bin, tgt.OS)
 			stagedBin := filepath.Join(stageDir, fmt.Sprintf("%s_%s_%s", bin, tgt.OS, tgt.Arch), binName)
 			if err := os.MkdirAll(filepath.Dir(stagedBin), 0o755); err != nil {
 				return err
@@ -216,11 +215,8 @@ func runRelease(opts releaseOpts, stdout io.Writer) error {
 				return fmt.Errorf("build %s for %s/%s: %w\n%s", bin, tgt.OS, tgt.Arch, err, stderr.String())
 			}
 
-			ext := ".tar.gz"
-			if tgt.OS == "windows" {
-				ext = ".zip"
-			}
-			archiveName := fmt.Sprintf("%s_%s_%s_%s%s", bin, verClean, tgt.OS, tgt.Arch, ext)
+			// The names come from internal/update: what is published is what the updater looks for.
+			archiveName := update.ArchiveName(bin, verClean, tgt.OS, tgt.Arch)
 			archivePath := filepath.Join(outDir, archiveName)
 			if tgt.OS == "windows" {
 				err = writeZipArchive(archivePath, stagedBin, binName, root, extraFiles, modTime)
@@ -248,9 +244,9 @@ func runRelease(opts releaseOpts, stdout io.Writer) error {
 	sort.Slice(artifacts, func(i, j int) bool { return artifacts[i].Name < artifacts[j].Name })
 	var sumsBuf bytes.Buffer
 	for _, a := range artifacts {
-		fmt.Fprintf(&sumsBuf, "%s  %s\n", a.SHA256, a.Name)
+		sumsBuf.WriteString(update.ChecksumLine(a.SHA256, a.Name))
 	}
-	sumsPath := filepath.Join(outDir, "SHA256SUMS")
+	sumsPath := filepath.Join(outDir, update.ChecksumsFile)
 	if err := os.WriteFile(sumsPath, sumsBuf.Bytes(), 0o644); err != nil {
 		return err
 	}
