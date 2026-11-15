@@ -331,6 +331,20 @@
     return Math.round(d / 86400e3) + ' days';
   }
 
+  // begin:offline-meta (jscompat_test runs this block on its own: keep it free of other helpers)
+  // The line under "N machines online": which machine is offline, since when, and how many more.
+  // Parts that have nothing to say are left out, so it never ends in a bare "·".
+  function offlineMeta(offline, linked, rel) {
+    rel = rel || relTime;
+    if (!offline.length) return linked ? '' : 'Link your first machine';
+    var parts = [offline[0].name + ' offline'];
+    var since = offline[0].lastSeenAt ? rel(offline[0].lastSeenAt) : '';
+    if (since) parts.push(since);
+    if (offline.length > 1) parts.push('+' + (offline.length - 1));
+    return parts.join(' · ');
+  }
+  // end:offline-meta
+
   function renderShell() {
     var wss = allWorkspaces();
     var needs = wss.reduce(function (n, w) { return n + w.needs; }, 0);
@@ -400,7 +414,7 @@
     var txt = !online.length ? 'No machine online' : online.length + ' ' + plural(online.length, 'machine', 'machines') + ' online';
     if (name) { name.textContent = txt; name.title = txt; }
     if (meta) {
-      meta.textContent = offline.length ? offline[0].name + ' offline' + (offline[0].lastSeenAt ? ' · ' + relTime(offline[0].lastSeenAt) : '') + (offline.length > 1 ? ' · +' + (offline.length - 1) : '') : (state.connectors.length ? '' : 'Link your first machine');
+      meta.textContent = offlineMeta(offline, state.connectors.length);
       meta.title = meta.textContent;
     }
     var needPair = online.filter(function (c) { return ['pair', 'revoked'].indexOf((state.access[c.id] || {}).state) >= 0; });
