@@ -30,6 +30,15 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Use the toolchain go.mod pins
+        shell: bash
+        # setup-go installs the version on go.mod's "go" line; build, test and scan with the
+        # patched "toolchain" version instead (Go downloads it, verified by the checksum database).
+        run: |
+          tc="$(go mod edit -json | python3 -c 'import json,sys; print(json.load(sys.stdin).get("Toolchain") or "local")')"
+          echo "GOTOOLCHAIN=$tc" >> "$GITHUB_ENV"
+          GOTOOLCHAIN="$tc" go version
+
       - name: Vet
         run: go vet ./...
 
@@ -53,13 +62,12 @@ jobs:
 
       - name: Scan for known vulnerabilities (govulncheck)
         if: matrix.os == 'ubuntu-latest'
-        env:
-          GOTOOLCHAIN: local # analyse with the Go from go.mod that setup-go installed
         # Pinned to an exact version and fetched through the Go module proxy, which checks it
         # against the checksum database. It reports only vulnerabilities the code can reach.
         shell: bash
         run: |
           set +e
+          go version
           go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./... > govulncheck.txt 2>&1
           status=$?
           cat govulncheck.txt
