@@ -89,6 +89,8 @@ type Server struct {
 	bg              sync.WaitGroup
 	broker          *sseBroker
 	ssePollInterval time.Duration
+	// sseRecheckInterval is how often an open stream re-checks its session (tests shorten it).
+	sseRecheckInterval time.Duration
 
 	sessionCookie string
 	pendingCookie string

@@ -1,9 +1,12 @@
 package web
 
 import (
+	"bufio"
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -248,5 +251,56 @@ func TestSecurityPageKeepsSignificantEventsVisible(t *testing.T) {
 	page := c.get("/security")
 	if !strings.Contains(page.body, "Signed in") {
 		t.Fatalf("the sign-in is not on the Security page:\n%.600s", page.body)
+	}
+}
+
+// An open event stream used to survive signing out, signing out everywhere and the kill switch,
+// because the session was only checked when the stream opened.
+func TestEventStreamEndsWhenTheSessionDoes(t *testing.T) {
+	cases := map[string]func(h *harness, c *client, token string){
+		"logout": func(h *harness, c *client, token string) { c.postForm("/logout", url.Values{"_csrf": {token}}, nil) },
+		"logout-all": func(h *harness, c *client, token string) {
+			c.postForm("/logout-all", url.Values{"_csrf": {token}}, nil)
+		},
+		"kill switch": func(h *harness, c *client, token string) {
+			c.postForm("/kill-switch", url.Values{"_csrf": {token}}, nil)
+		},
+		"session expired": func(h *harness, c *client, token string) { h.clock.advance(13 * time.Hour) },
+	}
+	for name, end := range cases {
+		t.Run(name, func(t *testing.T) {
+			h := newHarness(t, opts{mutate: func(c *config.Config) { c.MaestriDir = filepath.Join(t.TempDir(), "maestri") }})
+			h.srv.ssePollInterval = 20 * time.Millisecond
+			h.srv.sseRecheckInterval = 30 * time.Millisecond
+			c := h.client()
+			token := c.login()
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			pr, pw := newPipeResponseWriter()
+			req := httptest.NewRequest(http.MethodGet, "http://"+testHost+"/api/stream", nil).WithContext(ctx)
+			req.Host, req.RemoteAddr = testHost, c.ip
+			for _, ck := range c.jar.Cookies(req.URL) {
+				req.AddCookie(ck)
+			}
+			done := make(chan struct{})
+			go func() { defer close(done); h.srv.ServeHTTP(pw, req) }()
+			if line, err := bufio.NewReader(pr).ReadString('\n'); err != nil || !strings.Contains(line, "event: ready") {
+				t.Fatalf("stream did not open: %q %v", line, err)
+			}
+			select {
+			case <-done:
+				t.Fatal("the stream ended by itself")
+			case <-time.After(100 * time.Millisecond):
+			}
+
+			end(h, c, token)
+			select {
+			case <-done:
+			case <-time.After(5 * time.Second):
+				t.Fatal("the stream is still open after the session ended")
+			}
+			_ = pw.Close()
+		})
 	}
 }
