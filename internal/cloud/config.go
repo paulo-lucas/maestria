@@ -173,6 +173,11 @@ func (c *Config) Validate() error {
 	if c.DevEmail != "" && c.DevEmail != "stdout" && !strings.HasPrefix(c.DevEmail, "file:") {
 		return errors.New(`devEmail must be "stdout" or "file:<path>"`)
 	}
+	if c.SMTP.Host != "" {
+		if _, _, err := parseSender(c.SMTP.From); err != nil {
+			return fmt.Errorf("smtp.from: %w", err)
+		}
+	}
 	return nil
 }
 
