@@ -48,6 +48,7 @@ const (
 	PageSecurity   = "security"
 	PageComingSoon = "coming-soon"
 	PageActivity   = "workspace-activity"
+	PageInsights   = "insights"
 )
 
 // New loads the embedded assets and parses the templates.
@@ -137,7 +138,7 @@ func New() (*UI, error) {
 		return nil, err
 	}
 	u.funcs, u.base = funcs, base
-	for _, name := range []string{PageLogin, PageTwoFA, PageOverview, PageTasks, PageChat, PageFloors, PageDocs, PageUsage, PageSecurity, PageComingSoon, PageActivity} {
+	for _, name := range []string{PageLogin, PageTwoFA, PageOverview, PageTasks, PageChat, PageFloors, PageDocs, PageUsage, PageSecurity, PageComingSoon, PageActivity, PageInsights} {
 		t, err := template.Must(base.Clone()).ParseFS(files, "templates/"+name+".html")
 		if err != nil {
 			return nil, err
@@ -509,10 +510,34 @@ type Data struct {
 	StandbyActive     bool
 	WakeOnReset       bool
 
+	// Insights page.
+	Insights *InsightsView
+
 	// Coming-soon placeholder page.
 	ComingSoonTitle string
 	ComingSoonText  string
 	ComingSoonIcon  string
+}
+
+// InsightsView is the Insights page: an overall level and the rated areas behind it.
+type InsightsView struct {
+	Level     int    // 1..7, 0 when there is not enough data
+	Period    string // "Oct 16 – Nov 15"
+	FocusName string // title of the area to start with, "" when none
+	Areas     []InsightAreaView
+}
+
+// InsightAreaView is one rated area. Level 0 means not rated yet; Missing says why.
+type InsightAreaView struct {
+	ID      string
+	Title   string
+	Level   int
+	Value   string
+	Next    string
+	Tip     string
+	Note    string
+	Missing string
+	Focus   bool
 }
 
 // WireStateView explains why live data is missing and what to do. It is the "Maestri Wire is off"

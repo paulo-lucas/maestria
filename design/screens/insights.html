@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <title>Insights · Maestria</title>
+  <link rel="stylesheet" href="../tokens.css?v=24a1bf6d">
+  <link rel="stylesheet" href="../base.css?v=c9e4f4b3">
+  <link rel="stylesheet" href="../components.css?v=82c31d3d">
+  <link rel="stylesheet" href="../shell.css?v=35c971d6">
+  <script src="../assets/sidebar.js?v=ee686b5b"></script>
+  <script src="../assets/mock.js?v=a5131c49"></script>
+</head>
+<body>
+<!--icons:start (copy of assets/icons.svg)-->
+<svg xmlns="http://www.w3.org/2000/svg" class="sr-only" aria-hidden="true">
+  <symbol id="i-overview" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></symbol>
+  <symbol id="i-activity" viewBox="0 0 24 24"><path d="M3 12h3.5l2.5-7 5 14 2.5-7H21"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M3.5 13.5 6 5h12l2.5 8.5V19a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1z"/><path d="M3.5 13.5h5l1.5 2.5h4l1.5-2.5h5"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M5 4.5h14a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5H10l-5 4v-4a1.5 1.5 0 0 1-1.5-1.5V6A1.5 1.5 0 0 1 5 4.5z"/></symbol>
+  <symbol id="i-floors" viewBox="0 0 24 24"><path d="m12 3.5 8.5 4.5-8.5 4.5L3.5 8z"/><path d="m3.5 12 8.5 4.5 8.5-4.5"/><path d="m3.5 16 8.5 4.5 8.5-4.5"/></symbol>
+  <symbol id="i-docs" viewBox="0 0 24 24"><path d="M6.5 3.5h7.5l4 4v12a1 1 0 0 1-1 1H6.5a1 1 0 0 1-1-1v-15a1 1 0 0 1 1-1z"/><path d="M13.5 3.5V8h4.5"/><path d="M8.5 12.5h7M8.5 16h5"/></symbol>
+  <symbol id="i-gauge" viewBox="0 0 24 24"><path d="M3.5 17a8.5 8.5 0 1 1 17 0"/><path d="m12 17 4-5"/><path d="M3.5 17h2M18.5 17h2"/></symbol>
+  <symbol id="i-plug" viewBox="0 0 24 24"><path d="M9 3.5V8M15 3.5V8"/><path d="M6.5 8h11v3a5.5 5.5 0 0 1-11 0z"/><path d="M12 16.5v4"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.5 19.5 6v5.5c0 4.4-3.1 7.8-7.5 9-4.4-1.2-7.5-4.6-7.5-9V6z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3.5V12"/><path d="M6.6 6.8a7.5 7.5 0 1 0 10.8 0"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+  <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6.5 9.5 5.5 5.5 5.5-5.5"/></symbol>
+  <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9.5 6.5 5.5 5.5-5.5 5.5"/></symbol>
+  <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M4.5 12h15M13.5 6l6 6-6 6"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10z"/></symbol>
+  <symbol id="i-auto" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-terminal" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2"/><path d="m7.5 9.5 3 2.5-3 2.5M12.5 15h4"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M4.5 12 20 4.5 15.5 20l-3-6.5z"/><path d="m12.5 13.5 7.5-9"/></symbol>
+  <symbol id="i-question" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.6a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.4v.4"/><path d="M12 16.8v.2"/></symbol>
+  <symbol id="i-choice" viewBox="0 0 24 24"><path d="M10 6.5h10M10 12h10M10 17.5h10"/><circle cx="5.5" cy="6.5" r="1.5"/><circle cx="5.5" cy="12" r="1.5"/><circle cx="5.5" cy="17.5" r="1.5"/></symbol>
+  <symbol id="i-approve" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="m8.5 12.2 2.4 2.4 4.6-4.8"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 2H5z"/><path d="M10 21h4"/></symbol>
+  <symbol id="i-loop" viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 0 1 13-5.1L19.5 9"/><path d="M19.5 4v5h-5"/><path d="M19.5 12a7.5 7.5 0 0 1-13 5.1L4.5 15"/><path d="M4.5 20v-5h5"/></symbol>
+  <symbol id="i-branch" viewBox="0 0 24 24"><circle cx="6.5" cy="5.5" r="2"/><circle cx="6.5" cy="18.5" r="2"/><circle cx="17.5" cy="7.5" r="2"/><path d="M6.5 7.5v9"/><path d="M17.5 9.5c0 4-3 5.5-6.5 5.5H7"/></symbol>
+  <symbol id="i-merge" viewBox="0 0 24 24"><circle cx="6.5" cy="5.5" r="2"/><circle cx="6.5" cy="18.5" r="2"/><circle cx="17.5" cy="15.5" r="2"/><path d="M6.5 7.5v9"/><path d="M6.5 7.5c0 5 4 8 9 8"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.3 4.4 2.8 17.5A2 2 0 0 0 4.5 20.5h15a2 2 0 0 0 1.7-3L13.7 4.4a2 2 0 0 0-3.4 0z"/><path d="M12 9.5v4.5M12 17v.2"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.8v.2"/></symbol>
+  <symbol id="i-offline" viewBox="0 0 24 24"><path d="m3.5 3.5 17 17"/><path d="M8.7 8.7A4.5 4.5 0 0 0 7 17.5h10"/><path d="M11 6.1A5.5 5.5 0 0 1 17.4 10a3.8 3.8 0 0 1 2.4 6.2"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6.5" y="5" width="3.5" height="14" rx="1"/><rect x="14" y="5" width="3.5" height="14" rx="1"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5.5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="18.5" cy="12" r="1.2"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="4"/><path d="M4.5 20.5a7.5 7.5 0 0 1 15 0"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4.5"/><path d="m11.2 11.8 8.3-8.3M16 7l2.5 2.5M14 9l2 2"/></symbol>
+  <symbol id="i-device" viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M11 18.5h2"/></symbol>
+  <symbol id="i-laptop" viewBox="0 0 24 24"><rect x="4.5" y="5" width="15" height="10.5" rx="1.5"/><path d="M2.5 19h19"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5V6a1.5 1.5 0 0 0-1.5-1.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.4-4.4"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3.5 7a1.5 1.5 0 0 1 1.5-1.5h4.2l2 2.5H19a1.5 1.5 0 0 1 1.5 1.5v8A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5z"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M6.5 3.5h7.5l4 4v12a1 1 0 0 1-1 1H6.5a1 1 0 0 1-1-1v-15a1 1 0 0 1 1-1z"/><path d="M13.5 3.5V8h4.5"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></symbol>
+  <symbol id="i-wire" viewBox="0 0 24 24"><circle cx="5.5" cy="12" r="2"/><circle cx="18.5" cy="12" r="2"/><path d="M7.5 12h3M13.5 12h3"/><path d="M10.5 9.5v5M13.5 9.5v5"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4.5 7h9M17.5 7h2M4.5 17h3M11.5 17h8"/><circle cx="15.5" cy="7" r="2"/><circle cx="9.5" cy="17" r="2"/></symbol>
+  <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3.5c.5 4.3 2.2 6 6.5 6.5-4.3.5-6 2.2-6.5 6.5-.5-4.3-2.2-6-6.5-6.5 4.3-.5 6-2.2 6.5-6.5z"/><path d="M18.5 15.5c.2 1.6.9 2.3 2.5 2.5-1.6.2-2.3.9-2.5 2.5-.2-1.6-.9-2.3-2.5-2.5 1.6-.2 2.3-.9 2.5-2.5z"/></symbol>
+</svg>
+<!--icons:end-->
+<a class="skip-link" href="#main">Skip to content</a>
+
+<div class="app">
+  <aside class="sidebar" id="sidebar" aria-label="Main">
+    <a class="brand" href="overview.html"><svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true"><rect class="brand__bg" width="24" height="24" rx="6"/><path class="brand__bars" d="M7 14.5v2.5M10.3 11v6M13.7 7.5V17M17 10v7"/></svg> Maestria</a>
+    <nav class="nav">
+      <a class="nav__item" href="overview.html"><svg class="icon" aria-hidden="true"><use href="#i-overview"/></svg> Overview <span class="count" data-status="needs" title="Needs you">5</span></a>
+      <div class="nav__group">Workspaces</div>
+      <a class="nav__item" href="workspace-activity.html" data-ws="blue"><span class="swatch"></span> <span class="nav__label" title="Atlas">Atlas</span> <span class="count">2</span></a>
+      <a class="nav__item" href="workspace-activity.html" data-ws="violet"><span class="swatch"></span> <span class="nav__label" title="Nimbus">Nimbus</span> <span class="count">1</span></a>
+      <a class="nav__item" href="workspace-activity.html" data-ws="teal"><span class="swatch"></span> <span class="nav__label" title="Harbor">Harbor</span> <span class="count">1</span></a>
+      <a class="nav__item" href="workspace-activity.html" data-ws="amber"><span class="swatch"></span> <span class="nav__label" title="Juniper">Juniper</span> <span class="count">1</span></a>
+      <a class="nav__item" href="workspace-activity.html" data-ws="rose"><span class="swatch"></span> <span class="nav__label" title="Quarry">Quarry</span> </a>
+      <div class="nav__group">System</div>
+      <a class="nav__item" href="usage.html"><svg class="icon" aria-hidden="true"><use href="#i-gauge"/></svg> Usage &amp; standby</a>
+      <a class="nav__item" href="insights.html" aria-current="page"><svg class="icon" aria-hidden="true"><use href="#i-sparkle"/></svg> Insights</a>
+      <a class="nav__item" href="connector.html"><svg class="icon" aria-hidden="true"><use href="#i-plug"/></svg> Connectors</a>
+      <a class="nav__item" href="security.html"><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg> Devices &amp; security</a>
+    </nav>
+    <div class="sidebar__foot">
+      <a class="conn-card" href="connector.html">
+        <span class="dot" data-status="ok"></span>
+        <span class="conn-card__name">2 machines online</span>
+        <span class="conn-card__ver"><svg class="icon icon--sm" aria-hidden="true"><use href="#i-chevron-right"/></svg></span>
+        <span class="conn-card__meta">Mac mini offline · 3 days</span>
+      </a>
+      <div class="account-row">
+        <span class="avatar avatar--sm" data-tone="slate">Y</span>
+        <span class="account-row__id">
+          <span class="account-row__name truncate">Your account</span>
+          <span class="account-row__ver"><span>Server v1.4.0</span></span>
+        </span>
+        <button class="btn btn--ghost btn--icon theme-toggle btn--sm" type="button" data-theme-toggle aria-label="Theme: system" title="Theme: system">
+          <svg class="icon i-auto" aria-hidden="true"><use href="#i-auto"/></svg>
+          <svg class="icon i-light" aria-hidden="true"><use href="#i-sun"/></svg>
+          <svg class="icon i-dark" aria-hidden="true"><use href="#i-moon"/></svg>
+        </button>
+      </div>
+    </div>
+  </aside>
+  <div class="sidebar-resizer" data-sidebar-resizer role="separator" aria-orientation="vertical" aria-label="Resize sidebar" aria-controls="sidebar" tabindex="0" title="Drag to resize, double-click to reset" hidden></div>
+
+  <header class="topbar">
+    <a class="brand" href="overview.html" aria-label="Maestria overview"><svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true"><rect class="brand__bg" width="24" height="24" rx="6"/><path class="brand__bars" d="M7 14.5v2.5M10.3 11v6M13.7 7.5V17M17 10v7"/></svg></a>
+    <details class="menu scope">
+      <summary aria-label="Switch workspace">
+        <svg class="icon scope__all-icon" aria-hidden="true"><use href="#i-overview"/></svg><span class="truncate">All workspaces</span>
+        <svg class="icon" aria-hidden="true"><use href="#i-chevron-down"/></svg>
+      </summary>
+      <div class="menu__panel">
+        <a class="menu__item" href="overview.html" aria-current="page"><svg class="icon" aria-hidden="true"><use href="#i-overview"/></svg> All workspaces <span class="count" data-status="needs">5</span></a>
+        <div class="menu__sep"></div>
+        <a class="menu__item" href="workspace-activity.html" data-ws="blue"><span class="swatch swatch--lg"></span> Atlas <span class="count">2</span></a>
+        <a class="menu__item" href="workspace-activity.html" data-ws="violet"><span class="swatch swatch--lg"></span> Nimbus <span class="count">1</span></a>
+        <a class="menu__item" href="workspace-activity.html" data-ws="teal"><span class="swatch swatch--lg"></span> Harbor <span class="count">1</span></a>
+        <a class="menu__item" href="workspace-activity.html" data-ws="amber"><span class="swatch swatch--lg"></span> Juniper <span class="count">1</span></a>
+        <a class="menu__item" href="workspace-activity.html" data-ws="rose"><span class="swatch swatch--lg"></span> Quarry </a>
+        <div class="menu__sep"></div>
+        <div class="menu__meta"><span>Server v1.4.0</span></div>
+      </div>
+    </details>
+    <div class="topbar__end">
+      <a class="conn-dot" href="connector.html" aria-label="Machines: 2 online, 1 offline" title="Machines: 2 online, 1 offline">
+        <svg class="icon" aria-hidden="true"><use href="#i-plug"/></svg>
+      </a>
+      <button class="btn btn--ghost btn--icon theme-toggle" type="button" data-theme-toggle aria-label="Theme: system" title="Theme: system">
+          <svg class="icon i-auto" aria-hidden="true"><use href="#i-auto"/></svg>
+          <svg class="icon i-light" aria-hidden="true"><use href="#i-sun"/></svg>
+          <svg class="icon i-dark" aria-hidden="true"><use href="#i-moon"/></svg>
+        </button>
+    </div>
+  </header>
+
+  <main class="main" id="main">
+    <div class="page page--narrow">
+
+      <header class="page-head">
+        <div class="page-head__title">
+          <h1>Insights</h1>
+          <p class="page-head__sub">How agent work on this machine turned usage into landed floors over the last 30 days (Oct 16 – Nov 15). Each area is rated from 1 to 7 against fixed thresholds and shows the measure behind it. Worked out on this machine from its own records.</p>
+        </div>
+      </header>
+
+      <section class="card panel" aria-labelledby="overall-title">
+        <header class="panel__head">
+          <h2 class="panel__title" id="overall-title"><svg class="icon" aria-hidden="true"><use href="#i-sparkle"/></svg> Overall</h2>
+        </header>
+        <div class="setting">
+          <div class="gauge gauge--lg">
+            <div class="gauge__row"><span class="gauge__label">Level</span><span class="gauge__value">4 of 7</span></div>
+            <div class="gauge__track"><progress class="gauge__bar" max="7" value="4">4 of 7</progress></div>
+            <div class="gauge__foot"><span>The mean of the rated areas below. Usage that ships has the most room to grow.</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card panel" aria-labelledby="areas-title">
+        <header class="panel__head">
+          <h2 class="panel__title" id="areas-title">Areas</h2>
+        </header>
+
+        <div class="setting" id="area-delivery">
+          <div class="setting__head">
+            <div class="setting__text">
+              <h3 class="setting__title">Delivery speed</h3>
+              <p class="setting__desc">Median 19 h from start to landed, over 6 floors</p>
+            </div>
+          </div>
+          <div class="gauge">
+            <div class="gauge__row"><span class="gauge__label">Level</span><span class="gauge__value">5 of 7</span></div>
+            <div class="gauge__track"><progress class="gauge__bar" max="7" value="5">5 of 7</progress></div>
+            <div class="gauge__foot"><span>Level 6 at ≤ 8 h</span></div>
+          </div>
+          <dl class="kv">
+            <dt>Try</dt><dd>Split work into smaller floors, each with one outcome, so every floor lands within a day.</dd>
+          </dl>
+        </div>
+
+        <div class="setting" id="area-quality">
+          <div class="setting__head">
+            <div class="setting__text">
+              <h3 class="setting__title">Work that holds</h3>
+              <p class="setting__desc">6 of 7 floors landed · 1 of 12 approvals rejected</p>
+            </div>
+          </div>
+          <div class="gauge">
+            <div class="gauge__row"><span class="gauge__label">Level</span><span class="gauge__value">5 of 7</span></div>
+            <div class="gauge__track"><progress class="gauge__bar" max="7" value="5">5 of 7</progress></div>
+            <div class="gauge__foot"><span>Higher at ≥ 90% landed · ≤ 5% rejected</span></div>
+          </div>
+          <dl class="kv">
+            <dt>Try</dt><dd>Cancelled floors are usage that shipped nothing. Agree on the brief and when it is done before a floor starts.</dd>
+          </dl>
+        </div>
+
+        <div class="setting" id="area-spend">
+          <div class="setting__head">
+            <div class="setting__text">
+              <h3 class="setting__title">Usage that ships</h3>
+              <p class="setting__desc">58% of usage went to floors that landed</p>
+            </div>
+            <span class="status status--badge" data-status="info">Start here</span>
+          </div>
+          <div class="gauge">
+            <div class="gauge__row"><span class="gauge__label">Level</span><span class="gauge__value">3 of 7</span></div>
+            <div class="gauge__track"><progress class="gauge__bar" max="7" value="3">3 of 7</progress></div>
+            <div class="gauge__foot"><span>Level 4 at ≥ 60%</span></div>
+          </div>
+          <dl class="kv">
+            <dt>Try</dt><dd>Usage on cancelled floors, or with no floor running, ships nothing. Start work as a floor, and stop agents that sit idle.</dd>
+            <dt>Estimate</dt><dd>About 34% of a Claude session window per landed floor (6 floors). Floors that run at the same time share a window, so this is an average.</dd>
+          </dl>
+        </div>
+
+        <div class="setting" id="area-response">
+          <div class="setting__head">
+            <div class="setting__text">
+              <h3 class="setting__title">Your response time</h3>
+              <p class="setting__desc">Needs 3 answered tasks in the last 30 days (has 2).</p>
+            </div>
+            <span class="status status--quiet">Not rated yet</span>
+          </div>
+        </div>
+
+        <footer class="panel__foot">The thresholds are the same for everyone and are listed in docs/insights.md in the Maestria repository.</footer>
+      </section>
+
+    </div>
+  </main>
+
+  <nav class="bottomnav" aria-label="Sections">
+    <a class="bottomnav__item" href="overview.html"><svg class="icon" aria-hidden="true"><use href="#i-overview"/></svg>Overview<span class="count" data-status="needs">5</span></a>
+    <a class="bottomnav__item" href="usage.html"><svg class="icon" aria-hidden="true"><use href="#i-gauge"/></svg>Usage</a>
+    <a class="bottomnav__item" href="connector.html"><svg class="icon" aria-hidden="true"><use href="#i-plug"/></svg>Connectors</a>
+    <a class="bottomnav__item" href="security.html"><svg class="icon" aria-hidden="true"><use href="#i-shield"/></svg>Security</a>
+  </nav>
+</div>
+</body>
+</html>
