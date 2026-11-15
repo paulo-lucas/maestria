@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -171,6 +172,9 @@ func TestWaitSubprocessBlocksUntilEventArrives(t *testing.T) {
 	}
 	root := t.TempDir()
 	bin := filepath.Join(root, "maestria")
+	if runtime.GOOS == "windows" {
+		bin += ".exe"
+	}
 	build := exec.Command("go", "build", "-buildvcs=false", "-o", bin, "../../cmd/maestria")
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build maestria binary: %v\n%s", err, out)
