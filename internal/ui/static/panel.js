@@ -5,6 +5,7 @@
   const csrf = body.dataset.csrf;
   const DRAFT_PREFIX = 'maestria.draft.';
   let pendingRefresh = false;
+  let focusAfterRedraw = null; // { id, until }: see settleFocus
   let refreshTimer = null;
   let refreshing = false;
   // The workspace chosen in each overview list's filter chips ("needs-list", "updates-list").
@@ -241,6 +242,7 @@
       applyAgentsFilter(newMain);
       reapplyBusy(newMain);
       syncDocsNavPicker(newMain);
+      applyFocusAfterRedraw();
 
       const newChat = document.getElementById('chat-log');
       if (newChat && (!curChat || chatPinned)) {
@@ -451,10 +453,19 @@
 
   // After a redraw removed the control that had focus, keyboard focus falls to <body>: put it on
   // the heading of the list the item left, so the next Tab continues from there.
+  // The refresh that removes the item may still be in flight (the server's own event starts one),
+  // so the request is remembered for a few seconds and applied after each redraw, as long as
+  // nothing else has taken focus meanwhile.
   function settleFocus(headingId) {
+    focusAfterRedraw = { id: headingId, until: Date.now() + 4000 };
+    applyFocusAfterRedraw();
+  }
+  function applyFocusAfterRedraw() {
+    if (!focusAfterRedraw) return;
+    if (Date.now() > focusAfterRedraw.until) { focusAfterRedraw = null; return; }
     const active = document.activeElement;
     if (active && active !== document.body && active.isConnected) return;
-    const h = document.getElementById(headingId);
+    const h = document.getElementById(focusAfterRedraw.id);
     if (!h) return;
     if (!h.hasAttribute('tabindex')) h.setAttribute('tabindex', '-1');
     h.focus({ preventScroll: true });
