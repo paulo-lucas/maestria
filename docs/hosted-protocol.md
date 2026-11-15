@@ -257,8 +257,8 @@ Only the browser routes the UI needs. Anything else is `route_forbidden`, even w
 
 | Method | Path |
 | --- | --- |
-| GET | `/api/workspaces`, `/api/inbox`, `/api/workspaces/*/inbox`, `/api/workspaces/*/chat`, `/api/workspaces/*/activity`, `/api/workspaces/*/floors`, `/api/workspaces/*/docs`, `/api/floors`, `/api/wire`, `/api/usage`, `/api/stream`, `/api/audit`, `/api/relay/info`, `/api/devices` |
-| GET (HTML views) | `/`, `/workspaces/*/tasks`, `/workspaces/*/chat`, `/workspaces/*/activity`, `/workspaces/*/floors`, `/workspaces/*/docs`, `/workspaces/*/docs/asset`, `/usage` |
+| GET | `/api/workspaces`, `/api/inbox`, `/api/workspaces/*/inbox`, `/api/workspaces/*/chat`, `/api/workspaces/*/activity`, `/api/workspaces/*/floors`, `/api/workspaces/*/docs`, `/api/floors`, `/api/wire`, `/api/usage`, `/api/insights`, `/api/stream`, `/api/audit`, `/api/relay/info`, `/api/devices` |
+| GET (HTML views) | `/`, `/workspaces/*/tasks`, `/workspaces/*/chat`, `/workspaces/*/activity`, `/workspaces/*/floors`, `/workspaces/*/docs`, `/workspaces/*/docs/asset`, `/usage`, `/insights` |
 | POST | `/api/inbox/dismiss-notices`, `/api/workspaces/*/inbox/dismiss-notices`, `/api/workspaces/*/inbox/*/respond`, `/api/workspaces/*/inbox/*/dismiss`, `/api/workspaces/*/inbox/*/postpone`, `/api/workspaces/*/chat`, `/api/workspaces/*/agents/*/approve`, `/api/workspaces/*/agents/*/reject`, `/api/workspaces/*/agents/*/prompt`, `/api/standby/config`, `/api/standby/resume`, `/api/devices/*/revoke`, `/api/kill-switch` |
 
 Never reachable through the relay: login and logout, `auth setup`, sessions, the kill-switch **reset** (`maestria tunnel on` is local only and has no HTTP route), config writes (workspace registry, Wire pairing, tunnel commands), device **approval**, and everything not listed above. `POST /api/kill-switch` only turns the switch **on** (tightening).

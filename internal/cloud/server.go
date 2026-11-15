@@ -194,7 +194,7 @@ func (s *Server) routes() {
 	m.HandleFunc("POST /logout", s.postLogout)
 
 	// App pages: the same shell, the app routes on the client.
-	for _, p := range []string{"/{$}", "/connectors", "/connectors/link", "/admin/invites", "/security", "/pair", "/usage", "/workspaces/{rest...}", "/c/{id}/workspaces/{rest...}", "/c/{id}/usage"} {
+	for _, p := range []string{"/{$}", "/connectors", "/connectors/link", "/admin/invites", "/security", "/pair", "/usage", "/insights", "/workspaces/{rest...}", "/c/{id}/workspaces/{rest...}", "/c/{id}/usage", "/c/{id}/insights"} {
 		m.HandleFunc("GET "+p, s.getApp)
 	}
 

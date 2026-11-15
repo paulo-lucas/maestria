@@ -25,6 +25,7 @@ var allowlist = []route{
 	r("GET", "/api/floors"),
 	r("GET", "/api/wire"),
 	r("GET", "/api/usage"),
+	r("GET", "/api/insights"),
 	r("GET", "/api/stream"),
 	r("GET", "/api/audit"),
 	r("GET", "/api/relay/info"),
@@ -38,6 +39,7 @@ var allowlist = []route{
 	r("GET", "/workspaces/*/docs"),
 	r("GET", "/workspaces/*/docs/asset"),
 	r("GET", "/usage"),
+	r("GET", "/insights"),
 
 	r("POST", "/api/inbox/dismiss-notices"),
 	r("POST", "/api/workspaces/*/inbox/dismiss-notices"),

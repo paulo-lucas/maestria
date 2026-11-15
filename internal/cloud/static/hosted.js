@@ -299,6 +299,8 @@
     if (p === '/security') return { name: 'security' };
     if (p === '/usage') return { name: 'usage' };
     if ((m = p.match(/^\/c\/(cn_[0-9a-f]{32})\/usage$/))) return { name: 'usage', cid: m[1] };
+    if (p === '/insights') return { name: 'insights' };
+    if ((m = p.match(/^\/c\/(cn_[0-9a-f]{32})\/insights$/))) return { name: 'insights', cid: m[1] };
     if ((m = p.match(/^\/c\/(cn_[0-9a-f]{32})\/workspaces\/([^/]+)\/(tasks|chat|activity|floors|docs)$/))) {
       return { name: 'workspace', cid: m[1], ws: decodeURIComponent(m[2]), tab: m[3], query: u.search.slice(1) };
     }
@@ -419,7 +421,7 @@
         var bt = function (t, ic, l, c) { return '<a class="bottomnav__item" href="' + esc(wsHref(cur.cid, cur.id, t)) + '"' + (r.tab === t ? ' aria-current="page"' : '') + '>' + icon(ic) + l + (c || '') + '</a>'; };
         bn.innerHTML = bt('activity', 'i-activity', 'Activity') + bt('tasks', 'i-inbox', 'Tasks', cur.needs ? ' <span class="count" data-status="needs">' + cur.needs + '</span>' : '') + bt('chat', 'i-chat', 'Chat') + bt('floors', 'i-floors', 'Floors') + bt('docs', 'i-docs', 'Docs');
       } else {
-        var cur2 = function (n) { return r.name === n || (n === 'connectors' && r.name === 'link') ? ' aria-current="page"' : ''; };
+        var cur2 = function (n) { return r.name === n || (n === 'connectors' && r.name === 'link') || (n === 'usage' && r.name === 'insights') ? ' aria-current="page"' : ''; };
         bn.innerHTML = '<a class="bottomnav__item" href="/"' + cur2('overview') + '>' + icon('i-overview') + 'Overview' + (needs ? ' <span class="count" data-status="needs">' + needs + '</span>' : '') + '</a>' +
           '<a class="bottomnav__item" href="/usage"' + cur2('usage') + '>' + icon('i-gauge') + 'Usage</a>' +
           '<a class="bottomnav__item" href="/connectors"' + cur2('connectors') + '>' + icon('i-plug') + 'Connectors</a>' +
@@ -443,7 +445,7 @@
     if (dot) dot.setAttribute('data-status', tone);
     if (cdot) { cdot.setAttribute('aria-label', 'Machines: ' + txt); cdot.setAttribute('title', 'Machines: ' + txt); }
     var tabTitle = ({ tasks: 'Human tasks', chat: 'Chat', activity: 'Activity', floors: 'Floors', docs: 'Docs' })[r.tab];
-    document.title = (cur ? cur.name + ' · ' + (tabTitle || 'Workspace') : ({ overview: 'Overview', security: 'Devices & security', usage: 'Usage & standby', connectors: 'Connectors', link: 'Link a machine', invites: 'Invite someone' })[r.name] || 'Maestria') + ' · Maestria';
+    document.title = (cur ? cur.name + ' · ' + (tabTitle || 'Workspace') : ({ overview: 'Overview', security: 'Devices & security', usage: 'Usage & standby', insights: 'Insights', connectors: 'Connectors', link: 'Link a machine', invites: 'Invite someone' })[r.name] || 'Maestria') + ' · Maestria';
   }
 
   // ---- page content ----
@@ -551,6 +553,7 @@
   function rewriteLinks(node, cid) {
     $$('a[href^="/workspaces/"]', node).forEach(function (a) { a.setAttribute('href', '/c/' + cid + a.getAttribute('href')); });
     $$('a[href="/usage"]', node).forEach(function (a) { a.setAttribute('href', '/c/' + cid + '/usage'); });
+    $$('a[href="/insights"]', node).forEach(function (a) { a.setAttribute('href', '/c/' + cid + '/insights'); });
     $$('a[href="/security"]', node).forEach(function (a) { a.setAttribute('href', '/security'); });
   }
 
@@ -768,23 +771,32 @@
     return '<div class="page page--narrow"><div class="card"><div class="empty"><span class="empty__icon">' + icon('i-alert', 'icon--lg') + '</span><p class="empty__title">Could not load this page</p><p class="empty__text">' + esc(ERROR_TEXT[code] || (e && e.message) || 'Something went wrong.') + '</p><a class="btn btn--sm" href="/">Go to overview</a></div></div></div>';
   }
 
-  async function usageHtml(r) {
+  // A machine-wide page (usage, insights): one machine at a time, with a switcher when several are online.
+  async function machinePageHtml(r, page) {
     var ready = onlineConnectors();
     var cid = r.cid || (ready[0] && ready[0].id);
     if (!cid) return stateNoMachine();
     var switcher = '';
     if (ready.length > 1) {
-      switcher = '<div class="chip-row" role="group" aria-label="Machine" style="">' + '</div>';
       switcher = '<nav class="chip-row" aria-label="Machine">' + ready.map(function (c) {
-        return '<a class="chip" href="/c/' + c.id + '/usage" aria-pressed="' + (c.id === cid ? 'true' : 'false') + '">' + esc(c.name) + '</a>';
+        return '<a class="chip" href="/c/' + c.id + '/' + page + '" aria-pressed="' + (c.id === cid ? 'true' : 'false') + '">' + esc(c.name) + '</a>';
       }).join('') + '</nav>';
     }
     var gone = machineBanner(cid);
     if (gone) return gone;
     try {
-      var inner = await fetchMachineView(cid, '/usage', '');
+      var inner = await fetchMachineView(cid, '/' + page, '');
       return switcher ? '<div class="page">' + switcher + '</div>' + inner : inner;
-    } catch (e) { return machineBanner(cid) || errorCard(e); }
+    } catch (e) {
+      // A machine on an older connector refuses the Insights routes: say what fixes it.
+      if (page === 'insights' && e && e.code === 'route_forbidden') return (switcher ? '<div class="page">' + switcher + '</div>' : '') + insightsNeedsUpdate(connector(cid));
+      return machineBanner(cid) || errorCard(e);
+    }
+  }
+
+  function insightsNeedsUpdate(c) {
+    var cmd = window.MaestriaCmd ? window.MaestriaCmd.html('maestria update') : '<code>maestria update</code>';
+    return '<div class="page page--narrow"><div class="card"><div class="empty"><span class="empty__icon">' + icon('i-sparkle', 'icon--lg') + '</span><p class="empty__title">Update this machine to see Insights</p><p class="empty__text">' + esc((c && c.name) || 'This machine') + ' runs a version of Maestria from before Insights. Run this on it:</p>' + cmd + '</div></div></div>';
   }
 
   // ---- security page ----
@@ -1076,7 +1088,8 @@
         return renderOverview();
       }
       case 'workspace': return workspaceHtml(r);
-      case 'usage': return usageHtml(r);
+      case 'usage': return machinePageHtml(r, 'usage');
+      case 'insights': return machinePageHtml(r, 'insights');
       case 'security': return securityHtml();
       default: {
         var res = await fetch(location.pathname, { headers: { 'X-Fragment': '1' }, credentials: 'same-origin' });

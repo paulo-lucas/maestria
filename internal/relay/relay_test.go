@@ -10,6 +10,7 @@ func TestAllowlist(t *testing.T) {
 		{"GET", "/api/workspaces"}, {"GET", "/api/workspaces/atlas/inbox"}, {"POST", "/api/workspaces/atlas/inbox/12/respond"},
 		{"POST", "/api/workspaces/atlas/chat"}, {"GET", "/api/stream"}, {"GET", "/workspaces/atlas/tasks"}, {"GET", "/usage"}, {"GET", "/"},
 		{"POST", "/api/devices/abc/revoke"}, {"POST", "/api/kill-switch"}, {"POST", "/api/workspaces/a/agents/t1/approve"},
+		{"GET", "/insights"}, {"GET", "/api/insights"},
 	}
 	for _, c := range yes {
 		if !Allowed(c[0], c[1]) {
@@ -23,6 +24,8 @@ func TestAllowlist(t *testing.T) {
 		{"GET", "/api/workspaces/a/inbox/extra"}, {"POST", "/api/workspaces//chat"}, {"GET", "/static/panel.js"},
 		{"PUT", "/api/workspaces"}, {"GET", "api/workspaces"}, {"GET", ""}, {"POST", "/api/workspaces"}, {"GET", "/api/workspaces/a/docs/asset"},
 		{"POST", "/api/standby"}, {"POST", "/api/auth/setup"}, {"POST", "/api/config"}, {"GET", "/connector"},
+		// Insights is read-only: nothing can write to it through the relay.
+		{"POST", "/insights"}, {"POST", "/api/insights"}, {"GET", "/api/insights/extra"},
 	}
 	for _, c := range no {
 		if Allowed(c[0], c[1]) {

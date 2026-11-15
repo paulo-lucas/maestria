@@ -167,6 +167,8 @@ func (s *Server) getApp(w http.ResponseWriter, r *http.Request) {
 		return
 	case path == "/usage" || strings.HasSuffix(path, "/usage"):
 		nav, title = "usage", "Usage & standby"
+	case path == "/insights" || (strings.HasPrefix(path, "/c/") && strings.Count(path, "/") == 3 && strings.HasSuffix(path, "/insights")):
+		nav, title = "insights", "Insights"
 	case strings.HasPrefix(path, "/workspaces/") || strings.HasPrefix(path, "/c/"):
 		nav, title = "workspace", "Workspace"
 	}

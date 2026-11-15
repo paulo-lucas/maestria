@@ -341,7 +341,12 @@ func (s *Service) recordGone(wsID string, f seenFloor) {
 	}
 	if !known {
 		// The Maestro never told Maestria about this floor: create its record so history is whole.
-		if _, err := floors.Start(s.opts.DB, wsID, f.Name, floors.StartInput{Brief: unrecordedBrief}, nowMs); err != nil {
+		// It started no later than when it was first seen, which keeps its duration real.
+		startedAt := nowMs
+		if f.First > 0 && f.First < nowMs {
+			startedAt = f.First
+		}
+		if _, err := floors.Start(s.opts.DB, wsID, f.Name, floors.StartInput{Brief: unrecordedBrief}, startedAt); err != nil {
 			return
 		}
 	}

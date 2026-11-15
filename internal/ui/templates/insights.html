@@ -1,0 +1,71 @@
+{{define "page"}}{{template "app" .}}{{end}}
+{{define "content"}}
+    <div class="page page--narrow">
+
+      <nav class="tabs" aria-label="Usage and insights">
+        <a class="tab" href="/usage">Usage &amp; standby</a>
+        <a class="tab" href="/insights" aria-current="page">Insights</a>
+      </nav>
+
+      <header class="page-head">
+        <div class="page-head__title">
+          <h1>Insights</h1>
+          <p class="page-head__sub">How agent work on this machine turned usage into landed floors over the last 30 days{{with .Insights}} ({{.Period}}){{end}}. Each area is rated from 1 to 7 against fixed thresholds and shows the measure behind it. Worked out on this machine from its own records.</p>
+        </div>
+      </header>
+
+      {{with .Insights}}
+      <section class="card panel" aria-labelledby="overall-title">
+        <header class="panel__head">
+          <h2 class="panel__title" id="overall-title">{{icon "i-sparkle"}} Overall</h2>
+        </header>
+        {{if .Level}}
+        <div class="setting">
+          <div class="gauge gauge--lg">
+            <div class="gauge__row"><span class="gauge__label">Level</span><span class="gauge__value">{{.Level}} of 7</span></div>
+            <div class="gauge__track"><progress class="gauge__bar" max="7" value="{{.Level}}">{{.Level}} of 7</progress></div>
+            <div class="gauge__foot"><span>The mean of the rated areas below.{{if .FocusName}} {{.FocusName}} has the most room to grow.{{end}}</span></div>
+          </div>
+        </div>
+        {{else}}
+        <div class="empty empty--compact">
+          <p class="empty__title">Not rated yet</p>
+          <p class="empty__text">An overall level needs at least two rated areas. Each area below says what it still needs.</p>
+        </div>
+        {{end}}
+      </section>
+
+      <section class="card panel" aria-labelledby="areas-title">
+        <header class="panel__head">
+          <h2 class="panel__title" id="areas-title">Areas</h2>
+        </header>
+        {{range .Areas}}
+        <div class="setting" id="area-{{.ID}}">
+          <div class="setting__head">
+            <div class="setting__text">
+              <h3 class="setting__title">{{.Title}}</h3>
+              <p class="setting__desc">{{if .Level}}{{.Value}}{{else}}{{.Missing}}{{end}}</p>
+            </div>
+            {{if .Focus}}<span class="status status--badge" data-status="info">Start here</span>{{else if not .Level}}<span class="status status--quiet">Not rated yet</span>{{end}}
+          </div>
+          {{if .Level}}
+          <div class="gauge">
+            <div class="gauge__row"><span class="gauge__label">Level</span><span class="gauge__value">{{.Level}} of 7</span></div>
+            <div class="gauge__track"><progress class="gauge__bar" max="7" value="{{.Level}}">{{.Level}} of 7</progress></div>
+            {{if .Next}}<div class="gauge__foot"><span>{{.Next}}</span></div>{{end}}
+          </div>
+          {{if or .Tip .Note}}
+          <dl class="kv">
+            {{if .Tip}}<dt>Try</dt><dd>{{.Tip}}</dd>{{end}}
+            {{if .Note}}<dt>Estimate</dt><dd>{{.Note}}</dd>{{end}}
+          </dl>
+          {{end}}
+          {{end}}
+        </div>
+        {{end}}
+        <footer class="panel__foot">The thresholds are the same for everyone and are listed in docs/insights.md in the Maestria repository.</footer>
+      </section>
+      {{end}}
+
+    </div>
+{{end}}

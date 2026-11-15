@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/netip"
@@ -26,6 +27,7 @@ import (
 	"github.com/paulo-lucas/maestria/internal/devices"
 	"github.com/paulo-lucas/maestria/internal/docs"
 	"github.com/paulo-lucas/maestria/internal/floors"
+	"github.com/paulo-lucas/maestria/internal/insights"
 	"github.com/paulo-lucas/maestria/internal/tunnel"
 	"github.com/paulo-lucas/maestria/internal/ui"
 	"github.com/paulo-lucas/maestria/internal/update"
@@ -78,6 +80,8 @@ type Deps struct {
 	// Env overrides OS environment lookup (used in tests).
 	Env config.Env
 	Now func() time.Time
+	// Log receives rare operational warnings (the service log). nil discards them.
+	Log io.Writer
 }
 
 // UpdateNotes is what the panel needs from the release notifier: a cached answer (never a network
@@ -109,6 +113,13 @@ type Server struct {
 	sessionCookie string
 	pendingCookie string
 	csrfCookie    string
+
+	// The Insights report reads every 30-day row, so it is kept for a minute.
+	insightsMu  sync.Mutex
+	insightsAt  time.Time
+	insightsRep insights.Report
+	// usageErrLogged rate-limits the warning for a failed usage sample (background goroutine only).
+	usageErrLogged time.Time
 }
 
 // New builds the server. It does not listen: see Listen.
@@ -183,6 +194,7 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /workspaces/{id}/docs", s.getWorkspaceDocs)
 	m.HandleFunc("GET /workspaces/{id}/docs/asset", s.getWorkspaceDocsAsset)
 	m.HandleFunc("GET /usage", s.getUsage)
+	m.HandleFunc("GET /insights", s.getInsights)
 	m.HandleFunc("GET /security", s.getSecurity)
 	m.HandleFunc("POST /updates/dismiss", s.postUpdateDismiss)
 
@@ -214,6 +226,7 @@ func (s *Server) routes() {
 	m.HandleFunc("GET /api/workspaces/{id}/floors", s.apiWorkspaceFloors)
 	m.HandleFunc("GET /api/workspaces/{id}/docs", s.apiWorkspaceDocs)
 	m.HandleFunc("GET /api/usage", s.apiUsage)
+	m.HandleFunc("GET /api/insights", s.apiInsights)
 	m.HandleFunc("POST /api/standby/config", s.apiStandbyConfig)
 	m.HandleFunc("POST /api/standby/resume", s.apiStandbyResume)
 }
@@ -229,10 +242,13 @@ func (s *Server) StartBackground(ctx context.Context) {
 		pollSecs = 30
 	}
 	go func() {
-		_, _, changed := s.evaluateUsageAndStandby()
+		snap, _, changed := s.evaluateUsageAndStandby()
 		if changed {
 			s.notifyStream("standby")
 		}
+		// Sampled here only, not on page loads: RecordUsage keeps at most one sample per window
+		// every few minutes anyway.
+		s.recordUsage(snap)
 		usageTick := time.NewTicker(time.Duration(pollSecs) * time.Second)
 		sessionTick := time.NewTicker(10 * time.Minute)
 		defer usageTick.Stop()
@@ -244,10 +260,11 @@ func (s *Server) StartBackground(ctx context.Context) {
 			case <-sessionTick.C:
 				_ = s.Sessions.PurgeExpired()
 			case <-usageTick.C:
-				_, _, changed := s.evaluateUsageAndStandby()
+				snap, _, changed := s.evaluateUsageAndStandby()
 				if changed {
 					s.notifyStream("standby")
 				}
+				s.recordUsage(snap)
 			}
 		}
 	}()

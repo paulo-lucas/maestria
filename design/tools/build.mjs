@@ -70,6 +70,8 @@ const WS_NAV = [
 const GLOBAL_NAV = [
   { id: 'overview', label: 'Overview', short: 'Overview', icon: 'i-overview', href: 'overview.html', count: true },
   { id: 'usage', label: 'Usage &amp; standby', short: 'Usage', icon: 'i-gauge', href: 'usage.html' },
+  // Sidebar only: on a phone, Insights is reached from the Usage page (the bottom nav is full).
+  { id: 'insights', label: 'Insights', short: 'Insights', icon: 'i-sparkle', href: 'insights.html', sidebarOnly: true },
   { id: 'connectors', label: 'Connectors', short: 'Connectors', icon: 'i-plug', href: 'connector.html' },
   { id: 'security', label: 'Devices &amp; security', short: 'Security', icon: 'i-shield', href: 'security.html' },
 ];
@@ -106,6 +108,7 @@ function sidebar(m) {
 ${wsItems || `      <p class="nav__empty">${m.conn === 'none' ? 'Shown while a machine is online' : 'No workspaces yet'}</p>`}
       <div class="nav__group">System</div>
       ${item(g('usage'))}
+      ${item(g('insights'))}
       ${item(g('connectors'))}
       ${item(g('security'))}
     </nav>
@@ -163,10 +166,10 @@ function topbar(m) {
 
 function bottomnav(m) {
   const ws = wsFor(m).find((w) => w.id === m.scope);
-  const items = ws ? WS_NAV : GLOBAL_NAV;
+  const items = ws ? WS_NAV : GLOBAL_NAV.filter((n) => !n.sidebarOnly);
   const count = ws ? ws.needs : needsFor(m);
   return `<nav class="bottomnav" aria-label="${ws ? ws.name + ' sections' : 'Sections'}">
-${items.map((n) => `    <a class="bottomnav__item" href="${n.href}"${current(m.nav === n.id)}>${icon(n.icon)}${n.short}${n.count && count ? `<span class="count" data-status="needs">${count}</span>` : ''}</a>`).join('\n')}
+${items.map((n) => `    <a class="bottomnav__item" href="${n.href}"${current(m.nav === n.id || (n.id === 'usage' && m.nav === 'insights'))}>${icon(n.icon)}${n.short}${n.count && count ? `<span class="count" data-status="needs">${count}</span>` : ''}</a>`).join('\n')}
   </nav>`;
 }
 

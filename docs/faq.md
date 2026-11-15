@@ -53,6 +53,10 @@ You need to pair Maestria with Maestri Wire (`maestria wire pair`). Without it t
 
 A brake. When your AI usage nears a limit you set, Maestria tells the Maestro, or interrupts the agents, and wakes the Maestro when the limit resets. See [Standby](concepts.md#standby). Change it on the **Usage & standby** page.
 
+### What does the Insights level mean?
+
+A rating from 1 to 7 of how well agent work on that machine turned usage into landed floors in the last 30 days, with the measure behind each area and what to try next. The thresholds are fixed and the same for everyone. An area stays "not rated yet" until there is enough data. See [Insights](insights.md).
+
 ### Can I answer from my phone?
 
 Yes. Use a Cloudflare Tunnel ([Self-host](self-host.md#2-reach-it-from-your-phone-with-a-cloudflare-tunnel)) or a hosted server ([Hosted](hosted.md)). The panel works on small screens.

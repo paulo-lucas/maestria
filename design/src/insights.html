@@ -1,0 +1,100 @@
+<!--page {"title": "Insights", "scope": "all", "nav": "insights", "group": "All workspaces", "order": 75, "icon": "i-sparkle", "label": "7b. Insights", "desc": "A 1 to 7 rating of how agent work on one machine turns usage into landed floors, with the measure, the next threshold and a tip per area."}-->
+    <div class="page page--narrow">
+
+      <nav class="tabs" aria-label="Usage and insights">
+        <a class="tab" href="usage.html">Usage &amp; standby</a>
+        <a class="tab" href="insights.html" aria-current="page">Insights</a>
+      </nav>
+
+      <header class="page-head">
+        <div class="page-head__title">
+          <h1>Insights</h1>
+          <p class="page-head__sub">How agent work on this machine turned usage into landed floors over the last 30 days (Oct 16 – Nov 15). Each area is rated from 1 to 7 against fixed thresholds and shows the measure behind it. Worked out on this machine from its own records.</p>
+        </div>
+      </header>
+
+      <section class="card panel" aria-labelledby="overall-title">
+        <header class="panel__head">
+          <h2 class="panel__title" id="overall-title"><svg class="icon" aria-hidden="true"><use href="#i-sparkle"/></svg> Overall</h2>
+        </header>
+        <div class="setting">
+          <div class="gauge gauge--lg">
+            <div class="gauge__row"><span class="gauge__label">Level</span><span class="gauge__value">4 of 7</span></div>
+            <div class="gauge__track"><progress class="gauge__bar" max="7" value="4">4 of 7</progress></div>
+            <div class="gauge__foot"><span>The mean of the rated areas below. Usage that ships has the most room to grow.</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card panel" aria-labelledby="areas-title">
+        <header class="panel__head">
+          <h2 class="panel__title" id="areas-title">Areas</h2>
+        </header>
+
+        <div class="setting" id="area-delivery">
+          <div class="setting__head">
+            <div class="setting__text">
+              <h3 class="setting__title">Delivery speed</h3>
+              <p class="setting__desc">Median 19 h from start to landed, over 6 floors</p>
+            </div>
+          </div>
+          <div class="gauge">
+            <div class="gauge__row"><span class="gauge__label">Level</span><span class="gauge__value">5 of 7</span></div>
+            <div class="gauge__track"><progress class="gauge__bar" max="7" value="5">5 of 7</progress></div>
+            <div class="gauge__foot"><span>Level 6 at ≤ 8 h</span></div>
+          </div>
+          <dl class="kv">
+            <dt>Try</dt><dd>Split work into smaller floors, each with one outcome, so every floor lands within a day.</dd>
+          </dl>
+        </div>
+
+        <div class="setting" id="area-quality">
+          <div class="setting__head">
+            <div class="setting__text">
+              <h3 class="setting__title">Work that holds</h3>
+              <p class="setting__desc">6 of 7 floors landed · 1 of 12 approvals answered No (not rated)</p>
+            </div>
+          </div>
+          <div class="gauge">
+            <div class="gauge__row"><span class="gauge__label">Level</span><span class="gauge__value">5 of 7</span></div>
+            <div class="gauge__track"><progress class="gauge__bar" max="7" value="5">5 of 7</progress></div>
+            <div class="gauge__foot"><span>Level 6 at ≥ 90%</span></div>
+          </div>
+          <dl class="kv">
+            <dt>Try</dt><dd>Cancelled floors are usage that shipped nothing. Agreeing on the brief, and on when it is done, before a floor starts helps it land.</dd>
+          </dl>
+        </div>
+
+        <div class="setting" id="area-spend">
+          <div class="setting__head">
+            <div class="setting__text">
+              <h3 class="setting__title">Usage that ships</h3>
+              <p class="setting__desc">58% of usage went to floors that landed</p>
+            </div>
+            <span class="status status--badge" data-status="info">Start here</span>
+          </div>
+          <div class="gauge">
+            <div class="gauge__row"><span class="gauge__label">Level</span><span class="gauge__value">3 of 7</span></div>
+            <div class="gauge__track"><progress class="gauge__bar" max="7" value="3">3 of 7</progress></div>
+            <div class="gauge__foot"><span>Level 4 at ≥ 60%</span></div>
+          </div>
+          <dl class="kv">
+            <dt>Try</dt><dd>Usage on cancelled floors, or with no floor running, ships nothing. Start work as a floor, and stop agents that sit idle.</dd>
+            <dt>Estimate</dt><dd>About 34% of a Claude session window per landed floor (6 floors). Floors that run at the same time share a window, so this is an average.</dd>
+          </dl>
+        </div>
+
+        <div class="setting" id="area-response">
+          <div class="setting__head">
+            <div class="setting__text">
+              <h3 class="setting__title">Your response time</h3>
+              <p class="setting__desc">Needs 3 answered tasks in the last 30 days (has 2).</p>
+            </div>
+            <span class="status status--quiet">Not rated yet</span>
+          </div>
+        </div>
+
+        <footer class="panel__foot">The thresholds are the same for everyone and are listed in docs/insights.md in the Maestria repository.</footer>
+      </section>
+
+    </div>

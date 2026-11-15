@@ -211,6 +211,20 @@ var migrations = []string{
 	`
 	CREATE INDEX IF NOT EXISTS idx_device_pairings_state_expires ON device_pairings (state, expires_at);
 	`,
+	// 9: usage history for Insights. Maestri's usage file only holds the current percentages, so
+	// the connector samples them (see insights.RecordUsage) to tell when usage was spent.
+	`
+	CREATE TABLE IF NOT EXISTS usage_samples (
+		provider  TEXT NOT NULL,
+		account   TEXT NOT NULL,          -- a hash of the provider account key, never the key itself
+		window_id TEXT NOT NULL,
+		used_pct  REAL NOT NULL,
+		reset_at  INTEGER,                -- epoch ms, when known
+		at        INTEGER NOT NULL        -- epoch ms
+	);
+	CREATE INDEX IF NOT EXISTS idx_usage_samples_series ON usage_samples (provider, account, window_id, at);
+	CREATE INDEX IF NOT EXISTS idx_usage_samples_at ON usage_samples (at);
+	`,
 }
 
 // Open opens (creating if needed) the v2 database in configDir and migrates it.

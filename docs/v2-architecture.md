@@ -36,6 +36,7 @@ internal/inbox           human tasks (notice/approve/input/choice + postpone), h
 internal/events          per-workspace event log + wait cursors
 internal/usage           read-only reader of <maestriDir>/usage/providers/.status.json, grouping by provider account
 internal/standby         thresholds per provider/window, Tell the Maestro / Interrupt agents, wake on reset
+internal/insights        usage samples + 1-7 rating of delivery, quality, usage that ships and response time
 internal/wire            Maestri Wire client: pairing, SPKI-pinned TLS, REST, feed/chat sockets, capability gating
 internal/floors          floor plans (future), live floors (Wire), history (landed/cancelled) + Maestro CLI
 internal/docs            read-only mirror of the project's docs/ folder (path-safe, size-limited)

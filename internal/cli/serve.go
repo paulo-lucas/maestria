@@ -96,6 +96,7 @@ func buildServer(env *Env, o buildOpts) (*built, error) {
 	deps := web.Deps{
 		Config: cfg, DB: db, Secrets: secrets, Audit: aud, Sessions: sessions, Limiter: limiter,
 		Tunnel: tun, Access: access, Activity: act, Env: env.Config, Now: env.Now, ConnectorName: o.ConnectorName, Version: env.Version,
+		Log: env.Stderr,
 	}
 	if o.Devices != nil {
 		deps.Devices = o.Devices(db, cfg)

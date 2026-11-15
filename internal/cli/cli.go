@@ -35,6 +35,7 @@ Usage:
   maestria say <message>             Send a Maestro chat message
   maestria wait                      Block until a workspace event arrives
   maestria status                    Show workspace counts, standby, and usage status
+  maestria insights [--json]         Rate how agent work turns usage into landed floors (1 to 7)
   maestria floor <subcommand>        Manage Present, Future, and Past floors
   maestria agent brief <name> <text> Set the one-line brief the panel shows for an agent
   maestria wire pair|status|unpair   Connect to Maestri Wire (live agents, chat, floors)
@@ -188,6 +189,8 @@ func run(args []string, env *Env) error {
 		return cmdWait(rest, env)
 	case "status":
 		return cmdStatus(rest, env)
+	case "insights":
+		return cmdInsights(rest, env)
 	}
 	return usagef("Unknown command: %s\n\n%s", strings.Join(args, " "), help)
 }
