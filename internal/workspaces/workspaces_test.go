@@ -1,6 +1,7 @@
 package workspaces
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -112,8 +113,12 @@ func TestDiscoveryAndMerged(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(maestriDir, "manifest.json"), []byte(manifest), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	wsJSON := `{"name":"Three Room","path":"` + wsDirOnly + `","maestro":"Orchestrator"}`
-	if err := os.WriteFile(filepath.Join(maestriDir, "workspaces", "three-ws", "workspace.json"), []byte(wsJSON), 0o600); err != nil {
+	// Marshal rather than concatenate: Windows paths hold backslashes that must be escaped in JSON.
+	wsJSON, err := json.Marshal(map[string]string{"name": "Three Room", "path": wsDirOnly, "maestro": "Orchestrator"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(maestriDir, "workspaces", "three-ws", "workspace.json"), wsJSON, 0o600); err != nil {
 		t.Fatal(err)
 	}
 
