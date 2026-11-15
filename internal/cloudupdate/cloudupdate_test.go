@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
@@ -106,6 +107,8 @@ func newRig(t *testing.T, version string, healthy func(restarts int32) bool) *ri
 		},
 		Hook: func(u *update.Updater) {
 			u.APIBase, u.Insecure, u.ExePath, u.GOOS, u.GOARCH, u.Verify = srv.URL, true, r.exe, "linux", "amd64", nil
+			// The tests' fake release is unsigned; a cosign on the developer's PATH must not matter.
+			u.LookPath = func(string) (string, error) { return "", exec.ErrNotFound }
 		},
 	}
 	return r

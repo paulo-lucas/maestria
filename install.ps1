@@ -80,7 +80,7 @@ function Install-Maestria {
     $BaseUrl = $env:MAESTRIA_BASE_URL
 
     # owner/name only, because it becomes part of a URL and of the signing identity.
-    if ($Repo -notmatch '^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$') {
+    if ($Repo -notmatch '\A[A-Za-z0-9._-]+/[A-Za-z0-9._-]+\z') {
         throw "MAESTRIA_REPO must look like owner/name"
     }
 
@@ -107,7 +107,7 @@ function Install-Maestria {
         $Tag = "v$Version"
         $VerClean = $Version
     }
-    if ($Tag -notmatch '^[A-Za-z0-9._+-]+$') {
+    if ($Tag -notmatch '\A[A-Za-z0-9._+-]+\z') {
         throw "Unexpected characters in the version: $Tag"
     }
 

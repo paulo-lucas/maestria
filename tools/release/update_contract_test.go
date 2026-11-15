@@ -50,6 +50,7 @@ func TestPublishedReleaseInstallsThroughTheUpdater(t *testing.T) {
 	}
 	u := &update.Updater{
 		Binary: update.BinaryMaestria, Current: "1.0.0", APIBase: srv.URL, Insecure: true, ExePath: exe,
+		LookPath: func(string) (string, error) { return "", exec.ErrNotFound },
 		Verify: func(ctx context.Context, p string) error {
 			out, err := exec.CommandContext(ctx, p, "version").CombinedOutput()
 			if err != nil || !strings.Contains(string(out), "maestria 7.8.9") {

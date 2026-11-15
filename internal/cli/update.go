@@ -18,7 +18,7 @@ const updateUsage = "Usage: maestria update [--check] [--yes] [--force] [--chann
 // updater builds the release updater for this binary. Env.UpdateHook lets tests point it at a
 // fake GitHub and a temporary "installed" binary.
 func (e *Env) updater() *update.Updater {
-	u := &update.Updater{Binary: update.BinaryMaestria, Current: e.Version, Verify: verifyNewBinary}
+	u := &update.Updater{Binary: update.BinaryMaestria, Current: e.Version, Verify: verifyNewBinary, RequireSignature: update.RequireSignatureFromEnv()}
 	if e.UpdateHook != nil {
 		e.UpdateHook(u)
 	}

@@ -64,6 +64,10 @@ func (u *Updater) fetchBinary(ctx context.Context, rel Release, dir string) (str
 	if err != nil {
 		return "", fmt.Errorf("download %s: %w", ChecksumsFile, err)
 	}
+	// The signature first: no line of SHA256SUMS is trusted until it has verified.
+	if err := u.verifySignature(ctx, rel, sumsBody); err != nil {
+		return "", err
+	}
 	want, found := FindChecksum(string(sumsBody), archive)
 	if !found {
 		return "", fmt.Errorf("%s has no valid entry for %s; refusing to install", ChecksumsFile, archive)

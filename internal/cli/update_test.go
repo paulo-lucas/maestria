@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
@@ -65,6 +66,8 @@ func updateEnv(t *testing.T, f *fixture, srv *httptest.Server, version string) (
 	env.Version = version
 	env.UpdateHook = func(u *update.Updater) {
 		u.APIBase, u.Insecure, u.ExePath, u.GOOS, u.GOARCH, u.Verify = srv.URL, true, exe, "linux", "amd64", nil
+		// The fake release is unsigned; a cosign on the developer's PATH must not matter.
+		u.LookPath = func(string) (string, error) { return "", exec.ErrNotFound }
 		u.HealthTimeout, u.HealthPoll = 200*time.Millisecond, 10*time.Millisecond
 	}
 	return env, exe

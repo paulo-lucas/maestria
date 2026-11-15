@@ -124,7 +124,7 @@ func run(args []string, env *Env) error {
 		return &update.UsageError{Msg: err.Error()}
 	}
 
-	u := &update.Updater{Binary: update.BinaryCloud, Current: env.Version, Verify: verifyNewBinary}
+	u := &update.Updater{Binary: update.BinaryCloud, Current: env.Version, Verify: verifyNewBinary, RequireSignature: update.RequireSignatureFromEnv()}
 	if !*check {
 		env.attach(u)
 	}

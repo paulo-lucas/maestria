@@ -63,6 +63,14 @@ type Updater struct {
 	HealthTimeout time.Duration // default 30s
 	HealthPoll    time.Duration // default 1s
 
+	// RequireSignature makes a missing cosign an error instead of a warning (the check itself
+	// always runs, and is strict, whenever cosign is installed).
+	RequireSignature bool
+	// LookPath finds cosign; default exec.LookPath. RunCosign runs it; default os/exec. Both are
+	// hooks for tests.
+	LookPath  func(file string) (string, error)
+	RunCosign func(ctx context.Context, bin string, args []string) ([]byte, error)
+
 	// Log receives progress lines. nil is silent.
 	Log func(format string, args ...any)
 }

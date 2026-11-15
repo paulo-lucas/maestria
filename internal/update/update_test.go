@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -217,6 +218,7 @@ func updater(g *fakeGitHub, ins installed, current string) *Updater {
 	return &Updater{
 		Binary: BinaryMaestria, Current: current, APIBase: g.srv.URL, Insecure: true,
 		GOOS: "linux", GOARCH: "amd64", ExePath: ins.exe,
+		LookPath:      func(string) (string, error) { return "", exec.ErrNotFound },
 		HealthTimeout: 300 * time.Millisecond, HealthPoll: 20 * time.Millisecond,
 	}
 }

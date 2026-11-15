@@ -117,6 +117,10 @@ jobs:
     # token or the signing step. This job can only read the repository.
     permissions:
       contents: read
+      attestations: read # gh attestation verify
+    # Keep HOMEBREW_TAP_DEPLOY_KEY as a secret of this environment and restrict the environment
+    # to v* tags (docs/releasing.md).
+    environment: homebrew
     env:
       GH_TOKEN: ${{ github.token }}
       TAP_REPOSITORY: paulo-lucas/homebrew-tap
@@ -167,6 +171,7 @@ jobs:
         run: |
           set -euo pipefail
           install -d -m 700 "${RUNNER_TEMP}/ssh"
+          trap 'rm -f "${RUNNER_TEMP}/ssh/tap_key"' EXIT
           umask 077
           printf '%s\n' "${DEPLOY_KEY}" > "${RUNNER_TEMP}/ssh/tap_key"
           # github.com's ed25519 host key, pinned here instead of fetched with ssh-keyscan.
@@ -188,4 +193,3 @@ jobs:
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
             commit -m "maestria ${GITHUB_REF_NAME#v}"
           git push origin HEAD:main
-          rm -f "${RUNNER_TEMP}/ssh/tap_key"
