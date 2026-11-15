@@ -47,9 +47,15 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: go mod tidy -diff
 
-      - name: Race tests (relay, devices, connect, cloud)
+      - name: Race tests (relay, devices, connect, cloud, auth, web, runlock)
         if: matrix.os == 'ubuntu-latest'
-        run: go test -race -count=1 ./internal/relay/... ./internal/devices ./internal/connect ./internal/cloud
+        run: go test -race -count=1 ./internal/relay/... ./internal/devices ./internal/connect ./internal/cloud ./internal/auth ./internal/web ./internal/runlock
+
+      - name: Scan for known vulnerabilities (govulncheck)
+        if: matrix.os == 'ubuntu-latest'
+        # Pinned to an exact version and fetched through the Go module proxy, which checks it
+        # against the checksum database. It reports only vulnerabilities the code can reach.
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
 
       - name: Cross-compile release archives (maestria and maestria-cloud, all 5 targets)
         if: matrix.os == 'ubuntu-latest'
