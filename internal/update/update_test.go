@@ -812,3 +812,26 @@ func TestSecondUpdateReplacesPrevious(t *testing.T) {
 		t.Errorf("previous = %q, want V2", prev)
 	}
 }
+
+func TestBeforeSwapRunsFirstAndCanStopTheUpdate(t *testing.T) {
+	g := newFakeGitHub(t)
+	g.add(release(t, "maestria", "v1.2.0", "linux", "amd64", "NEW"))
+	ins := install(t, "maestria", "OLD")
+	u := updater(g, ins, "1.0.0")
+	var sawBinary string
+	u.BeforeSwap = func(context.Context) error { sawBinary = ins.read(t); return nil }
+	mustApply(t, u, latest(t, u, ChannelStable))
+	if sawBinary != "OLD" {
+		t.Errorf("BeforeSwap saw %q, want the old binary still in place", sawBinary)
+	}
+
+	ins2 := install(t, "maestria", "OLD")
+	u2 := updater(g, ins2, "1.0.0")
+	u2.BeforeSwap = func(context.Context) error { return errors.New("backup failed") }
+	if _, err := u2.Apply(context.Background(), latest(t, u2, ChannelStable)); err == nil || !strings.Contains(err.Error(), "backup failed") {
+		t.Fatalf("err = %v", err)
+	}
+	if ins2.read(t) != "OLD" || len(ins2.leftovers(t)) != 0 {
+		t.Error("a failed BeforeSwap must leave the install untouched")
+	}
+}

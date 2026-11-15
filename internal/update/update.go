@@ -52,6 +52,9 @@ type Updater struct {
 
 	// Verify runs the staged binary before it replaces the current one (e.g. `<new> version`).
 	Verify func(ctx context.Context, path string) error
+	// BeforeSwap runs after Verify and before the binary is replaced (a backup, for instance). An
+	// error stops the update with the old binary untouched.
+	BeforeSwap func(ctx context.Context) error
 	// Restart restarts what runs the binary; nil when nothing needs it. Health then has to pass
 	// within HealthTimeout, or the previous binary is put back and Restart runs again.
 	Restart func(ctx context.Context) error
@@ -163,6 +166,11 @@ func (u *Updater) Apply(ctx context.Context, rel Release) (Result, error) {
 	if u.Verify != nil {
 		if err := u.Verify(ctx, staged); err != nil {
 			return res, fmt.Errorf("the downloaded binary does not run here: %w", err)
+		}
+	}
+	if u.BeforeSwap != nil {
+		if err := u.BeforeSwap(ctx); err != nil {
+			return res, fmt.Errorf("before the update: %w", err)
 		}
 	}
 	prev, err := swapIn(exe, staged, u.goos())
