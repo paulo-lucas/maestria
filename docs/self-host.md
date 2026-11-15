@@ -144,7 +144,7 @@ cloudflared service install
 
 ### Step 8. Count real visitor addresses
 
-Behind Cloudflare, every request seems to come from your own machine, so the sign-in limits could not tell visitors apart: one stranger's failed attempts would lock everyone out. Since you allowed a public host name (`maestria config allow-host`), Maestria now **reads the visitor's address from Cloudflare's `CF-Connecting-IP` header automatically**. You do not need to do anything. Opening the panel directly on the machine (`http://127.0.0.1:...`) is never locked out by strangers' failed attempts.
+Behind Cloudflare, every request seems to come from your own machine, so the sign-in limits could not tell visitors apart: one stranger's failed attempts would lock everyone out. Since you allowed a public host name (`maestria config allow-host`), Maestria now **reads the visitor's address from Cloudflare's `CF-Connecting-IP` header automatically**. You do not need to do anything. Opening the panel directly on the machine (`http://127.0.0.1:...` or `http://localhost:...`, with no proxy in between) is not locked out by strangers' failed attempts. With a tunnel that does not report visitor addresses (ngrok, Tailscale Funnel, `ssh -R`, a plain reverse proxy), all of its visitors share one limit, so a stranger can lock the sign-in *for the tunnel*; you at the machine are unaffected. Make sure such a proxy adds an `X-Forwarded-For` header (most do), otherwise its visitors cannot be told apart from you at the machine.
 
 If your tunnel is **not** Cloudflare's and lets a visitor send that header themselves, turn this off so a stranger cannot pick the address the limits see. Open `config.json` in your config directory (`~/.config/maestria/config.json`) and add:
 

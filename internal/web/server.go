@@ -83,8 +83,10 @@ type Server struct {
 	auth  *auth.Authenticator
 	mux   *http.ServeMux
 	hosts map[string]bool
-	env   config.Env
-	cfgMu sync.RWMutex
+	// localHosts are the loopback names of the panel itself (see directLocal).
+	localHosts map[string]bool
+	env        config.Env
+	cfgMu      sync.RWMutex
 
 	bg              sync.WaitGroup
 	broker          *sseBroker
@@ -128,6 +130,7 @@ func New(d Deps) (*Server, error) {
 	port := strconv.Itoa(d.Config.Port)
 	s.hosts["localhost:"+port] = true
 	s.hosts["127.0.0.1:"+port] = true
+	s.localHosts = map[string]bool{"localhost:" + port: true, "127.0.0.1:" + port: true}
 	for _, h := range d.Config.AllowedHosts {
 		s.hosts[h] = true
 	}
@@ -394,7 +397,42 @@ func (s *Server) clientIP(r *http.Request) string {
 	if err != nil {
 		return r.RemoteAddr
 	}
+	// Every request through a tunnel, ssh -R or a reverse proxy arrives from 127.0.0.1 too. Only
+	// a request that really is the person at this machine (a loopback Host name and no proxy
+	// headers) keeps the loopback address and the allowances that go with it. Everything else
+	// that arrives over loopback shares one "tunnel" bucket, so strangers can use up that
+	// bucket's limits but never the owner's.
+	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() && !s.directLocal(r) {
+		return tunnelClient
+	}
 	return host
+}
+
+// tunnelClient is the client key of requests that came over loopback but not from this machine's
+// own browser. It is not an IP address, so it never gets a local owner's allowances.
+const tunnelClient = "tunnel"
+
+// proxyHeaders are sent by tunnels and reverse proxies. A browser opening the panel directly on
+// this machine never sends them.
+var proxyHeaders = []string{
+	"Cf-Connecting-Ip", "Cf-Ray", "Cf-Visitor", "Cf-Ipcountry", "True-Client-Ip", "X-Forwarded-For",
+	"X-Forwarded-Host", "X-Forwarded-Proto", "X-Forwarded-Port", "X-Real-Ip", "Forwarded", "Via",
+}
+
+// directLocal reports whether a request over loopback is the person at this machine: the Host is
+// the panel's own loopback name and port, and no proxy header is present. A tunnel or proxy that
+// rewrites Host to 127.0.0.1 and adds no header at all cannot be told apart from a browser here;
+// docs/security.md says so.
+func (s *Server) directLocal(r *http.Request) bool {
+	if !s.localHosts[strings.ToLower(r.Host)] {
+		return false
+	}
+	for _, h := range proxyHeaders {
+		if r.Header.Get(h) != "" {
+			return false
+		}
+	}
+	return true
 }
 
 func ipOf(r *http.Request) string { ip, _ := r.Context().Value(ipKey).(string); return ip }

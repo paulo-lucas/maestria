@@ -173,7 +173,7 @@ func TestLoopbackInCfHeaderIsIgnored(t *testing.T) {
 		if r.Code != http.StatusOK {
 			t.Fatalf("%s: %d", v, r.Code)
 		}
-		if got := h.srv.clientIP(requestWith("127.0.0.1:6000", v)); got != "127.0.0.1" {
+		if got := h.srv.clientIP(requestWith("127.0.0.1:6000", v)); got != tunnelClient {
 			t.Fatalf("header %q was believed: client address %q", v, got)
 		}
 	}
@@ -190,7 +190,7 @@ func TestPublicHostTurnsOnCfConnectingIPByDefault(t *testing.T) {
 		t.Fatalf("a tunnel is in use (public host allowed): %q", got)
 	}
 	h2 := newHarness(t)
-	if got := h2.srv.clientIP(requestWith("127.0.0.1:6000", "192.0.2.77")); got != "127.0.0.1" {
+	if got := h2.srv.clientIP(requestWith("127.0.0.1:6000", "192.0.2.77")); got != tunnelClient {
 		t.Fatalf("no public host: the header is ignored: %q", got)
 	}
 }
@@ -302,5 +302,87 @@ func TestEventStreamEndsWhenTheSessionDoes(t *testing.T) {
 			}
 			_ = pw.Close()
 		})
+	}
+}
+
+// Behind a tunnel that reports no visitor address (ngrok, Tailscale Funnel, ssh -R, a reverse
+// proxy) every visitor connects from 127.0.0.1. Only a request that is really the person at this
+// machine (the panel's own loopback Host and no proxy header) is treated as the local owner.
+func TestOnlyTheRealLocalOwnerGetsTheLoopbackAddress(t *testing.T) {
+	h := newHarness(t, opts{mutate: func(c *config.Config) {
+		c.AllowedHosts = append(c.AllowedHosts, "panel.example.com")
+		c.TrustCfConnectingIP, c.TrustCfConnectingIPSet = false, true // a tunnel that gives no address
+	}})
+	req := func(host string, hdr map[string]string) *http.Request {
+		r := httptest.NewRequest(http.MethodGet, "/login", nil)
+		r.RemoteAddr, r.Host = "127.0.0.1:50000", host
+		for k, v := range hdr {
+			r.Header.Set(k, v)
+		}
+		return r
+	}
+	for _, host := range []string{"127.0.0.1:4777", "localhost:4777", "LocalHost:4777"} {
+		if got := h.srv.clientIP(req(host, nil)); got != "127.0.0.1" {
+			t.Errorf("the owner at %s must be local, got %q", host, got)
+		}
+	}
+	for name, r := range map[string]*http.Request{
+		"public Host":                req("panel.example.com", nil),
+		"public Host with a header":  req("panel.example.com", map[string]string{"X-Forwarded-For": "203.0.113.9"}),
+		"loopback Host, X-Forwarded": req("127.0.0.1:4777", map[string]string{"X-Forwarded-For": "203.0.113.9"}),
+		"loopback Host, Forwarded":   req("127.0.0.1:4777", map[string]string{"Forwarded": "for=203.0.113.9"}),
+		"loopback Host, X-Real-Ip":   req("127.0.0.1:4777", map[string]string{"X-Real-Ip": "203.0.113.9"}),
+		"loopback Host, Cloudflare":  req("127.0.0.1:4777", map[string]string{"Cf-Ray": "abc"}),
+		"loopback Host, Via":         req("127.0.0.1:4777", map[string]string{"Via": "1.1 proxy"}),
+		"loopback Host, wrong port":  req("127.0.0.1:9999", nil),
+	} {
+		if got := h.srv.clientIP(r); got != tunnelClient {
+			t.Errorf("%s: client %q, want the shared %q bucket", name, got, tunnelClient)
+		}
+	}
+	// A real visitor address from a trusted header still wins over the shared bucket.
+	h2 := newHarness(t, opts{mutate: trustCfHeader})
+	if got := h2.srv.clientIP(req("panel.example.com", map[string]string{"Cf-Connecting-Ip": "203.0.113.9"})); got != "203.0.113.9" {
+		t.Errorf("visitor address: %q", got)
+	}
+}
+
+// A stranger's failed sign-ins and password checks through a tunnel that reports no address fill
+// the shared "tunnel" bucket. They must not lock out, or 429, the owner at the machine.
+func TestTunnelStrangersCannotLockOutTheOwnerAtTheMachine(t *testing.T) {
+	h := newHarness(t, opts{mutate: func(c *config.Config) {
+		c.AllowedHosts = append(c.AllowedHosts, "panel.example.com")
+		c.TrustCfConnectingIP, c.TrustCfConnectingIPSet = false, true
+	}})
+	fromTunnel := func() *client {
+		c := h.client()
+		c.ip, c.host = "127.0.0.1:50000", "panel.example.com"
+		return c
+	}
+	// Lock the shared bucket with failed sign-ins (5 per address), then burn the password-check
+	// budget as well.
+	stranger := fromTunnel()
+	locked := false
+	for i := 0; i < 8 && !locked; i++ {
+		_, r := stranger.attempt("wrong password!", "000000", false)
+		locked = r.Code == http.StatusTooManyRequests
+	}
+	if !locked {
+		t.Fatal("the shared tunnel bucket never locked")
+	}
+	for i := 0; i < 40; i++ {
+		c := fromTunnel()
+		c.postForm("/login", url.Values{"_csrf": {csrfFrom(t, c.get("/login"))}, "password": {"x"}}, nil)
+	}
+	// Other tunnel visitors (the owner on their phone, say) share the stranger's fate...
+	phone := fromTunnel()
+	if r := phone.postForm("/login", url.Values{"_csrf": {csrfFrom(t, phone.get("/login"))}, "password": {testPassword}}, nil); r.Code != http.StatusTooManyRequests {
+		t.Fatalf("tunnel visitors share one bucket: %d", r.Code)
+	}
+	// ...but the owner at the machine does not.
+	owner := h.client()
+	owner.ip, owner.host = "127.0.0.1:50001", testHost
+	if _, r := owner.attempt(testPassword, h.code(0), false); r.Header().Get("Location") != "/" {
+		t.Fatalf("the owner at the machine was refused: %d %s", r.Code, r.Header().Get("Location"))
 	}
 }
