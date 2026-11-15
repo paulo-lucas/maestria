@@ -5,9 +5,11 @@
     <div class="auth-card__head">
       <h1 id="t">Create your account</h1>
       <p>One account sees every workspace on every machine you link.</p>
+      {{if .Invite}}<p class="field__hint">You were invited.{{if .InviteBound}} This invitation is for one email address: use the one it was sent to.{{end}} It works once.</p>{{end}}
     </div>
     <form method="post" action="/signup">
       <input type="hidden" name="_csrf" value="{{.CSRF}}">
+      {{if .Invite}}<input type="hidden" name="invite" value="{{.Invite}}">{{end}}
       <div class="field">
         <label class="field__label" for="email">Email</label>
         <input class="input" id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com" value="{{.Email}}" required>

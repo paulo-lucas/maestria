@@ -2,6 +2,7 @@ package cloud
 
 import (
 	"bytes"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -15,8 +16,11 @@ func cliRun(t *testing.T, dir string, args ...string) (stdout, stderr string, co
 	var out, errb bytes.Buffer
 	env := Env{Stdout: &out, Stderr: &errb, Home: t.TempDir(), Now: time.Now, Version: "test",
 		Getenv: func(k string) string {
-			if k == "MAESTRIA_CLOUD_DIR" {
+			switch k {
+			case "MAESTRIA_CLOUD_DIR":
 				return dir
+			case "MAESTRIA_CLOUD_PUBLIC_URL":
+				return "https://cloud.example.test"
 			}
 			return ""
 		}}
@@ -128,5 +132,54 @@ func TestMigrationKeepsExistingAccounts(t *testing.T) {
 	}
 	if out, _, _ := cliRun(t, dir, "user", "list"); !strings.Contains(out, "owner@example.com") || !strings.Contains(out, "admin") {
 		t.Fatalf("user list: %q", out)
+	}
+}
+
+func TestInviteCLI(t *testing.T) {
+	b := inviteBed(t)
+	b.clock.t = time.Now() // the command line uses the real clock
+	dir := b.cfg.DataDir
+
+	for _, bad := range [][]string{{"--expires", "0"}, {"--expires", "-1d"}, {"--expires", "45d"}, {"--expires", "soon"}, {"--email", "nope"}} {
+		if _, _, code := cliRun(t, dir, append([]string{"invite", "create"}, bad...)...); code == 0 {
+			t.Fatalf("invite create %v must be refused", bad)
+		}
+	}
+	out, _, code := cliRun(t, dir, "invite", "create", "--email", "Ann@example.com", "--expires", "2d", "--note", "for\x1b[2J ann")
+	if code != 0 {
+		t.Fatalf("create: %s", out)
+	}
+	m := regexp.MustCompile(`/signup\?invite=([A-Za-z0-9_-]{43})`).FindStringSubmatch(out)
+	if m == nil || !strings.Contains(out, "only for ann@example.com") {
+		t.Fatalf("create output: %q", out)
+	}
+	tok := m[1]
+
+	list, _, _ := cliRun(t, dir, "invite", "list")
+	if strings.Contains(list, tok) || strings.Contains(list, "\x1b") || !strings.Contains(list, "ann@example.com") || !strings.Contains(list, "active") {
+		t.Fatalf("list must show no token and no control characters: %q", list)
+	}
+	if r := b.browser("10.0.0.1").signupWith(tok, "ann@example.com"); r.StatusCode != 200 {
+		t.Fatalf("the CLI's link works: %d", r.StatusCode)
+	}
+	if list, _, _ = cliRun(t, dir, "invite", "list"); !strings.Contains(list, "used by ann@example.com") {
+		t.Fatalf("list after use: %q", list)
+	}
+
+	out, _, _ = cliRun(t, dir, "invite", "create")
+	id := regexp.MustCompile(`inv_[0-9a-f]{12}`).FindString(out)
+	if id == "" {
+		t.Fatalf("no id in %q", out)
+	}
+	for i := 0; i < 2; i++ {
+		if _, _, code := cliRun(t, dir, "invite", "revoke", id); code != 0 {
+			t.Fatal("revoke is idempotent")
+		}
+	}
+	if _, _, code := cliRun(t, dir, "invite", "revoke", "inv_000000000000"); code == 0 {
+		t.Fatal("revoking an unknown id must fail")
+	}
+	if list, _, _ = cliRun(t, dir, "invite", "list"); !strings.Contains(list, "revoked") {
+		t.Fatalf("list: %q", list)
 	}
 }

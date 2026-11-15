@@ -28,6 +28,10 @@ Usage:
   maestria-cloud user enable EMAIL   Enable it again
   maestria-cloud user promote EMAIL  Make an account an administrator (the only way to make the first one)
   maestria-cloud user demote EMAIL   Take administrator rights away
+  maestria-cloud invite create [--email ADDRESS] [--expires 7d] [--note TEXT]
+                                     Make a sign-up invitation and print its link (shown once)
+  maestria-cloud invite list         List invitations (never their links)
+  maestria-cloud invite revoke ID    Withdraw an invitation
   maestria-cloud version             Print the version
 
 Config: <data dir>/config.json and MAESTRIA_CLOUD_* variables. Data dir: $MAESTRIA_CLOUD_DIR,
@@ -139,6 +143,8 @@ func run(args []string, env *Env) error {
 		return cmdServe(args[1:], env)
 	case "user":
 		return cmdUser(args[1:], env)
+	case "invite":
+		return cmdInvite(args[1:], env)
 	}
 	return fmt.Errorf("unknown command %q\n\n%s", args[0], help)
 }

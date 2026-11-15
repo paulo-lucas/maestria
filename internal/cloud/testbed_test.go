@@ -90,6 +90,7 @@ func newBed(t *testing.T, mut ...func(*Config)) *bed {
 	cfg.Listen = ln.Addr().String()
 	cfg.PublicURL = "http://" + ln.Addr().String()
 	cfg.TrustProxy, cfg.ProxyHops = "xff", 1
+	cfg.Signup = SignupOpen // the flows under test are not about invitations; invite tests set their own mode
 	for _, m := range mut {
 		m(cfg)
 	}

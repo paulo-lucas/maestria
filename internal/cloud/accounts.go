@@ -150,10 +150,20 @@ func MaskEmail(e string) string {
 	return e[:1] + "***" + e[at:]
 }
 
+// execer is what *sql.DB and *sql.Tx share, so a step can run on either.
+type execer interface {
+	Exec(query string, args ...any) (sql.Result, error)
+	QueryRow(query string, args ...any) *sql.Row
+}
+
 func (a *Accounts) userBy(query string, args ...any) (*User, error) {
+	return a.userByQ(a.db, query, args...)
+}
+
+func (a *Accounts) userByQ(q execer, query string, args ...any) (*User, error) {
 	var u User
 	var ver, enr, dis sql.NullInt64
-	err := a.db.QueryRow("SELECT id, email, email_verified_at, totp_enrolled_at, disabled_at, created_at, is_admin FROM users WHERE "+query, args...).
+	err := q.QueryRow("SELECT id, email, email_verified_at, totp_enrolled_at, disabled_at, created_at, is_admin FROM users WHERE "+query, args...).
 		Scan(&u.ID, &u.Email, &ver, &enr, &dis, &u.CreatedAt, &u.IsAdmin)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -172,9 +182,13 @@ func (a *Accounts) UserByID(id string) (*User, error) { return a.userBy("id = ?"
 func (a *Accounts) UserByEmail(email string) (*User, error) { return a.userBy("email = ?", email) }
 
 func (a *Accounts) newEmailToken(userID, kind string) (string, error) {
+	return a.newEmailTokenQ(a.db, userID, kind)
+}
+
+func (a *Accounts) newEmailTokenQ(q execer, userID, kind string) (string, error) {
 	tok := auth.RandomToken()
 	now := a.now()
-	_, err := a.db.Exec("INSERT INTO email_tokens (hash, user_id, kind, created_at, expires_at) VALUES (?, ?, ?, ?, ?)",
+	_, err := q.Exec("INSERT INTO email_tokens (hash, user_id, kind, created_at, expires_at) VALUES (?, ?, ?, ?, ?)",
 		auth.HashToken(tok), userID, kind, now.UnixMilli(), now.Add(EmailTokenTTL).UnixMilli())
 	return tok, err
 }
@@ -214,78 +228,6 @@ func (a *Accounts) burnToken(token string) (bool, error) {
 type PasswordError struct{ Msg string }
 
 func (e *PasswordError) Error() string { return e.Msg }
-
-// Signup creates an account (unverified, no 2FA) and emails a verification link. It answers the
-// same whether or not the address was already registered.
-func (a *Accounts) Signup(ip, rawEmail, password string) error {
-	email, ok := NormalizeEmail(rawEmail)
-	if !ok {
-		return &PasswordError{"Enter a valid email address."}
-	}
-	if err := auth.ValidateNewPassword(password); err != nil {
-		return &PasswordError{err.Error()}
-	}
-	if !a.rate.Allow("signup:ip:"+ip, 10, time.Hour) || !a.rate.Allow("signup:email:"+email, 5, time.Hour) {
-		return &LockedError{RetryAfter: time.Hour}
-	}
-	// Whatever the sign-up turns out to send (a verification link, or a notice to an existing
-	// account), it is limited like a resend, and the same for new and existing addresses.
-	if err := a.mailGate(mailVerify, ip, email); err != nil {
-		return err
-	}
-	release, err := a.guard(ip)
-	if err != nil {
-		return err
-	}
-	hash, err := auth.HashPassword(password) // always: same work for new and existing addresses
-	release()
-	if err != nil {
-		return err
-	}
-	u, err := a.UserByEmail(email)
-	if err != nil {
-		return err
-	}
-	switch {
-	case u == nil:
-		id := newID()
-		if _, err := a.db.Exec("INSERT INTO users (id, email, password_hash, created_at) VALUES (?, ?, ?, ?)", id, email, hash, a.now().UnixMilli()); err != nil {
-			// A concurrent sign-up for the same address won the race: answer the same.
-			return nil
-		}
-		a.event(id, "signup", ip, nil)
-		return a.sendVerify(id, email)
-	case u.VerifiedAt == 0 || u.EnrolledAt == 0:
-		a.event(u.ID, "signup_repeat", ip, nil)
-		if u.VerifiedAt == 0 {
-			// Nobody has proved they own the address yet, so the newest sign-up wins: an earlier
-			// one (someone who typed the address before its owner) must not keep it. The password
-			// becomes the new one and the older verification links stop working; whoever can read
-			// the mailbox and knows the newest password finishes the sign-up.
-			tx, err := a.db.Begin()
-			if err != nil {
-				return err
-			}
-			defer tx.Rollback()
-			if _, err := tx.Exec("UPDATE users SET password_hash = ? WHERE id = ? AND email_verified_at IS NULL", hash, u.ID); err != nil {
-				return err
-			}
-			if _, err := tx.Exec("UPDATE email_tokens SET used_at = ? WHERE user_id = ? AND kind = 'verify' AND used_at IS NULL", a.now().UnixMilli(), u.ID); err != nil {
-				return err
-			}
-			if err := tx.Commit(); err != nil {
-				return err
-			}
-			return a.sendVerify(u.ID, email)
-		}
-		// Verified but 2FA unfinished: the same link works (it asks for the password).
-		return a.sendVerify(u.ID, email)
-	default:
-		a.event(u.ID, "signup_existing", ip, nil)
-		a.sendMail(mailNotice, Message{To: email, Subject: "Maestria: you already have an account", Body: "Someone tried to create a Maestria account with this address, but one already exists.\n\nIf it was you, log in at " + a.url + "/login (use \"Forgot password?\" if needed).\nIf it was not, you can ignore this email."})
-		return nil
-	}
-}
 
 func (a *Accounts) sendVerify(userID, email string) error {
 	tok, err := a.newEmailToken(userID, "verify")
