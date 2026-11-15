@@ -53,6 +53,8 @@ jobs:
 
       - name: Scan for known vulnerabilities (govulncheck)
         if: matrix.os == 'ubuntu-latest'
+        env:
+          GOTOOLCHAIN: local # analyse with the Go from go.mod that setup-go installed
         # Pinned to an exact version and fetched through the Go module proxy, which checks it
         # against the checksum database. It reports only vulnerabilities the code can reach.
         shell: bash
