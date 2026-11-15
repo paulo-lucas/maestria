@@ -4,10 +4,14 @@ All notable changes to Maestria are listed here. The format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-11-15
+
 ### Added
 
 - **Insights.** A new page (a tab next to Usage & standby, and System → Insights in the sidebar) and `maestria insights [--json]` rate from 1 to 7 how agent work on a machine turns usage into landed floors over the last 30 days: delivery speed, work that holds, usage that ships and your response time. Each area shows its measure, the threshold for the next level and one thing to try; an area without enough data says what it needs. Thresholds are fixed and listed in [docs/insights.md](docs/insights.md). Local panel and hosted site.
 - The connector keeps a usage history for Insights: one sample per usage window every 5 minutes while it runs, kept 90 days, in its own database, with the provider account stored as a hash. Maestri's usage files are still only read.
+
+Insights is the first outside contribution ([#1](https://github.com/paulo-lucas/maestria/pull/1)). Thank you!
 
 ### Fixed
 

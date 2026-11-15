@@ -57,7 +57,8 @@ func (s *Server) recordUsage(snap usage.Snapshot) {
 	if err == nil || s.Log == nil {
 		return
 	}
-	if !s.usageErrLogged.IsZero() && s.Now().Sub(s.usageErrLogged) < time.Hour {
+	// A negative age (the clock stepped back) logs again rather than muting the warning.
+	if age := s.Now().Sub(s.usageErrLogged); !s.usageErrLogged.IsZero() && age >= 0 && age < time.Hour {
 		return
 	}
 	s.usageErrLogged = s.Now()

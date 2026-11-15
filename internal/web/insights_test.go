@@ -120,4 +120,10 @@ func TestUsageSampleFailureIsLoggedOnceAnHour(t *testing.T) {
 	if n := strings.Count(log.String(), "Insights could not record a usage sample"); n != 2 {
 		t.Fatalf("logged %d times after an hour, want 2", n)
 	}
+	// A clock that steps back does not mute the warning until it catches up.
+	h.clock.advance(-3 * time.Hour)
+	h.srv.recordUsage(snap)
+	if n := strings.Count(log.String(), "Insights could not record a usage sample"); n != 3 {
+		t.Fatalf("logged %d times after the clock stepped back, want 3", n)
+	}
 }

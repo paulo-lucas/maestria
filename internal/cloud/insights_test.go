@@ -22,7 +22,12 @@ func TestInsightsShellOnColdLoad(t *testing.T) {
 		}
 	}
 	// A workspace that happens to be called "insights" is still a workspace page.
-	if r := admin.get("/c/cn_" + strings.Repeat("a", 32) + "/workspaces/insights/tasks"); strings.Contains(r.body, "<title>Insights · Maestria</title>") {
-		t.Error("a workspace page was taken for the Insights page")
+	for _, path := range []string{
+		"/c/cn_" + strings.Repeat("a", 32) + "/workspaces/insights",
+		"/c/cn_" + strings.Repeat("a", 32) + "/workspaces/insights/tasks",
+	} {
+		if r := admin.get(path); strings.Contains(r.body, "<title>Insights · Maestria</title>") {
+			t.Errorf("GET %s: a workspace page was taken for the Insights page", path)
+		}
 	}
 }
