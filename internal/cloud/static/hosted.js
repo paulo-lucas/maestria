@@ -350,7 +350,7 @@
     wss.forEach(function (w) {
       var href = wsHref(w.cid, w.id, 'tasks');
       var active = cur && cur.cid === w.cid && cur.id === w.id;
-      html += '<a class="nav__item" href="' + esc(href) + '" data-ws="' + esc(w.tone) + '"><span class="swatch"></span> ' + esc(wname(w)) + (w.needs ? ' <span class="count">' + w.needs + '</span>' : '') + '</a>';
+      html += '<a class="nav__item" href="' + esc(href) + '" data-ws="' + esc(w.tone) + '"><span class="swatch"></span> <span class="nav__label" title="' + esc(wname(w)) + '">' + esc(wname(w)) + '</span>' + (w.needs ? ' <span class="count">' + w.needs + '</span>' : '') + '</a>';
       if (active) {
         var tab = function (t, ic, label, extra) {
           return '<a class="nav__item" href="' + esc(wsHref(w.cid, w.id, t)) + '"' + (r.tab === t ? ' aria-current="page"' : '') + '>' + icon(ic) + ' ' + label + (extra || '') + '</a>';
@@ -428,10 +428,18 @@
       (text ? '<p class="banner__text">' + text + '</p>' : '') + (command ? cmdBlock(command) : '') + '</div>' + (extra ? '<div class="banner__actions">' + extra + '</div>' : '') + '</div>';
   }
 
+  // A machine's version, with a quiet hint when a newer release is known (computed by the server
+  // from its cached release check: the browser makes no request for it).
+  function versionNote(c) {
+    if (!c.version) return '';
+    var v = /^[0-9]/.test(c.version) ? 'v' + c.version : c.version;
+    return ' · ' + esc(v) + (c.updateAvailable ? ' <span class="ver-hint" data-status="info" title="' + esc(c.updateAvailable) + ' is available">update</span>' : '');
+  }
+
   function machineList(list) {
     return '<ul class="list machine-list">' + list.map(function (c) {
       return '<li class="device"><span class="device__icon">' + icon('i-laptop') + '</span><span class="device__name">' + esc(c.name) + ' <span class="status" data-status="' + (c.online ? 'ok' : 'offline') + '">' + (c.online ? 'Online' : 'Offline') + '</span></span>' +
-        '<span class="device__meta">' + (c.online ? 'Connected' : (c.lastSeenAt ? 'Last seen ' + new Date(c.lastSeenAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Never connected')) + '</span></li>';
+        '<span class="device__meta">' + (c.online ? 'Connected' : (c.lastSeenAt ? 'Last seen ' + new Date(c.lastSeenAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Never connected')) + versionNote(c) + '</span></li>';
     }).join('') + '</ul>';
   }
 

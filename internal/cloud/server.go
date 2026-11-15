@@ -48,23 +48,30 @@ type Deps struct {
 	Now    func() time.Time
 	// Sealer encrypts TOTP secrets. nil loads or creates the key in the data dir.
 	Sealer *Sealer
+	// Version is this server's build (from -ldflags), shown in the sidebar footer.
+	Version string
+	// Releases says which release is newest, from a cache (no network on a page view). nil means
+	// unknown, so no machine is ever reported as behind.
+	Releases Releases
 }
 
 // Server is the cloud's http.Handler.
 type Server struct {
-	cfg   *Config
-	db    *sql.DB
-	log   *slog.Logger
-	now   func() time.Time
-	audit *audit.Log
-	acc   *Accounts
-	cons  *Connectors
-	hub   *Hub
-	ui    *cloudUI
-	mail  *mailQueue
-	mux   *http.ServeMux
-	hosts map[string]bool
-	rate  *rateLimiter
+	cfg      *Config
+	db       *sql.DB
+	log      *slog.Logger
+	now      func() time.Time
+	audit    *audit.Log
+	acc      *Accounts
+	cons     *Connectors
+	hub      *Hub
+	ui       *cloudUI
+	mail     *mailQueue
+	mux      *http.ServeMux
+	hosts    map[string]bool
+	rate     *rateLimiter
+	version  string
+	releases Releases
 
 	sessionCookie, pendingCookie, csrfCookie, setupCookie string
 
@@ -93,7 +100,7 @@ func New(d Deps) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Server{cfg: d.Config, db: d.DB, log: d.Log, now: d.Now, audit: audit.New(d.DB, d.Now), ui: u, mux: http.NewServeMux(), rate: newRateLimiter(d.Now)}
+	s := &Server{cfg: d.Config, db: d.DB, log: d.Log, now: d.Now, audit: audit.New(d.DB, d.Now), ui: u, mux: http.NewServeMux(), rate: newRateLimiter(d.Now), version: d.Version, releases: d.Releases}
 	s.mail = newMailQueue(d.Mailer, d.Log)
 	s.acc = NewAccounts(d.DB, sealer, s.audit, d.Config, s.mail.Enqueue, d.Now)
 	s.cons = &Connectors{a: s.acc}
@@ -483,3 +490,9 @@ func decodeJSON(r *http.Request, dst any) error {
 }
 
 var _ = auth.RandomToken
+
+// Releases is what the server needs to know about published releases: the newest one, from a
+// cache. *update.Notifier satisfies it.
+type Releases interface {
+	LatestKnown() string
+}

@@ -118,6 +118,11 @@ type pageData struct {
 
 	Connectors []connectorPage
 	PublicURL  string
+
+	// ServerVersion is this server's build ("v1.2.3" or "dev"); ServerUpdate the newer release
+	// when there is one.
+	ServerVersion string
+	ServerUpdate  string
 }
 
 type connectorPage struct {
@@ -130,6 +135,8 @@ type connectorPage struct {
 	Connected  string
 	KillSwitch bool
 	Linked     string
+	// UpdateAvailable is the newest release when this machine is behind it.
+	UpdateAvailable string
 }
 
 // qrPath draws text as one SVG path of unit squares, with a 2-module quiet zone.

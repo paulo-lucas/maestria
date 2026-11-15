@@ -34,7 +34,7 @@
         <div class="panel__body">
           <dl class="kv">
             {{if .Online}}
-            <dt>Version</dt><dd>{{if .Version}}{{.Version}}{{else}}unknown{{end}}</dd>
+            <dt>Version</dt><dd>{{if .Version}}{{.Version}}{{else}}unknown{{end}}{{if .UpdateAvailable}} <span class="ver-hint" data-status="info" title="{{.UpdateAvailable}} is available">{{.UpdateAvailable}} available</span>{{end}}</dd>
             <dt>System</dt><dd>{{.System}}</dd>
             <dt>Last seen</dt><dd>just now <span class="subtle">· connected {{.Connected}}</span></dd>
             <dt>Maestri Wire</dt><dd data-slot="wire"><span class="subtle">Checking…</span></dd>
@@ -43,7 +43,7 @@
             <dt>Linked</dt><dd>{{.Linked}}</dd>
             {{else}}
             <dt>Last seen</dt><dd>{{.LastSeen}}</dd>
-            {{if .Version}}<dt>Last version</dt><dd>{{.Version}}</dd>{{end}}
+            {{if .Version}}<dt>Last version</dt><dd>{{.Version}}{{if .UpdateAvailable}} <span class="ver-hint" data-status="info" title="{{.UpdateAvailable}} is available">{{.UpdateAvailable}} available</span>{{end}}</dd>{{end}}
             {{if .System}}<dt>System</dt><dd>{{.System}}</dd>{{end}}
             <dt>Linked</dt><dd>{{.Linked}}</dd>
             {{end}}

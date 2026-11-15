@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/paulo-lucas/maestria/internal/relay"
+	"github.com/paulo-lucas/maestria/internal/update"
 )
 
 type connectorView struct {
@@ -24,6 +25,8 @@ type connectorView struct {
 	LastSeenAt  int64              `json:"lastSeenAt"`
 	ConnectedAt int64              `json:"connectedAt,omitempty"`
 	Devices     []relay.DeviceInfo `json:"devices"`
+	// UpdateAvailable is the newest release when this machine runs an older one ("" otherwise).
+	UpdateAvailable string `json:"updateAvailable,omitempty"`
 }
 
 func (s *Server) views(userID string) ([]connectorView, error) {
@@ -40,6 +43,7 @@ func (s *Server) views(userID string) ([]connectorView, error) {
 			v.Version, v.OS, v.Arch, v.KillSwitch = hello.Version, hello.OS, hello.Arch, hello.KillSwitch
 			v.LastSeenAt = s.now().UnixMilli()
 		}
+		v.UpdateAvailable = s.updateFor(v.Version)
 		devs, _ := s.cons.Devices(cn.ID)
 		if devs == nil {
 			devs = []relay.DeviceInfo{}
@@ -48,6 +52,22 @@ func (s *Server) views(userID string) ([]connectorView, error) {
 		out = append(out, v)
 	}
 	return out, nil
+}
+
+// latest is the newest known release ("" when unknown).
+func (s *Server) latest() string {
+	if s.releases == nil {
+		return ""
+	}
+	return s.releases.LatestKnown()
+}
+
+// updateFor returns the newest release as "v1.4.0" when version is behind it, else "".
+func (s *Server) updateFor(version string) string {
+	if latest := s.latest(); latest != "" && update.Behind(version, latest) {
+		return displayVersion(latest)
+	}
+	return ""
 }
 
 // displayVersion shows 2.0.3 as v2.0.3 and leaves names like "dev" alone.
@@ -109,7 +129,8 @@ func (s *Server) shellData(r *http.Request, title, nav string) *pageData {
 		initial = strings.ToUpper(sess.User.Email[:1])
 	}
 	return &pageData{Title: title, Nav: nav, CSRF: sess.CSRFToken, Email: sess.User.Email, Initial: initial,
-		Scripts: []string{"hosted-keys.js", "hosted.js", "panel.js"}, PublicURL: s.cfg.PublicURL}
+		Scripts: []string{"hosted-keys.js", "hosted.js", "panel.js"}, PublicURL: s.cfg.PublicURL,
+		ServerVersion: displayVersion(s.version), ServerUpdate: s.updateFor(s.version)}
 }
 
 // getApp serves the app shell for every in-app route. Cloud-owned pages are rendered here;
@@ -150,7 +171,7 @@ func (s *Server) getApp(w http.ResponseWriter, r *http.Request) {
 		now := s.now()
 		for _, v := range views {
 			cp := connectorPage{ID: v.ID, Name: v.Name, Online: v.Online, Version: displayVersion(v.Version), System: prettyOS(v.OS, v.Arch),
-				KillSwitch: v.KillSwitch, Linked: time.UnixMilli(v.CreatedAt).Format("Jan 2")}
+				KillSwitch: v.KillSwitch, Linked: time.UnixMilli(v.CreatedAt).Format("Jan 2"), UpdateAvailable: v.UpdateAvailable}
 			if v.Online {
 				cp.Connected = span(now.Sub(time.UnixMilli(v.ConnectedAt)))
 			} else if v.LastSeenAt > 0 {
