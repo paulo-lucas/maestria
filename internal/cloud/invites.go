@@ -253,8 +253,12 @@ func (a *Accounts) PeekInvite(ip, token string) (*InviteInfo, error) {
 // the whole check (unused, not withdrawn, not expired, address matches), so two sign-ups with one
 // token cannot both succeed. Zero rows is ErrInviteInvalid and the caller rolls back.
 func (a *Accounts) useInvite(tx execer, token, email, userID string) (string, error) {
+	var by any // NULL when this sign-up left an existing or pending account alone
+	if userID != "" {
+		by = userID
+	}
 	res, err := tx.Exec("UPDATE invites SET used_at = ?, used_by = ? WHERE token_hash = ? AND used_at IS NULL AND revoked_at IS NULL AND expires_at > ? AND (email IS NULL OR email = ?)",
-		a.now().UnixMilli(), userID, auth.HashToken(token), a.now().UnixMilli(), email)
+		a.now().UnixMilli(), by, auth.HashToken(token), a.now().UnixMilli(), email)
 	if err != nil {
 		return "", err
 	}

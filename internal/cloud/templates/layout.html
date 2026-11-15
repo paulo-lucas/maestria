@@ -40,7 +40,7 @@
 {{end}}
 
 {{define "app"}}{{template "head" .}}
-<body data-csrf="{{.CSRF}}" data-page="{{.Nav}}" data-email="{{.Email}}" data-app="hosted">
+<body data-csrf="{{.CSRF}}" data-page="{{.Nav}}" data-email="{{.Email}}" data-app="hosted"{{if .Admin}} data-admin="1"{{end}}>
 {{sprite}}
 <a class="skip-link" href="#main">Skip to content</a>
 

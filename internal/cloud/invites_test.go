@@ -1,7 +1,9 @@
 package cloud
 
 import (
+	"errors"
 	"fmt"
+	"github.com/paulo-lucas/maestria/internal/auth"
 	"net/url"
 	"regexp"
 	"strings"
@@ -230,7 +232,15 @@ func TestInviteIsSingleUseUnderRace(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			err := b.srv.acc.Signup(fmt.Sprintf("10.9.0.%d", i), fmt.Sprintf("racer%d@example.com", i), testPassword, tok)
+			var err error
+			for try := 0; try < 400; try++ {
+				// Only two password hashes run at once, so the server may say "slow down". That is
+				// not a verdict on the token: ask again.
+				if err = b.srv.acc.Signup(fmt.Sprintf("10.9.0.%d", i), fmt.Sprintf("racer%d@example.com", i), testPassword, tok); !errors.As(err, new(*LockedError)) {
+					break
+				}
+				time.Sleep(5 * time.Millisecond)
+			}
 			switch err {
 			case nil:
 				atomic.AddInt32(&ok, 1)
@@ -322,4 +332,95 @@ func TestRevokeIsIdempotent(t *testing.T) {
 	if r := b.browser("10.0.0.1").signupWith(tok, "a@example.com"); r.StatusCode != 403 {
 		t.Fatalf("a revoked invitation must not work: %d", r.StatusCode)
 	}
+}
+
+func hashOf(tok string) string { return auth.HashToken(tok) }
+
+func pwHash(b *bed, email string) string {
+	var h string
+	_ = b.srv.db.QueryRow("SELECT password_hash FROM users WHERE email = ?", email).Scan(&h)
+	return h
+}
+
+func usedBy(b *bed, token string) (used bool, by *string) {
+	var u *int64
+	_ = b.srv.db.QueryRow("SELECT used_at, used_by FROM invites WHERE token_hash = ?", hashOf(token)).Scan(&u, &by)
+	return u != nil, by
+}
+
+// One invitee cannot lock another out of a pending sign-up: an unbound invitation leaves the
+// pending password alone (and is spent, with the same answer).
+func TestUnboundInviteCannotReplaceAPendingPassword(t *testing.T) {
+	b := inviteBed(t)
+	_, annTok := b.invite(InviteOptions{Email: "ann@example.com"})
+	annBr := b.browser("10.0.0.1")
+	annBr.signupWith(annTok, "ann@example.com")
+	annLink := b.link(b.waitMail("ann@example.com", "Verify"))
+	before := pwHash(b, "ann@example.com")
+
+	b.clock.advance(5 * time.Minute)
+	_, malTok := b.invite(InviteOptions{})
+	r := b.browser("10.0.0.9").signupAs(malTok, "ann@example.com", "mallory chose this passphrase")
+	if r.StatusCode != 200 || !strings.Contains(r.body, "Check your email") {
+		t.Fatalf("same answer as any accepted sign-up: %d", r.StatusCode)
+	}
+	if pwHash(b, "ann@example.com") != before {
+		t.Fatal("an unbound invitation must not replace a pending password")
+	}
+	if used, by := usedBy(b, malTok); !used || by != nil {
+		t.Fatalf("the invitation is spent and records no account: used=%v by=%v", used, by)
+	}
+	// Ann's own link still works with her own password.
+	if r := annBr.form(annLink, url.Values{"password": {testPassword}}); r.StatusCode != 303 {
+		t.Fatalf("ann's verification link must still work: %d %s", r.StatusCode, r.body)
+	}
+}
+
+// The recovery path: an invitation bound to the real owner of an address does replace a squatter's
+// pending sign-up.
+func TestBoundInviteReplacesASquattersPendingSignup(t *testing.T) {
+	b := inviteBed(t)
+	_, squatTok := b.invite(InviteOptions{})
+	b.browser("10.0.0.9").signupAs(squatTok, "ann@example.com", "squatter passphrase here")
+	squatLink := b.link(b.waitMail("ann@example.com", "Verify"))
+	before := pwHash(b, "ann@example.com")
+
+	b.clock.advance(5 * time.Minute)
+	_, annTok := b.invite(InviteOptions{Email: "ann@example.com"})
+	if r := b.browser("10.0.0.1").signupWith(annTok, "ann@example.com"); r.StatusCode != 200 {
+		t.Fatalf("ann: %d", r.StatusCode)
+	}
+	if pwHash(b, "ann@example.com") == before {
+		t.Fatal("the bound invitation replaces the squatter's password")
+	}
+	if used, by := usedBy(b, annTok); !used || by == nil {
+		t.Fatal("the bound invitation records the account")
+	}
+	if r := b.browser("10.0.0.9").form(squatLink, url.Values{"password": {"squatter passphrase here"}}); r.StatusCode == 303 {
+		t.Fatal("the squatter's old link must be dead")
+	}
+}
+
+func TestExistingAccountIsNotCreditedWithTheInvitation(t *testing.T) {
+	b := inviteBed(t)
+	_, first := b.invite(InviteOptions{})
+	br := b.browser("10.0.0.1")
+	br.signupWith(first, "ann@example.com")
+	b.clock.advance(5 * time.Minute)
+	_, tok := b.invite(InviteOptions{Email: "ann@example.com"})
+	b.browser("10.0.0.2").signupWith(tok, "ann@example.com") // pending, owned by a bound one
+	// Now make her complete: use the CLI-free way: mark verified+enrolled directly.
+	_, _ = b.srv.db.Exec("UPDATE users SET email_verified_at = 1, totp_enrolled_at = 1 WHERE email = 'ann@example.com'")
+	b.clock.advance(5 * time.Minute)
+	_, again := b.invite(InviteOptions{})
+	b.browser("10.0.0.3").signupWith(again, "ann@example.com")
+	if used, by := usedBy(b, again); !used || by != nil {
+		t.Fatalf("an invitation used against an existing account is spent and credits nobody: used=%v by=%v", used, by)
+	}
+}
+
+func (br *browser) signupAs(token, email, password string) *resp {
+	br.b.t.Helper()
+	br.get("/signup?invite=" + url.QueryEscape(token))
+	return br.form("/signup", url.Values{"email": {email}, "password": {password}, "invite": {token}})
 }

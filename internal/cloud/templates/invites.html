@@ -60,7 +60,7 @@
             <li class="invite-row" data-invite="{{.ID}}">
               <div class="invite-row__main">
                 <p class="invite-row__title">{{if .Note}}{{.Note}}{{else}}<span class="subtle">No note</span>{{end}}</p>
-                <p class="invite-row__meta">{{.For}} · {{if eq .Status "used"}}used{{if .UsedBy}} by {{.UsedBy}}{{end}}{{else}}expires {{.Expires}}{{end}} · <span class="mono">{{.ID}}</span></p>
+                <p class="invite-row__meta">{{.For}} · {{if eq .Status "used"}}used{{if .UsedBy}}, {{.UsedBy}}{{end}}{{else}}expires {{.Expires}}{{end}} · <span class="mono">{{.ID}}</span></p>
               </div>
               <span class="status status--badge" data-status="{{if eq .Status "used"}}ok{{else if eq .Status "active"}}working{{else}}offline{{end}}">{{.StatusLabel}}</span>
               {{if .CanRevoke}}<button class="btn btn--sm" type="button" data-action="revoke-invite" data-id="{{.ID}}">Revoke</button>{{end}}

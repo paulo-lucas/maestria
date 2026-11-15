@@ -377,6 +377,8 @@ An invitation works **once**. The person's sign-up spends it, even if they never
 
 Lifetimes outside 1 hour to 30 days are refused, not rounded.
 
+**If someone's address is held by a sign-up they didn't make** (somebody typed it first and never verified it), send them an invitation **bound to their address** (`--email`). Only a bound invitation may replace the password of a pending sign-up; an unbound one never does, so one invited person cannot lock out another. A pending sign-up that nobody verifies disappears after 24 hours.
+
 ### Other things you can do
 
 To block an account (it ends its sessions and disconnects its machines within about 15 seconds):

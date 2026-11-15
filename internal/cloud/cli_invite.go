@@ -46,7 +46,7 @@ func cmdInvite(args []string, env *Env) error {
 			link = "<your server>" + link
 			fmt.Fprintln(env.Stderr, "warning: publicUrl is not set, so the link has no address; put your server's address in front of it")
 		}
-		fmt.Fprintf(env.Stdout, "Invitation %s, valid until %s", inv.ID, time.UnixMilli(inv.ExpiresAt).Format("2006-01-02 15:04"))
+		fmt.Fprintf(env.Stdout, "Invitation %s, valid until %s", inv.ID, time.UnixMilli(inv.ExpiresAt).UTC().Format("2006-01-02 15:04 UTC"))
 		if inv.Email != "" {
 			fmt.Fprintf(env.Stdout, ", only for %s", termsafe.Clean(inv.Email, 254))
 		}
@@ -80,10 +80,13 @@ func cmdInvite(args []string, env *Env) error {
 				who = termsafe.Clean(in.Email, 254)
 			}
 			status := in.Status(now)
-			if status == "used" && in.UsedBy != "" {
-				status = "used by " + termsafe.Clean(users[in.UsedBy], 254)
+			if status == "used" {
+				status = "used (no new account)"
+				if in.UsedBy != "" {
+					status = "used by " + termsafe.Clean(users[in.UsedBy], 254)
+				}
 			}
-			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", in.ID, status, time.UnixMilli(in.ExpiresAt).Format("2006-01-02 15:04"), who, by, termsafe.Clean(in.Note, InviteNoteMax))
+			fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\n", in.ID, status, time.UnixMilli(in.ExpiresAt).UTC().Format("2006-01-02 15:04 UTC"), who, by, termsafe.Clean(in.Note, InviteNoteMax))
 		}
 		return tw.Flush()
 	case "revoke":

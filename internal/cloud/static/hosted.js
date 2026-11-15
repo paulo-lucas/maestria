@@ -388,7 +388,8 @@
         bn.innerHTML = '<a class="bottomnav__item" href="/"' + cur2('overview') + '>' + icon('i-overview') + 'Overview' + (needs ? ' <span class="count" data-status="needs">' + needs + '</span>' : '') + '</a>' +
           '<a class="bottomnav__item" href="/usage"' + cur2('usage') + '>' + icon('i-gauge') + 'Usage</a>' +
           '<a class="bottomnav__item" href="/connectors"' + cur2('connectors') + '>' + icon('i-plug') + 'Connectors</a>' +
-          '<a class="bottomnav__item" href="/security"' + cur2('security') + '>' + icon('i-shield') + 'Security</a>';
+          '<a class="bottomnav__item" href="/security"' + cur2('security') + '>' + icon('i-shield') + 'Security</a>' +
+          (body.dataset.admin === '1' ? '<a class="bottomnav__item" href="/admin/invites"' + cur2('invites') + '>' + icon('i-user') + 'Invite</a>' : '');
       }
     }
 

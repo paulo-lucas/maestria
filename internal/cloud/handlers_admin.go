@@ -52,7 +52,7 @@ func (s *Server) invitePages() ([]invitePage, error) {
 	for i := range list {
 		in := &list[i]
 		st := in.Status(now)
-		p := invitePage{ID: in.ID, Note: in.Note, For: "Anyone with the link", Expires: time.UnixMilli(in.ExpiresAt).Format("Jan 2, 15:04"), Status: st, CanRevoke: st == "active"}
+		p := invitePage{ID: in.ID, Note: in.Note, For: "Anyone with the link", Expires: time.UnixMilli(in.ExpiresAt).UTC().Format("Jan 2, 15:04 UTC"), Status: st, CanRevoke: st == "active"}
 		if in.Email != "" {
 			p.For = MaskEmail(in.Email)
 		}
@@ -61,8 +61,9 @@ func (s *Server) invitePages() ([]invitePage, error) {
 			p.StatusLabel = "Waiting"
 		case "used":
 			p.StatusLabel = "Used"
+			p.UsedBy = "no new account"
 			if e := users[in.UsedBy]; e != "" {
-				p.UsedBy = MaskEmail(e)
+				p.UsedBy = "by " + MaskEmail(e)
 			}
 		case "revoked":
 			p.StatusLabel = "Revoked"

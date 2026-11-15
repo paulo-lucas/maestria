@@ -23,8 +23,10 @@ func (a *Accounts) Signup(ip, rawEmail, password, invite string) error {
 	if !ok {
 		return &PasswordError{"Enter a valid email address."}
 	}
+	bound := false
 	if mode == SignupInvite {
-		if _, _, err := a.inviteRow(a.db, invite, email, true); err != nil {
+		var err error
+		if _, bound, err = a.inviteRow(a.db, invite, email, true); err != nil {
 			return a.inviteFailure(ip, err)
 		}
 	}
@@ -58,6 +60,7 @@ func (a *Accounts) Signup(ip, rawEmail, password, invite string) error {
 	defer tx.Rollback()
 	var after []func()
 	var uid string
+	owns := false // this sign-up created the account, or replaced the pending one: only then is it recorded as the invitation's account
 	u, err := a.userByQ(tx, "email = ?", email)
 	if err != nil {
 		return err
@@ -65,6 +68,7 @@ func (a *Accounts) Signup(ip, rawEmail, password, invite string) error {
 	switch {
 	case u == nil:
 		uid = newID()
+		owns = true
 		if _, err := tx.Exec("INSERT INTO users (id, email, password_hash, created_at) VALUES (?, ?, ?, ?)", uid, email, hash, a.now().UnixMilli()); err != nil {
 			return err
 		}
@@ -75,11 +79,14 @@ func (a *Accounts) Signup(ip, rawEmail, password, invite string) error {
 		after = append(after, func() { a.event(uid, "signup", ip, nil); a.sendMail(mailVerify, a.verifyMessage(email, tok)) })
 	case u.VerifiedAt == 0 || u.EnrolledAt == 0:
 		uid = u.ID
-		if u.VerifiedAt == 0 {
-			// Nobody has proved they own the address yet, so the newest sign-up wins: an earlier
-			// one (someone who typed the address before its owner) must not keep it. The password
-			// becomes the new one and the older verification links stop working; whoever can read
-			// the mailbox and knows the newest password finishes the sign-up.
+		// Nobody has proved they own a pending address yet, so the newest sign-up wins: someone who
+		// typed it before its owner must not keep it. The password becomes the new one and the older
+		// verification links stop working; whoever can read the mailbox and knows the newest password
+		// finishes the sign-up. In invite mode only an invitation bound to this address may do that:
+		// with an unbound one (any invitee holds one) the pending password stays, so one invitee
+		// cannot lock another out. The answer is the same and the invitation is spent either way.
+		if u.VerifiedAt == 0 && (mode != SignupInvite || bound) {
+			owns = true
 			if _, err := tx.Exec("UPDATE users SET password_hash = ? WHERE id = ? AND email_verified_at IS NULL", hash, u.ID); err != nil {
 				return err
 			}
@@ -101,7 +108,7 @@ func (a *Accounts) Signup(ip, rawEmail, password, invite string) error {
 		})
 	}
 	if mode == SignupInvite {
-		id, err := a.useInvite(tx, invite, email, uid)
+		id, err := a.useInvite(tx, invite, email, ownerOf(owns, uid))
 		if err != nil {
 			return a.inviteFailure(ip, err)
 		}
@@ -128,4 +135,14 @@ func (a *Accounts) inviteFailure(ip string, err error) error {
 func (a *Accounts) verifyMessage(email, tok string) Message {
 	return Message{To: email, Subject: "Verify your email for Maestria",
 		Body: "Confirm your email to finish creating your Maestria account:\n\n" + a.url + "/verify/" + tok + "\n\nThe link expires in 30 minutes. If you did not sign up, ignore this email."}
+}
+
+// ownerOf is the account an invitation is recorded against: the one this sign-up created or took
+// over, and nothing for a repeat that left an existing or pending account alone (so the list never
+// says someone used an invitation they did not touch).
+func ownerOf(owns bool, uid string) string {
+	if owns {
+		return uid
+	}
+	return ""
 }
