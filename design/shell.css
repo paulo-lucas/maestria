@@ -295,9 +295,9 @@
     background: transparent;
     transition: background var(--dur-fast) var(--ease);
   }
-  .sidebar-resizer:hover::after { background: var(--line-strong); }
+  .sidebar-resizer:hover::after { left: 3px; width: 3px; background: color-mix(in oklab, var(--focus) 50%, var(--line-strong)); }
   .sidebar-resizer:focus-visible { outline: none; }
-  .sidebar-resizer:focus-visible::after, .is-resizing .sidebar-resizer::after { background: var(--focus); }
+  .sidebar-resizer:focus-visible::after, .is-resizing .sidebar-resizer::after { left: 3px; width: 3px; background: var(--focus); }
   .is-resizing, .is-resizing * { cursor: col-resize !important; user-select: none !important; }
   .sidebar > .brand { padding: var(--space-1) var(--space-3) var(--space-2); }
   .main { padding: var(--space-6) var(--space-7) var(--space-8); }

@@ -396,9 +396,10 @@
     var offline = state.connectors.filter(function (c) { return !c.online; });
     var name = $('#conn-card-name'), meta = $('#conn-card-meta'), dot = $('#conn-card-dot'), cdot = $('#conn-dot');
     var txt = !online.length ? 'No machine online' : online.length + ' ' + plural(online.length, 'machine', 'machines') + ' online';
-    if (name) name.textContent = txt;
+    if (name) { name.textContent = txt; name.title = txt; }
     if (meta) {
       meta.textContent = offline.length ? offline[0].name + ' offline' + (offline[0].lastSeenAt ? ' · ' + relTime(offline[0].lastSeenAt) : '') + (offline.length > 1 ? ' · +' + (offline.length - 1) : '') : (state.connectors.length ? '' : 'Link your first machine');
+      meta.title = meta.textContent;
     }
     var needPair = online.filter(function (c) { return ['pair', 'revoked'].indexOf((state.access[c.id] || {}).state) >= 0; });
     var tone = !online.length ? 'offline' : (needPair.length || online.some(function (c) { return c.killSwitch; })) ? 'warn' : 'ok';

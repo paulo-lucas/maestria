@@ -14,7 +14,6 @@
   'use strict';
   var KEY = 'maestria-sidebar-w';
   var VAR = '--sidebar-w';
-  var MIN_MAIN = 480; // never leave the page less than this when the window is small
   var STEP = 16, BIG_STEP = 64;
   var root = document.documentElement;
 
@@ -24,8 +23,8 @@
   }
   function minW() { return token('--sidebar-w-min', 248); }
   function maxW() { return token('--sidebar-w-max', 496); }
-  // The largest width allowed right now: the token maximum, less on a narrow window.
-  function ceiling() { return Math.max(minW(), Math.min(maxW(), window.innerWidth - MIN_MAIN)); }
+  // The sidebar only exists from 1024px, where the maximum still leaves the page 528px.
+  function ceiling() { return maxW(); }
   // Anything that is not a finite number (garbage in storage) means "default".
   function clamp(v) {
     v = Number(v);

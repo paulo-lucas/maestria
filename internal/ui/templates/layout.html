@@ -89,9 +89,9 @@
     <div class="sidebar__foot">
       <a class="conn-card" href="/security">
         <span class="dot" data-status="{{if .Killed}}danger{{else}}ok{{end}}"></span>
-        <span class="conn-card__name">This machine</span>
+        <span class="conn-card__name" title="This machine">This machine</span>
         <span class="conn-card__ver">{{icon "i-chevron-right" "icon--sm"}}</span>
-        <span class="conn-card__meta">Local mode · {{.Listen}}</span>
+        <span class="conn-card__meta" title="Local mode · {{.Listen}}">Local mode · {{.Listen}}</span>
       </a>
       <div class="account-row">
         <span class="avatar avatar--sm" data-tone="slate">O</span>

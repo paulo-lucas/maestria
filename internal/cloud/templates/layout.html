@@ -67,7 +67,7 @@
         <span class="avatar avatar--sm" data-tone="slate">{{.Initial}}</span>
         <span class="account-row__id">
           <span class="account-row__name truncate" title="{{.Email}}">{{.Email}}</span>
-          {{if .ServerVersion}}<span class="account-row__ver" title="Server {{.ServerVersion}}"><span>Server {{.ServerVersion}}</span>{{if .ServerUpdate}}<span class="ver-dot" data-status="info" role="img" aria-label="{{.ServerUpdate}} is available" title="{{.ServerUpdate}} is available"></span>{{end}}</span>{{end}}
+          {{if .ServerVersion}}<span class="account-row__ver" title="Server {{.ServerVersion}}"><span>Server {{.ServerVersion}}</span>{{if .ServerUpdate}}<a class="ver-dot" data-status="info" href="/connectors" aria-label="{{.ServerUpdate}} is available" title="{{.ServerUpdate}} is available"></a>{{end}}</span>{{end}}
         </span>
         <form method="post" action="/logout"><input type="hidden" name="_csrf" value="{{.CSRF}}"><button class="btn btn--ghost btn--icon btn--sm" type="submit" aria-label="Log out" title="Log out">{{icon "i-arrow-right"}}</button></form>
         {{template "themetoggle" " btn--sm"}}
