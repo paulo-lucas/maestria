@@ -14,6 +14,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -424,7 +425,12 @@ func TestApplyTarGz(t *testing.T) {
 	if res.From != "1.0.0" || res.To != "1.2.0" || res.Previous != ins.exe+".previous" || res.Restarted {
 		t.Errorf("result: %+v", res)
 	}
-	if info, _ := os.Stat(ins.exe); info.Mode().Perm() != 0o755 {
+	info, err := os.Stat(ins.exe)
+	if err != nil || !info.Mode().IsRegular() {
+		t.Fatalf("installed binary: %v %v", info, err)
+	}
+	// Unix mode bits mean nothing on Windows (executability comes from the .exe name).
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o755 {
 		t.Errorf("mode = %v", info.Mode())
 	}
 	if l := ins.leftovers(t); len(l) != 0 {
@@ -638,6 +644,9 @@ func TestApplyOversized(t *testing.T) {
 }
 
 func TestApplyUnwritableFolder(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("a folder cannot be made unwritable with chmod on Windows")
+	}
 	if os.Geteuid() == 0 {
 		t.Skip("root ignores directory permissions")
 	}

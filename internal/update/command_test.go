@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -200,7 +201,8 @@ func TestNotifierChecksOncePerDay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm()&0o077 != 0 {
+	// Private files are 0600 on POSIX only; Windows keeps the project-wide no-op (see privfile).
+	if runtime.GOOS != "windows" && info.Mode().Perm()&0o077 != 0 {
 		t.Errorf("state file mode %v", info.Mode())
 	}
 }
