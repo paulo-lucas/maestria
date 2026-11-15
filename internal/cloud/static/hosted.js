@@ -763,7 +763,9 @@
   function versionDot(update, href) {
     if (!update) return '';
     var t = esc(update) + ' is available';
-    return (href ? '<a class="ver-dot" data-status="info" href="' + esc(href) + '"' : '<span class="ver-dot" data-status="info" role="img"') + ' aria-label="' + t + '" title="' + t + '">' + (href ? '</a>' : '</span>');
+    // A bare dot in a menu (a link to the machines page); a worded hint where there is room.
+    return href ? '<a class="ver-dot" data-status="info" href="' + esc(href) + '" aria-label="' + t + '" title="' + t + '"></a>'
+      : '<span class="ver-hint" data-status="info">' + esc(update) + ' available</span>';
   }
 
   function aboutHtml() {

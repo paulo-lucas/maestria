@@ -449,6 +449,17 @@
     });
   }
 
+  // After a redraw removed the control that had focus, keyboard focus falls to <body>: put it on
+  // the heading of the list the item left, so the next Tab continues from there.
+  function settleFocus(headingId) {
+    const active = document.activeElement;
+    if (active && active !== document.body && active.isConnected) return;
+    const h = document.getElementById(headingId);
+    if (!h) return;
+    if (!h.hasAttribute('tabindex')) h.setAttribute('tabindex', '-1');
+    h.focus({ preventScroll: true });
+  }
+
   // One write on an inbox item (respond, postpone, dismiss), single-flight: the item is busy
   // until the server answers. On success the page is refreshed (the item leaves or changes); on
   // error everything is enabled again with the reason shown on the item.
@@ -467,7 +478,9 @@
       });
       if (onDone) onDone();
       inflight.delete(key);
+      const heading = task.closest('#updates-list, [aria-labelledby="updates-title"]') ? 'updates-title' : 'needs-title';
       await refreshNow(true);
+      settleFocus(heading);
       // The refresh normally replaces the item. If it is still here (the refresh failed or is
       // queued), do not leave it greyed out for ever.
       setTimeout(() => {
@@ -698,6 +711,7 @@
           body: {},
         });
         await refreshNow(true);
+        settleFocus('updates-title');
         setTimeout(() => { if (btn.isConnected) stop(); }, 8000);
       } catch (err) {
         stop();
@@ -732,6 +746,7 @@
       }
       if (failures.length) stop();
       await refreshNow(true);
+      if (!failures.length) settleFocus('updates-title');
       if (failures.length) {
         // The page was just redrawn: put the reason on the new panel.
         const panel = document.getElementById('updates-title');

@@ -21,6 +21,9 @@ All notable changes to Maestria are listed here. The format follows [Keep a Chan
 - The **Later** menu was clipped by the card on the last item. It is now a popover that opens upward when there is no room below, and a bottom sheet on a phone.
 - Long code or commands in an inbox item no longer widen the card or push the time and buttons out of view.
 - A floor that landed and had its branch deleted at once was recorded as cancelled. The panel now remembers the branch tip while the floor is alive and uses that commit to tell it was merged. (A floor that never made a commit of its own still reads as landed, as before: git cannot tell the two apart.)
+- On a phone, the Security audit log's date no longer overlaps the event text.
+- A one-line notice longer than the title limit shows its full text under the shortened title.
+- After **Got it**, **Mark all as read** or an answer removes an item, keyboard focus moves to that list's heading instead of being lost.
 - The hosted sidebar's machine card no longer ends with a bare "·" ("offline ·") when the last-seen time is unknown.
 - The systemd environment file example, the `smtp.from` documentation and the start-up error now say to put a `Name <address>` From value in double quotes.
 

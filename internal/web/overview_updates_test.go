@@ -7,6 +7,22 @@ import (
 	"github.com/paulo-lucas/maestria/internal/inbox"
 )
 
+// A one-line notice longer than the title limit is cut in the title; its whole text is still shown.
+func TestLongOneLineNoticeIsShownInFull(t *testing.T) {
+	h := newHarness(t)
+	ws := addTestWorkspace(t, h, "Atlas")
+	c := h.client()
+	c.login()
+	tail := "tail_of_the_long_path_that_must_stay_visible"
+	body := "See /very/long/path/" + strings.Repeat("segment/", 14) + tail
+	if _, err := inbox.Post(h.db, ws.ID, inbox.PostInput{Kind: inbox.KindNotice, Body: body}, h.clock.now().UnixMilli()); err != nil {
+		t.Fatal(err)
+	}
+	if page := c.get("/").body; !strings.Contains(page, tail) {
+		t.Fatalf("the end of a long one-line notice is not shown")
+	}
+}
+
 // The overview lists every workspace's notices under "Updates", newest first, each with "Got it",
 // and a filter chip per workspace that has some.
 func TestOverviewListsUpdatesFromAllWorkspaces(t *testing.T) {

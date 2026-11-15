@@ -82,7 +82,7 @@ func TestSidebarFooterShowsTheVersionAndAnUpdateHint(t *testing.T) {
 		t.Fatalf("version missing from the scope menu:\n%s", page)
 	}
 	about := c.get("/security").body
-	if !strings.Contains(about, `<p class="about-line"><span>maestria v1.1.0<span class="ver-dot"`) {
+	if !strings.Contains(about, `<p class="about-line"><span>maestria v1.1.0<span class="ver-hint"`) {
 		t.Fatalf("About line missing from Security:\n%s", about)
 	}
 

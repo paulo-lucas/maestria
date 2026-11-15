@@ -900,6 +900,7 @@ a.agent-line:hover { background: var(--surface-2); }
   font-variant-numeric: tabular-nums;
 }
 .menu__meta { padding: var(--space-2) var(--space-3) var(--space-1); }
+.menu__meta .ver-dot::after { inset: -12px; }  /* a thumb-sized target around the 6px dot */
 .menu__meta > span:first-child, .about-line > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Floating menu: a button that opens a native popover. The panel lives in the top layer, so no
@@ -1158,7 +1159,7 @@ a.agent-line:hover { background: var(--surface-2); }
 @media (max-width: 639px) {
   .table--stack thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
   .table--stack, .table--stack tbody { display: block; }
-  .table--stack tr { display: grid; grid-template-columns: 52px minmax(0, 1fr); column-gap: var(--space-3); row-gap: 2px; padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--line); }
+  .table--stack tr { display: grid; grid-template-columns: 100px minmax(0, 1fr); column-gap: var(--space-3); row-gap: 2px; padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--line); }
   .table--stack tr:last-child { border-bottom: 0; }
   .table--stack td { padding: 0; border: 0; }
   .table--stack td:first-child { grid-row: span 3; color: var(--text-3); }

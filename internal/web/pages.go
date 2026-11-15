@@ -523,7 +523,10 @@ func toTaskView(it inbox.Item, byID map[string]workspaces.Workspace, now time.Ti
 
 	bodyHTML := ""
 	trimmedBody := strings.TrimSpace(it.Body)
-	if idx := strings.IndexByte(trimmedBody, '\n'); idx >= 0 {
+	if strings.HasSuffix(it.Title, "…") && it.Title == inbox.SummaryTitle(trimmedBody) {
+		// The title is the first line cut short: show the whole text so none of it is lost.
+		bodyHTML = inbox.RenderMarkdown(trimmedBody)
+	} else if idx := strings.IndexByte(trimmedBody, '\n'); idx >= 0 {
 		rest := strings.TrimSpace(trimmedBody[idx+1:])
 		if rest != "" {
 			bodyHTML = inbox.RenderMarkdown(rest)
