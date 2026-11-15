@@ -5,10 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="light dark">
   <title>Connectors · Maestria</title>
-  <link rel="stylesheet" href="../tokens.css?v=30371db2">
+  <link rel="stylesheet" href="../tokens.css?v=24a1bf6d">
   <link rel="stylesheet" href="../base.css?v=c9e4f4b3">
-  <link rel="stylesheet" href="../components.css?v=0e04da2f">
-  <link rel="stylesheet" href="../shell.css?v=2a6141af">
+  <link rel="stylesheet" href="../components.css?v=dd38a9eb">
+  <link rel="stylesheet" href="../shell.css?v=ec1220de">
+  <script src="../assets/sidebar.js?v=740d4454"></script>
   <script src="../assets/mock.js?v=a5131c49"></script>
 </head>
 <body>
@@ -64,16 +65,16 @@
 <a class="skip-link" href="#main">Skip to content</a>
 
 <div class="app">
-  <aside class="sidebar" aria-label="Main">
+  <aside class="sidebar" id="sidebar" aria-label="Main">
     <a class="brand" href="overview.html"><svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true"><rect class="brand__bg" width="24" height="24" rx="6"/><path class="brand__bars" d="M7 14.5v2.5M10.3 11v6M13.7 7.5V17M17 10v7"/></svg> Maestria</a>
     <nav class="nav">
       <a class="nav__item" href="overview.html"><svg class="icon" aria-hidden="true"><use href="#i-overview"/></svg> Overview <span class="count" data-status="needs" title="Needs you">5</span></a>
       <div class="nav__group">Workspaces</div>
-      <a class="nav__item" href="workspace-activity.html" data-ws="blue"><span class="swatch"></span> Atlas <span class="count">2</span></a>
-      <a class="nav__item" href="workspace-activity.html" data-ws="violet"><span class="swatch"></span> Nimbus <span class="count">1</span></a>
-      <a class="nav__item" href="workspace-activity.html" data-ws="teal"><span class="swatch"></span> Harbor <span class="count">1</span></a>
-      <a class="nav__item" href="workspace-activity.html" data-ws="amber"><span class="swatch"></span> Juniper <span class="count">1</span></a>
-      <a class="nav__item" href="workspace-activity.html" data-ws="rose"><span class="swatch"></span> Quarry </a>
+      <a class="nav__item" href="workspace-activity.html" data-ws="blue"><span class="swatch"></span> <span class="nav__label" title="Atlas">Atlas</span> <span class="count">2</span></a>
+      <a class="nav__item" href="workspace-activity.html" data-ws="violet"><span class="swatch"></span> <span class="nav__label" title="Nimbus">Nimbus</span> <span class="count">1</span></a>
+      <a class="nav__item" href="workspace-activity.html" data-ws="teal"><span class="swatch"></span> <span class="nav__label" title="Harbor">Harbor</span> <span class="count">1</span></a>
+      <a class="nav__item" href="workspace-activity.html" data-ws="amber"><span class="swatch"></span> <span class="nav__label" title="Juniper">Juniper</span> <span class="count">1</span></a>
+      <a class="nav__item" href="workspace-activity.html" data-ws="rose"><span class="swatch"></span> <span class="nav__label" title="Quarry">Quarry</span> </a>
       <div class="nav__group">System</div>
       <a class="nav__item" href="usage.html"><svg class="icon" aria-hidden="true"><use href="#i-gauge"/></svg> Usage &amp; standby</a>
       <a class="nav__item" href="connector.html" aria-current="page"><svg class="icon" aria-hidden="true"><use href="#i-plug"/></svg> Connectors</a>
@@ -88,7 +89,10 @@
       </a>
       <div class="account-row">
         <span class="avatar avatar--sm" data-tone="slate">Y</span>
-        <span class="account-row__name truncate">Your account</span>
+        <span class="account-row__id">
+          <span class="account-row__name truncate">Your account</span>
+          <span class="account-row__ver"><span>Server v1.4.0</span></span>
+        </span>
         <button class="btn btn--ghost btn--icon theme-toggle btn--sm" type="button" data-theme-toggle aria-label="Theme: system" title="Theme: system">
           <svg class="icon i-auto" aria-hidden="true"><use href="#i-auto"/></svg>
           <svg class="icon i-light" aria-hidden="true"><use href="#i-sun"/></svg>
@@ -97,6 +101,7 @@
       </div>
     </div>
   </aside>
+  <div class="sidebar-resizer" data-sidebar-resizer role="separator" aria-orientation="vertical" aria-label="Resize sidebar" aria-controls="sidebar" tabindex="0" title="Drag to resize, double-click to reset" hidden></div>
 
   <header class="topbar">
     <a class="brand" href="overview.html" aria-label="Maestria overview"><svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true"><rect class="brand__bg" width="24" height="24" rx="6"/><path class="brand__bars" d="M7 14.5v2.5M10.3 11v6M13.7 7.5V17M17 10v7"/></svg></a>

@@ -6,11 +6,18 @@
   <meta name="color-scheme" content="light dark">
   <meta name="referrer" content="same-origin">
   <title>{{.Title}} · Maestria</title>
+  <link rel="icon" href="{{asset "favicon.svg"}}" type="image/svg+xml">
+  <link rel="icon" href="{{asset "favicon-32.png"}}" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="{{asset "apple-touch-icon.png"}}">
+  <link rel="manifest" href="{{asset "manifest.webmanifest"}}">
+  <meta name="theme-color" content="#f9f8f5" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0d0e11" media="(prefers-color-scheme: dark)">
   <link rel="stylesheet" href="{{asset "tokens.css"}}">
   <link rel="stylesheet" href="{{asset "base.css"}}">
   <link rel="stylesheet" href="{{asset "components.css"}}">
   <link rel="stylesheet" href="{{asset "shell.css"}}">
   <script src="{{asset "app.js"}}"></script>
+  <script src="{{asset "sidebar.js"}}"></script>
   <script src="{{asset "copy.js"}}" defer></script>
   <script src="{{asset "panel.js"}}" defer></script>
 </head>{{end}}
@@ -54,14 +61,14 @@
 <a class="skip-link" href="#main">Skip to content</a>
 
 <div class="app">
-  <aside class="sidebar" aria-label="Main">
+  <aside class="sidebar" id="sidebar" aria-label="Main">
     <a class="brand" href="/">{{template "brandmark"}} Maestria</a>
     <nav class="nav">
       <a class="nav__item" href="/"{{if eq .Nav "overview"}} aria-current="page"{{end}}>{{icon "i-overview"}} Overview{{if .TotalNeeds}} <span class="count" data-status="needs" title="Needs you">{{.TotalNeeds}}</span>{{end}}</a>
       <div class="nav__group">Workspaces</div>
       {{if .Workspaces}}
         {{range .Workspaces}}
-        <a class="nav__item" href="/workspaces/{{.ID}}/tasks" data-ws="{{.Tone}}"><span class="swatch"></span> {{.Name}}{{if .NeedsCount}} <span class="count">{{.NeedsCount}}</span>{{end}}</a>
+        <a class="nav__item" href="/workspaces/{{.ID}}/tasks" data-ws="{{.Tone}}"><span class="swatch"></span> <span class="nav__label" title="{{.Name}}">{{.Name}}</span>{{if .NeedsCount}} <span class="count">{{.NeedsCount}}</span>{{end}}</a>
         {{if eq $.Scope .ID}}
         <div class="nav__sub">
           <a class="nav__item" href="/workspaces/{{.ID}}/activity"{{if eq $.Nav "activity"}} aria-current="page"{{end}}>{{icon "i-activity"}} Activity</a>
@@ -88,12 +95,16 @@
       </a>
       <div class="account-row">
         <span class="avatar avatar--sm" data-tone="slate">O</span>
-        <span class="account-row__name truncate">Owner</span>
+        <span class="account-row__id">
+          <span class="account-row__name truncate">Owner</span>
+          {{if .Version}}<span class="account-row__ver" title="maestria {{.Version}}"><span>maestria {{.Version}}</span>{{if .UpdateVersion}}<a class="ver-dot" data-status="info" href="/security" aria-label="{{.UpdateVersion}} is available" title="{{.UpdateVersion}} is available"></a>{{end}}</span>{{end}}
+        </span>
         <button class="btn btn--ghost btn--icon btn--sm" type="button" data-open-dialog="kill-dialog" aria-label="Kill switch" title="Kill switch">{{icon "i-power"}}</button>
         {{template "themetoggle" " btn--sm"}}
       </div>
     </div>
   </aside>
+  <div class="sidebar-resizer" data-sidebar-resizer role="separator" aria-orientation="vertical" aria-label="Resize sidebar" aria-controls="sidebar" tabindex="0" title="Drag to resize, double-click to reset" hidden></div>
 
   <header class="topbar">
     <a class="brand" href="/" aria-label="Maestria overview">{{template "brandmark"}}</a>

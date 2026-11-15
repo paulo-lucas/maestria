@@ -132,9 +132,9 @@
 
 /* ---------- Sidebar (desktop) ---------- */
 
-.sidebar { display: none; }
+.sidebar, .sidebar-resizer { display: none; }
 
-.nav { display: grid; gap: 1px; }
+.nav { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1px; }
 .nav__group {
   display: flex;
   align-items: center;
@@ -159,12 +159,14 @@
   font-weight: var(--fw-medium);
   text-decoration: none;
 }
-.nav__item > .icon { width: 17px; height: 17px; color: var(--text-3); }
+.nav__item > .icon { width: 17px; height: 17px; flex: none; color: var(--text-3); }
+/* A name that may be long (workspace names): ellipsis, never a wider sidebar. */
+.nav__label { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nav__item:hover { background: var(--surface-2); color: var(--text); text-decoration: none; }
 .nav__item[aria-current="page"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow-1), inset 0 0 0 1px var(--line); }
 .nav__item[aria-current="page"] > .icon { color: var(--text); }
-.nav__item .count { margin-left: auto; }
-.nav__item .swatch { margin: 0 4px 0 5px; }
+.nav__item .count { margin-left: auto; flex: none; }
+.nav__item .swatch { margin: 0 4px 0 5px; flex: none; }
 .nav__sub { display: grid; gap: 1px; margin: 2px 0 var(--space-2) 18px; padding-left: 10px; border-left: 1px solid var(--line); }
 .nav__sub .nav__item { min-height: 30px; }
 
@@ -183,11 +185,36 @@
   text-decoration: none;
 }
 .conn-card:hover { border-color: var(--line-strong); text-decoration: none; }
-.conn-card__name { font-weight: var(--fw-medium); }
-.conn-card__ver { color: var(--text-3); font-variant-numeric: tabular-nums; }
-.conn-card__meta { grid-column: 2 / -1; color: var(--text-3); }
-.account-row { display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-1); }
-.account-row__name { flex: 1; min-width: 0; color: var(--text-2); font-size: var(--fs-sm); font-weight: var(--fw-medium); }
+.conn-card__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--fw-medium); }
+.conn-card__ver { color: var(--text-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.conn-card__meta { grid-column: 2 / -1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-3); }
+
+/* The signed-in account: avatar, the name over the version, then the actions. Only the text
+   column shrinks; everything else keeps its size, so no value can widen the sidebar. */
+.account-row { display: flex; align-items: center; gap: var(--space-2); min-width: 0; padding: 0 var(--space-1); }
+.account-row > * { flex: none; }
+.account-row > form { display: flex; }
+.account-row__id { flex: 1 1 0; min-width: 0; display: grid; }
+.account-row__name { display: block; min-width: 0; color: var(--text-2); font-size: var(--fs-sm); font-weight: var(--fw-medium); }
+.account-row__ver {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  color: var(--text-3);
+  font-size: var(--fs-2xs);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+.account-row__ver > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* A newer release exists: just a dot after the version (the title says which). */
+.ver-dot { position: relative; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--tone); }
+.ver-dot::after { content: ""; position: absolute; inset: -6px; }
+
+/* A subtle "newer release" marker: a quiet word next to a version, in the info tone. */
+.ver-hint { display: inline-flex; align-items: center; gap: 5px; color: var(--tone-ink); font-size: var(--fs-2xs); font-weight: var(--fw-medium); white-space: nowrap; }
+.ver-hint::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--tone); }
 
 /* ---------- Main and page frame ---------- */
 
@@ -229,10 +256,49 @@
     flex-direction: column;
     height: 100dvh;
     padding: var(--space-4) var(--space-3);
+    overflow-x: hidden; /* overflow-y: auto makes x auto too; the sidebar never scrolls sideways */
     overflow-y: auto;
     border-right: 1px solid var(--line);
     scrollbar-width: thin;
   }
+  .sidebar > * { min-width: 0; }
+  /* Explicit cells: the resizer shares the sidebar's, and auto-placement would skip it. */
+  .sidebar { grid-area: 1 / 1; }
+  .main { grid-area: 1 / 2; }
+
+  /* Drag handle on the sidebar's right edge (see sidebar.js). It lives in the grid, over the
+     sidebar's last pixels, so it stays put while the sidebar scrolls. */
+  .sidebar-resizer[hidden] { display: none; }
+  .sidebar-resizer {
+    display: block;
+    position: sticky;
+    top: 0;
+    grid-area: 1 / 1;
+    align-self: start;
+    justify-self: end;
+    z-index: 20;
+    width: 9px;
+    height: 100dvh;
+    margin-right: -5px;
+    cursor: col-resize;
+    touch-action: none;
+    user-select: none;
+  }
+  .sidebar-resizer::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 4px;
+    width: 2px;
+    border-radius: 1px;
+    background: transparent;
+    transition: background var(--dur-fast) var(--ease);
+  }
+  .sidebar-resizer:hover::after { background: var(--line-strong); }
+  .sidebar-resizer:focus-visible { outline: none; }
+  .sidebar-resizer:focus-visible::after, .is-resizing .sidebar-resizer::after { background: var(--focus); }
+  .is-resizing, .is-resizing * { cursor: col-resize !important; user-select: none !important; }
   .sidebar > .brand { padding: var(--space-1) var(--space-3) var(--space-2); }
   .main { padding: var(--space-6) var(--space-7) var(--space-8); }
   .page-head h1 { font-size: var(--fs-2xl); }

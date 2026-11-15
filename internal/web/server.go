@@ -73,6 +73,8 @@ type Deps struct {
 	ConnectorName string
 	// Updates supplies the "newer release" note on the Security page. nil hides it.
 	Updates UpdateNotes
+	// Version is the running build (from -ldflags), shown in the sidebar footer.
+	Version string
 	// Env overrides OS environment lookup (used in tests).
 	Env config.Env
 	Now func() time.Time
