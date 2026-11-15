@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"net/mail"
 	"net/smtp"
 	"os"
 	"strings"
@@ -53,13 +54,16 @@ func (s *SMTPMailer) Send(m Message) error {
 	if strings.ContainsAny(m.To, "\r\n") || strings.ContainsAny(m.Subject, "\r\n") {
 		return errors.New("invalid header value")
 	}
+	envelope, fromHeader, err := parseSender(s.Cfg.From)
+	if err != nil {
+		return err
+	}
 	addr := net.JoinHostPort(s.Cfg.Host, fmt.Sprint(s.Cfg.Port))
-	msg := "From: " + s.Cfg.From + "\r\nTo: " + m.To + "\r\nSubject: " + m.Subject +
+	msg := "From: " + fromHeader + "\r\nTo: " + m.To + "\r\nSubject: " + m.Subject +
 		"\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\nDate: " + time.Now().Format(time.RFC1123Z) +
 		"\r\n\r\n" + strings.ReplaceAll(m.Body, "\n", "\r\n") + "\r\n"
 	dialer := &net.Dialer{Timeout: 15 * time.Second}
 	var conn net.Conn
-	var err error
 	if s.Cfg.TLS {
 		conn, err = tls.DialWithDialer(dialer, "tcp", addr, &tls.Config{ServerName: s.Cfg.Host, MinVersion: tls.VersionTLS12})
 	} else {
@@ -89,7 +93,7 @@ func (s *SMTPMailer) Send(m Message) error {
 			return err
 		}
 	}
-	if err := c.Mail(s.Cfg.From); err != nil {
+	if err := c.Mail(envelope); err != nil {
 		return err
 	}
 	if err := c.Rcpt(m.To); err != nil {
@@ -106,6 +110,16 @@ func (s *SMTPMailer) Send(m Message) error {
 		return err
 	}
 	return c.Quit()
+}
+
+// parseSender accepts "no-reply@example.com" or "Maestria <no-reply@example.com>". It returns the
+// bare address for the SMTP envelope (MAIL FROM takes only the address) and the header form.
+func parseSender(from string) (envelope, header string, err error) {
+	a, err := mail.ParseAddress(strings.TrimSpace(from))
+	if err != nil {
+		return "", "", fmt.Errorf("invalid sender address %q (use name@example.com or \"Name <name@example.com>\"): %w", from, err)
+	}
+	return a.Address, a.String(), nil
 }
 
 // NewMailer builds the mailer from config: dev mode wins, then SMTP.
