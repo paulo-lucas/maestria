@@ -4,6 +4,14 @@ All notable changes to Maestria are listed here. The format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-11-15
+
+### Fixed
+
+- **The hosted Overview was stuck on "Approve this browser"** for an approved browser, while the sidebar and every other page worked. Building the new Updates card threw an error, so the page kept what it showed while connecting. A test now catches this kind of mistake in the browser code.
+- The hosted Overview shows **Connecting to your machines…** while a machine has not answered yet, instead of asking to approve the browser.
+- When a machine is online but does not answer (a slow or dropped connection, a clock that is off), the hosted Overview says **Could not reach your machine**, with the reason and a **Try again** button, instead of asking to approve the browser. It also tries again by itself, waiting longer each time, when the tab comes back into view and when the device reconnects.
+
 ## [0.1.1] - 2026-11-15
 
 ### Added
