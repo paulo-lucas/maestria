@@ -2,6 +2,7 @@ package auth
 
 import (
 	"database/sql"
+	"errors"
 	"strconv"
 	"time"
 
@@ -20,6 +21,9 @@ const (
 	Locked
 	// Expired means the pending login is missing, expired, used, or from another IP.
 	Expired
+	// Throttled means the password-check budget is used up or every check is busy (see
+	// HashGuard). It says nothing about the credentials; RetryAfter says when to try again.
+	Throttled
 )
 
 // Result of a login step. On OK, Token is the pending-login token (step 1) or the session token (step 2).
@@ -45,8 +49,25 @@ type Authenticator struct {
 	Secrets  *Secrets
 	Sessions *SessionStore
 	Limiter  *LoginLimiter
-	Audit    *audit.Log
-	Now      func() time.Time
+	// Guard bounds the argon2 work an unauthenticated client can start. nil means no bound
+	// (tests only).
+	Guard *HashGuard
+	Audit *audit.Log
+	Now   func() time.Time
+}
+
+// guard takes a password-check slot for the client. ok is false when the request must be refused
+// with the returned result; otherwise the caller must call release.
+func (a *Authenticator) guard(ip string) (release func(), refused Result, ok bool) {
+	if a.Guard == nil {
+		return func() {}, Result{}, true
+	}
+	rel, d := a.Guard.Acquire(ip)
+	if !d.Allowed {
+		_ = a.Audit.WriteThrottled("throttled:"+d.Reason+":"+ip, time.Minute, "login_throttled", ip, map[string]any{"scope": d.Reason})
+		return nil, Result{Outcome: Throttled, RetryAfter: d.RetryAfter}, false
+	}
+	return rel, Result{}, true
 }
 
 func (a *Authenticator) now() time.Time {
@@ -73,6 +94,11 @@ func (a *Authenticator) Password(ip, password string) (Result, error) {
 	if r, ok := a.gate(ip); !ok {
 		return r, nil
 	}
+	// The check is counted and bounded before it runs, whatever the password is.
+	release, refused, ok := a.guard(ip)
+	if !ok {
+		return refused, nil
+	}
 	if len(password) > MaxPasswordLength {
 		password = password[:MaxPasswordLength]
 	}
@@ -81,7 +107,11 @@ func (a *Authenticator) Password(ip, password string) (Result, error) {
 		hash = dummyHash()
 	}
 	good := VerifyPassword(password, hash)
+	release()
 	token, err := a.Sessions.CreatePending(ip, good)
+	if errors.Is(err, ErrPendingFull) {
+		return Result{Outcome: Throttled, RetryAfter: pendingRetryHint}, nil
+	}
 	if err != nil {
 		return Result{}, err
 	}
@@ -120,7 +150,13 @@ func (a *Authenticator) second(ip, userAgent, pending, method, code string) (Res
 	if method == "totp" {
 		step, factorOK = VerifyTOTP(a.Secrets.TOTPSecret, code, a.now(), 1)
 	} else {
+		// Every unused recovery code is one argon2 check: bound them like the password.
+		release, refused, ok := a.guard(ip)
+		if !ok {
+			return refused, nil
+		}
 		recoveryID, err = MatchRecoveryCode(a.DB, code)
+		release()
 		if err != nil {
 			return Result{}, err
 		}

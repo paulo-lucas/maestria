@@ -59,6 +59,8 @@ type Accounts struct {
 	ipLim   *auth.LoginLimiter
 	acctLim *auth.LoginLimiter
 	rate    *rateLimiter
+	// hashes bounds the argon2 work a stranger can start (sign-up, verify, sign-in, reset).
+	hashes *auth.HashGuard
 
 	idle, absolute time.Duration
 	touch          sync.Mutex
@@ -76,8 +78,20 @@ func NewAccounts(db *sql.DB, sealer *Sealer, aud *audit.Log, cfg *Config, mail f
 		ipLim:   auth.NewLoginLimiter(auth.LimiterOptions{MaxFailuresPerIP: lim.MaxFailuresPerIP, MaxFailuresGlobal: lim.MaxFailuresGlobal, Window: win, Lockout: lock}, now),
 		acctLim: auth.NewLoginLimiter(auth.LimiterOptions{MaxFailuresPerIP: lim.MaxFailuresPerAccount, MaxFailuresGlobal: 1 << 30, Window: win, Lockout: lock}, now),
 		rate:    newRateLimiter(now),
+		hashes:  auth.NewHashGuard(auth.GuardOptions{}, now),
 		idle:    time.Duration(cfg.SessionIdleMinutes) * time.Minute, absolute: time.Duration(cfg.SessionAbsoluteHours) * time.Hour,
 	}
+}
+
+// guard takes a password-check slot for the client address. A refusal is a LockedError (429 with
+// Retry-After) and says nothing about the credentials. The caller must call release.
+func (a *Accounts) guard(ip string) (release func(), err error) {
+	rel, d := a.hashes.Acquire(ip)
+	if !d.Allowed {
+		_ = a.audit.WriteThrottled("throttled:"+d.Reason+":"+ip, time.Minute, "login_throttled", ip, map[string]any{"scope": d.Reason})
+		return nil, &LockedError{RetryAfter: d.RetryAfter}
+	}
+	return rel, nil
 }
 
 func (a *Accounts) event(userID, event, ip string, detail map[string]any) {
@@ -203,7 +217,12 @@ func (a *Accounts) Signup(ip, rawEmail, password string) error {
 	if !a.rate.Allow("signup:ip:"+ip, 10, time.Hour) || !a.rate.Allow("signup:email:"+email, 5, time.Hour) {
 		return &LockedError{RetryAfter: time.Hour}
 	}
+	release, err := a.guard(ip)
+	if err != nil {
+		return err
+	}
 	hash, err := auth.HashPassword(password) // always: same work for new and existing addresses
+	release()
 	if err != nil {
 		return err
 	}
@@ -300,7 +319,13 @@ func (a *Accounts) ConfirmVerify(ip, token, password string) (string, error) {
 	if len(password) > auth.MaxPasswordLength {
 		password = password[:auth.MaxPasswordLength]
 	}
-	if !auth.VerifyPassword(password, hash) || u.DisabledAt != 0 {
+	release, err := a.guard(ip)
+	if err != nil {
+		return "", err
+	}
+	verified := auth.VerifyPassword(password, hash)
+	release()
+	if !verified || u.DisabledAt != 0 {
 		if a.fail(ip, key) {
 			a.event(uid, "login_lockout", ip, nil)
 		}
@@ -335,7 +360,12 @@ func (a *Accounts) ResumeSetup(ip, rawEmail, password string) (string, error) {
 	if len(password) > auth.MaxPasswordLength {
 		password = password[:auth.MaxPasswordLength]
 	}
+	release, err := a.guard(ip)
+	if err != nil {
+		return "", err
+	}
 	good := auth.VerifyPassword(password, hash)
+	release()
 	if !good || u == nil || u.VerifiedAt == 0 || u.EnrolledAt != 0 || u.DisabledAt != 0 {
 		if a.fail(ip, key) {
 			a.event("", "login_lockout", ip, nil)
@@ -503,7 +533,12 @@ func (a *Accounts) LoginPassword(ip, rawEmail, password string) (string, error) 
 			hash = h
 		}
 	}
+	release, err := a.guard(ip)
+	if err != nil {
+		return "", err
+	}
 	good := auth.VerifyPassword(password, hash) && u != nil && u.CanLogin()
+	release()
 	tok := auth.RandomToken()
 	now := a.now()
 	uid := sql.NullString{}
@@ -519,8 +554,17 @@ func (a *Accounts) LoginPassword(ip, rawEmail, password string) (string, error) 
 		return "", err
 	}
 	defer tx.Rollback()
-	if _, err := tx.Exec("DELETE FROM pending_logins WHERE ip = ? OR expires_at <= ?", clip(ip, 64), now.UnixMilli()); err != nil {
+	// A pending login belongs to the browser holding its cookie: another client's first step
+	// never replaces it. The table is bounded by refusing new logins, per address and in total.
+	if _, err := tx.Exec("DELETE FROM pending_logins WHERE expires_at <= ?", now.UnixMilli()); err != nil {
 		return "", err
+	}
+	var perIP, total int
+	if err := tx.QueryRow("SELECT COUNT(*), COALESCE(SUM(ip = ?), 0) FROM pending_logins", clip(ip, 64)).Scan(&total, &perIP); err != nil {
+		return "", err
+	}
+	if perIP >= auth.MaxPendingPerIP || total >= auth.MaxPendingTotal {
+		return "", &LockedError{RetryAfter: 30 * time.Second}
 	}
 	if _, err := tx.Exec("INSERT INTO pending_logins (id, ip, user_id, email_key, password_ok, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
 		auth.HashToken(tok), clip(ip, 64), uid, key, ok, now.UnixMilli(), now.Add(auth.PendingTTL).UnixMilli()); err != nil {
@@ -584,14 +628,23 @@ func (a *Accounts) LoginSecond(ip, ua, pendingToken, method, code string) (strin
 		step     int64
 		recID    int64
 	)
+	// Recovery codes are argon2 hashes, every unused one checked: bound them like passwords.
+	release := func() {}
+	if method == "recovery" {
+		if release, err = a.guard(ip); err != nil {
+			return "", err
+		}
+	}
 	if p.userID.Valid {
 		factorOK, step, recID, err = a.checkFactor(p.userID.String, method, code)
 		if err != nil {
+			release()
 			return "", err
 		}
 	} else {
 		a.dummyFactor(method, code)
 	}
+	release()
 
 	good := p.passOK && factorOK && p.userID.Valid
 	if good {
@@ -773,6 +826,13 @@ func (a *Accounts) CompleteReset(ip, ua, token, newPassword, method, code string
 	if err := a.gate(ip, key); err != nil {
 		return "", nil, err
 	}
+	// One slot for the whole reset: a recovery code check and the new password's hash are both
+	// argon2 work, and a refusal must come before the code or the link is spent.
+	release, err := a.guard(ip)
+	if err != nil {
+		return "", nil, err
+	}
+	defer release()
 	ok, step, recID, err := a.checkFactor(u.ID, method, code)
 	if err != nil {
 		return "", nil, err

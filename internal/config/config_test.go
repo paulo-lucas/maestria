@@ -285,3 +285,26 @@ func TestStandbyActionsWakeAndSave(t *testing.T) {
 		t.Fatal("invalid action should fail parse")
 	}
 }
+
+func TestTrustsCfConnectingIPIsAutomaticWithAPublicHost(t *testing.T) {
+	parse := func(raw string) *Config {
+		t.Helper()
+		cfg, err := Parse([]byte(raw), t.TempDir(), testEnv(t.TempDir(), nil))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return cfg
+	}
+	if parse(`{}`).TrustsCfConnectingIP() {
+		t.Fatal("no public host: the header must be ignored")
+	}
+	if !parse(`{"allowedHosts": ["panel.example.com"]}`).TrustsCfConnectingIP() {
+		t.Fatal("a public host means a tunnel: the header must be trusted unless turned off")
+	}
+	if parse(`{"allowedHosts": ["panel.example.com"], "trustCfConnectingIp": false}`).TrustsCfConnectingIP() {
+		t.Fatal("an explicit false must win")
+	}
+	if !parse(`{"trustCfConnectingIp": true}`).TrustsCfConnectingIP() {
+		t.Fatal("an explicit true must win")
+	}
+}

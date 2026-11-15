@@ -96,13 +96,15 @@ type Config struct {
 	CookieSecure        bool
 	AllowedHosts        []string
 	TrustCfConnectingIP bool
-	Session             Session
-	Login               Login
-	CloudflareAccess    *CloudflareAccess
-	Usage               Usage
-	Standby             Standby
-	Tunnel              Tunnel
-	Relay               Relay
+	// TrustCfConnectingIPSet is true when config.json states trustCfConnectingIp, either way.
+	TrustCfConnectingIPSet bool
+	Session                Session
+	Login                  Login
+	CloudflareAccess       *CloudflareAccess
+	Usage                  Usage
+	Standby                Standby
+	Tunnel                 Tunnel
+	Relay                  Relay
 	// Cloud is the hosted Maestria URL for `maestria connect` (the --cloud flag overrides it).
 	Cloud string
 }
@@ -192,6 +194,20 @@ func ResolveMaestriDir(configured string, env Env) (string, error) {
 func isDir(p string) bool {
 	st, err := os.Stat(p)
 	return err == nil && st.IsDir()
+}
+
+// TrustsCfConnectingIP says whether the panel reads the visitor's address from the
+// CF-Connecting-IP header. The panel only listens on 127.0.0.1, so a request that carries the header
+// came through a tunnel on this machine. When config.json says nothing, the header is trusted as
+// soon as a public host name is allowed (a tunnel is in use): without it every visitor would share
+// 127.0.0.1, and one stranger's failed sign-ins would lock everyone out. Set
+// "trustCfConnectingIp": false to turn this off, for example for a tunnel that does not strip the
+// header from the visitor's own request.
+func (c *Config) TrustsCfConnectingIP() bool {
+	if c.TrustCfConnectingIPSet {
+		return c.TrustCfConnectingIP
+	}
+	return len(c.AllowedHosts) > 0
 }
 
 // Defaults returns the default configuration for configDir.
@@ -318,6 +334,7 @@ func Parse(data []byte, configDir string, env Env) (*Config, error) {
 		if cfg.TrustCfConnectingIP, err = boolField(raw, "trustCfConnectingIp"); err != nil {
 			return nil, err
 		}
+		cfg.TrustCfConnectingIPSet = true
 	}
 	if raw, ok := top["allowedHosts"]; ok {
 		var hosts []json.RawMessage

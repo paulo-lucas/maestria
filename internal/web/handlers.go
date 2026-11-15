@@ -88,8 +88,12 @@ func (s *Server) postLogin(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	if res.Outcome == auth.Locked {
+	switch res.Outcome {
+	case auth.Locked:
 		s.renderLocked(w, res, d)
+		return
+	case auth.Throttled:
+		s.renderThrottled(w, res, ui.PageLogin, d)
 		return
 	}
 	s.setCookie(w, s.pendingCookie, res.Token, auth.PendingTTL)
@@ -101,6 +105,24 @@ func (s *Server) renderLocked(w http.ResponseWriter, res auth.Result, d *ui.Data
 	d.Title, d.CSRF, d.Error = "Log in", s.freshLoginCSRF(w), lockedMessage(res.RetryAfter)
 	w.WriteHeader(http.StatusTooManyRequests)
 	s.render(w, ui.PageLogin, d)
+}
+
+// renderThrottled answers 429 when the password-check budget is used up or busy. It says nothing
+// about the credentials, so it is no oracle.
+func (s *Server) renderThrottled(w http.ResponseWriter, res auth.Result, page string, d *ui.Data) {
+	secs := int(res.RetryAfter.Seconds())
+	if secs < 1 {
+		secs = 1
+	}
+	w.Header().Set("Retry-After", strconv.Itoa(secs))
+	d.CSRF, d.Error = s.freshLoginCSRF(w), "Too many sign-in attempts right now. Wait a moment and try again."
+	if page == ui.PageTwoFA {
+		d.Title = "Two-factor check"
+	} else {
+		d.Title = "Log in"
+	}
+	w.WriteHeader(http.StatusTooManyRequests)
+	s.render(w, page, d)
 }
 
 func (s *Server) pendingToken(r *http.Request) string {
@@ -159,6 +181,9 @@ func (s *Server) secondFactor(w http.ResponseWriter, r *http.Request, recovery b
 	case auth.Locked:
 		s.clearCookie(w, s.pendingCookie)
 		s.renderLocked(w, res, &ui.Data{})
+	case auth.Throttled:
+		// The pending login is kept: nothing was checked, so the person can try again.
+		s.renderThrottled(w, res, ui.PageTwoFA, &ui.Data{})
 	case auth.Expired:
 		s.clearCookie(w, s.pendingCookie)
 		http.Redirect(w, r, "/login?error=expired", http.StatusSeeOther)

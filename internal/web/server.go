@@ -56,7 +56,9 @@ type Deps struct {
 	Audit    *audit.Log
 	Sessions *auth.SessionStore
 	Limiter  *auth.LoginLimiter
-	Tunnel   *tunnel.Controller
+	// Guard bounds the password checks a stranger can start. nil uses the default budget.
+	Guard  *auth.HashGuard
+	Tunnel *tunnel.Controller
 	// Access is the optional Cloudflare Access verifier.
 	Access *auth.AccessVerifier
 	// LiveFloors optionally enriches Present floors with live runtime data (e.g. Wire).
@@ -134,7 +136,11 @@ func New(d Deps) (*Server, error) {
 	s.sessionCookie = prefix + "maestria_session"
 	s.pendingCookie = prefix + "maestria_pending"
 	s.csrfCookie = prefix + "maestria_login_csrf"
-	s.auth = &auth.Authenticator{DB: d.DB, Secrets: d.Secrets, Sessions: d.Sessions, Limiter: d.Limiter, Audit: d.Audit, Now: d.Now}
+	guard := d.Guard
+	if guard == nil {
+		guard = auth.NewHashGuard(auth.GuardOptions{LocalOwner: true}, d.Now)
+	}
+	s.auth = &auth.Authenticator{DB: d.DB, Secrets: d.Secrets, Sessions: d.Sessions, Limiter: d.Limiter, Guard: guard, Audit: d.Audit, Now: d.Now}
 	s.routes()
 	return s, nil
 }
@@ -362,12 +368,17 @@ func (s *Server) setSecurityHeaders(w http.ResponseWriter) {
 	// No CORS, ever: Access-Control-* headers are never set.
 }
 
-// clientIP is the connecting address, or CF-Connecting-IP when explicitly trusted.
+// clientIP is the connecting address, or CF-Connecting-IP when it is trusted (see
+// Config.TrustsCfConnectingIP). A header value that is a loopback or unspecified address is never
+// taken: a loopback client address means "this machine, no proxy" and only a real direct request
+// may have it (the global sign-in lockout never applies to it).
 func (s *Server) clientIP(r *http.Request) string {
-	if s.Config.TrustCfConnectingIP {
+	if s.Config.TrustsCfConnectingIP() {
 		if v := strings.TrimSpace(r.Header.Get("Cf-Connecting-Ip")); v != "" {
 			if a, err := netip.ParseAddr(v); err == nil {
-				return a.String()
+				if a = a.Unmap(); !a.IsLoopback() && !a.IsUnspecified() {
+					return a.String()
+				}
 			}
 		}
 	}

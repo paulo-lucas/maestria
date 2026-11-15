@@ -3,6 +3,7 @@ package auth
 import (
 	"database/sql"
 	"encoding/base32"
+	"errors"
 	"os"
 	"runtime"
 	"strings"
@@ -297,14 +298,48 @@ func TestPendingLoginIsBoundToIPExpiresAndIsSingleUse(t *testing.T) {
 	if got, _ := s.PendingFor(p2, "1.1.1.1"); got != nil {
 		t.Fatal("pending login must expire")
 	}
-	// One pending login per IP: a flood from one address cannot grow the table.
-	for i := 0; i < 20; i++ {
-		_, _ = s.CreatePending("9.9.9.9", false)
+}
+
+// Another client's first step must never replace or evict a pending login, even from the same
+// address (visitors behind a tunnel that reports no addresses all share one).
+func TestPendingLoginsOfOtherClientsAreNeverEvicted(t *testing.T) {
+	db := openDB(t)
+	c := newClock()
+	s := sessions(db, c)
+	owner, err := s.CreatePending("127.0.0.1", true)
+	if err != nil {
+		t.Fatal(err)
 	}
-	var n int
-	_ = db.QueryRow("SELECT COUNT(*) FROM pending_logins WHERE ip = '9.9.9.9'").Scan(&n)
-	if n != 1 {
-		t.Fatalf("pending logins for one IP: %d", n)
+	for i := 0; i < 50; i++ {
+		if _, err := s.CreatePending("127.0.0.1", false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if p, _ := s.PendingFor(owner, "127.0.0.1"); p == nil || !p.PasswordOK {
+		t.Fatal("another client's first step removed the owner's pending login")
+	}
+}
+
+// The table is bounded by refusing new logins, per address and in total, never by evicting.
+func TestPendingLoginTableIsBounded(t *testing.T) {
+	db := openDB(t)
+	s := sessions(db, newClock())
+	first, _ := s.CreatePending("9.9.9.9", true)
+	var refused bool
+	for i := 0; i < MaxPendingPerIP+10; i++ {
+		if _, err := s.CreatePending("9.9.9.9", false); errors.Is(err, ErrPendingFull) {
+			refused = true
+			break
+		}
+	}
+	if !refused {
+		t.Fatal("one address could grow the table without bound")
+	}
+	if p, _ := s.PendingFor(first, "9.9.9.9"); p == nil {
+		t.Fatal("a full table evicted an existing pending login")
+	}
+	if _, err := s.CreatePending("8.8.8.8", true); err != nil {
+		t.Fatalf("another address must not be affected by 9.9.9.9 being full: %v", err)
 	}
 }
 

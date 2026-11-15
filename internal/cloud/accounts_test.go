@@ -424,3 +424,71 @@ func TestEmailNormalization(t *testing.T) {
 		t.Fatal(MaskEmail("ann@example.com"))
 	}
 }
+
+// The cloud's sign-in, sign-up and verify paths run argon2id for strangers: they are counted and
+// limited per address before the work starts, and a refusal is a 429 with Retry-After that says
+// nothing about the password.
+func TestPasswordChecksAreRateLimitedPerAddress(t *testing.T) {
+	b := newBed(t)
+	x := b.browser("10.7.0.1")
+	x.get("/login")
+	before := auth.VerifyCalls()
+	var limited *resp
+	for i := 0; i < 40; i++ {
+		r := x.form("/login", url.Values{"email": {"ann@example.com"}, "password": {"wrong password here"}})
+		if r.StatusCode == 429 {
+			limited = r
+			break
+		}
+		if r.StatusCode != 303 {
+			t.Fatalf("attempt %d: %d", i, r.StatusCode)
+		}
+	}
+	if limited == nil || limited.Header.Get("Retry-After") == "" {
+		t.Fatal("forty sign-in step-1 posts from one address were all accepted")
+	}
+	if n := auth.VerifyCalls() - before; n > 11 {
+		t.Fatalf("%d password checks ran for one address in one window", n)
+	}
+	// The same budget covers the other paths that hash for strangers.
+	if r := x.form("/signup", url.Values{"email": {"new@example.com"}, "password": {testPassword}}); r.StatusCode != 429 {
+		t.Fatalf("sign-up from an address that used its budget: %d", r.StatusCode)
+	}
+	// Another address is unaffected.
+	y := b.browser("10.7.0.2")
+	y.get("/login")
+	if r := y.form("/login", url.Values{"email": {"ann@example.com"}, "password": {"x"}}); r.StatusCode != 303 {
+		t.Fatalf("another address: %d", r.StatusCode)
+	}
+	// After the window the first address can try again.
+	b.clock.advance(2 * time.Minute)
+	if r := x.form("/login", url.Values{"email": {"ann@example.com"}, "password": {"x"}}); r.StatusCode != 303 {
+		t.Fatalf("after the window: %d", r.StatusCode)
+	}
+	if !strings.Contains(auditEvents(t, b), "login_throttled") {
+		t.Fatal("throttling must be audited")
+	}
+}
+
+// Behind a reverse proxy that does not forward addresses, every visitor can look like one
+// address. One visitor's first step must not remove another visitor's pending login.
+func TestPendingLoginIsNotEvictedBySameAddress(t *testing.T) {
+	b := newBed(t)
+	secret, _ := b.browser("10.0.0.1").signup("ann@example.com", testPassword)
+	owner := b.browser("10.8.0.1")
+	owner.get("/login")
+	if r := owner.form("/login", url.Values{"email": {"ann@example.com"}, "password": {testPassword}}); r.StatusCode != 303 {
+		t.Fatalf("owner step 1: %d", r.StatusCode)
+	}
+	other := b.browser("10.8.0.1")
+	other.get("/login")
+	other.form("/login", url.Values{"email": {"ann@example.com"}, "password": {"anything at all here"}})
+
+	owner.get("/login/2fa")
+	b.clock.advance(auth.TOTPStep)
+	code, _ := auth.TOTP(secret, b.clock.now())
+	r := owner.form("/login/2fa", url.Values{"code": {code}})
+	if r.Header.Get("Location") == "/login?error=expired" || !owner.signedIn() {
+		t.Fatalf("the owner's sign-in was evicted by another visitor: %v", r.Header)
+	}
+}

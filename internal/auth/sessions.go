@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
+	"errors"
 	"time"
 )
 
@@ -150,9 +151,22 @@ func (s *SessionStore) Count() (int, error) {
 	return n, err
 }
 
+// Bounds of the pending-login table. A pending login belongs to the browser that holds its random
+// cookie and is never replaced or evicted by another client's attempt (before, one client's first
+// step wiped the pending login of every client that shared its address, which is every visitor
+// behind a tunnel that does not report addresses). The table is bounded by refusing new logins
+// instead: per address, and in total.
+const (
+	MaxPendingPerIP  = 200
+	MaxPendingTotal  = 5000
+	pendingRetryHint = 30 * time.Second
+)
+
+// ErrPendingFull means the table of pending logins has no room for this client now.
+var ErrPendingFull = errors.New("auth: too many logins in progress")
+
 // CreatePending records the first login step and returns its cookie token. The record keeps, on
-// the server only, whether the password was right and which IP did the first step. There is at
-// most one pending login per IP, which also bounds the table against floods.
+// the server only, whether the password was right and which IP did the first step.
 func (s *SessionStore) CreatePending(ip string, passwordOK bool) (string, error) {
 	token := RandomToken()
 	t := s.now()
@@ -166,8 +180,15 @@ func (s *SessionStore) CreatePending(ip string, passwordOK bool) (string, error)
 		return "", err
 	}
 	defer tx.Rollback()
-	if _, err := tx.Exec("DELETE FROM pending_logins WHERE ip = ? OR expires_at <= ?", ip, t.UnixMilli()); err != nil {
+	if _, err := tx.Exec("DELETE FROM pending_logins WHERE expires_at <= ?", t.UnixMilli()); err != nil {
 		return "", err
+	}
+	var perIP, total int
+	if err := tx.QueryRow("SELECT COUNT(*), COALESCE(SUM(ip = ?), 0) FROM pending_logins", ip).Scan(&total, &perIP); err != nil {
+		return "", err
+	}
+	if perIP >= MaxPendingPerIP || total >= MaxPendingTotal {
+		return "", ErrPendingFull
 	}
 	if _, err := tx.Exec("INSERT INTO pending_logins (id, created_at, expires_at, ip, password_ok) VALUES (?, ?, ?, ?, ?)",
 		HashToken(token), t.UnixMilli(), t.Add(PendingTTL).UnixMilli(), ip, ok); err != nil {

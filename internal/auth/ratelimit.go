@@ -12,6 +12,10 @@ type LimiterOptions struct {
 	MaxFailuresGlobal int
 	Window            time.Duration
 	Lockout           time.Duration
+	// LocalOwner is set by the local panel, where a loopback client address can only be a direct
+	// request on this machine. A server behind a reverse proxy must leave it off: there a loopback
+	// address is the proxy, and every visitor would share it.
+	LocalOwner bool
 }
 
 // LimitDecision says whether a login attempt may proceed.
@@ -31,6 +35,12 @@ const maxTrackedIPs = 10000
 // LoginLimiter is the failed-login limiter (V1 semantics): one bucket per client IP plus a global
 // bucket against distributed guessing. Reaching the maximum within the window locks the bucket;
 // while locked, even correct credentials are refused. Success clears only the IP's bucket.
+//
+// A loopback client address means the panel was opened directly on this machine (a request that
+// came through a tunnel carries the visitor's address, never a loopback one). One person at the
+// keyboard cannot be a distributed guesser, so the global bucket neither counts their failures nor
+// refuses them: a stranger on the internet can never lock the owner out of their own machine. The
+// per-address bucket still applies to them.
 type LoginLimiter struct {
 	opts LimiterOptions
 	now  func() time.Time
@@ -68,7 +78,7 @@ func (l *LoginLimiter) Check(ip string) LimitDecision {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	t := l.now()
-	if l.global.lockedUntil.After(t) {
+	if l.global.lockedUntil.After(t) && !l.exempt(ip) {
 		return LimitDecision{RetryAfter: retryAfter(l.global.lockedUntil, t), Scope: "global"}
 	}
 	if b := l.ips[ip]; b != nil && b.lockedUntil.After(t) {
@@ -97,6 +107,9 @@ func (l *LoginLimiter) Fail(ip string) bool {
 		b.lockedUntil = t.Add(l.opts.Lockout)
 		b.failures = nil
 		locked = true
+	}
+	if l.exempt(ip) {
+		return locked
 	}
 	l.prune(&l.global, t)
 	l.global.failures = append(l.global.failures, t)
@@ -138,3 +151,6 @@ func (l *LoginLimiter) evict(t time.Time) {
 		l.ips = map[string]*bucket{}
 	}
 }
+
+// exempt reports whether ip is a direct local client that the global bucket leaves alone.
+func (l *LoginLimiter) exempt(ip string) bool { return l.opts.LocalOwner && IsLoopback(ip) }

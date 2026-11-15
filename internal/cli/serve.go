@@ -72,6 +72,7 @@ func buildServer(env *Env, o buildOpts) (*built, error) {
 		MaxFailuresGlobal: cfg.Login.MaxFailuresGlobal,
 		Window:            time.Duration(cfg.Login.WindowSeconds) * time.Second,
 		Lockout:           time.Duration(cfg.Login.LockoutSeconds) * time.Second,
+		LocalOwner:        true,
 	}, env.Now)
 	tun := &tunnel.Controller{DB: db, Audit: aud, Sessions: sessions, Config: cfg.Tunnel, Now: env.Now}
 	var access *auth.AccessVerifier
