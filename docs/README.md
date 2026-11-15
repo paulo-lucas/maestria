@@ -40,7 +40,6 @@ For contributors and the curious.
 | [v2-architecture.md](v2-architecture.md) | How it is built. |
 | [releasing.md](releasing.md) | Cutting a release or prerelease, how machines update, rolling back. |
 | [../design/README.md](../design/README.md) | The panel's design system and screens. |
-| [announcement.md](announcement.md) | A draft launch post. |
 
 ## Screenshots
 
