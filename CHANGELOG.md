@@ -4,6 +4,8 @@ All notable changes to Maestria are listed here. The format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-15
+
 ### Added
 
 - **Overview shows every update.** Notices from all workspaces now sit in an **Updates** card under Needs you, newest first, with workspace filter chips, **Got it** on each one and a **Mark all as read** button that acts on the chosen workspace (or all of them). Local panel and hosted site.
