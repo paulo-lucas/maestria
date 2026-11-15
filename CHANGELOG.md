@@ -4,7 +4,9 @@ All notable changes to Maestria are listed here. The format follows [Keep a Chan
 
 ## [Unreleased]
 
-Maestria 2: a control panel and protocol add-on for Maestri, in Go.
+## [0.1.0-rc.1] - 2026-11-15
+
+Release candidate for the first public release. Maestria 2: a control panel and protocol add-on for Maestri, in Go.
 
 ### Added
 
