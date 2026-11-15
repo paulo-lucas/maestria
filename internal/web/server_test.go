@@ -104,7 +104,7 @@ func newHarness(t *testing.T, o ...opts) *harness {
 	sessions := auth.NewSessionStore(db, time.Duration(cfg.Session.IdleMinutes)*time.Minute, time.Duration(cfg.Session.AbsoluteHours)*time.Hour, clock.now)
 	limiter := auth.NewLoginLimiter(auth.LimiterOptions{
 		MaxFailuresPerIP: cfg.Login.MaxFailuresPerIP, MaxFailuresGlobal: cfg.Login.MaxFailuresGlobal,
-		Window: time.Duration(cfg.Login.WindowSeconds) * time.Second, Lockout: time.Duration(cfg.Login.LockoutSeconds) * time.Second,
+		Window: time.Duration(cfg.Login.WindowSeconds) * time.Second, Lockout: time.Duration(cfg.Login.LockoutSeconds) * time.Second, LocalOwner: true,
 	}, clock.now)
 	runs := &[][]string{}
 	tun := &tunnel.Controller{
@@ -171,7 +171,9 @@ func (c *client) do(method, path string, body io.Reader, hdr map[string]string) 
 	res := rec.Result()
 	c.jar.SetCookies(u, res.Cookies())
 	b, _ := io.ReadAll(res.Body)
-	return resp{ResponseRecorder: rec, body: string(b)}
+	// Command blocks wrap each word in a span (so a line never breaks inside "--link"); the tests
+	// look for the commands as a person reads them.
+	return resp{ResponseRecorder: rec, body: cmdWords.Replace(string(b))}
 }
 
 func (c *client) cookie(name string) string {
@@ -684,7 +686,7 @@ func TestTrustedCfConnectingIPKeysTheLimiter(t *testing.T) {
 			c.postForm("/login/2fa", url.Values{"_csrf": {csrfFrom(t, page)}, "code": {"000000"}}, map[string]string{"Cf-Connecting-Ip": cfIP})
 		}
 	}
-	h := newHarness(t, opts{mutate: func(c *config.Config) { c.TrustCfConnectingIP = true }})
+	h := newHarness(t, opts{mutate: func(c *config.Config) { c.TrustCfConnectingIP, c.TrustCfConnectingIPSet = true, true }})
 	c := h.client()
 	failFrom(h, c, "192.0.2.50", 5)
 	page := c.get("/login")
@@ -1175,3 +1177,6 @@ func TestServerAnswersOverARealSocket(t *testing.T) {
 		t.Fatalf("real socket: %d", res.StatusCode)
 	}
 }
+
+// cmdWords removes the per-word spans of command blocks (see ui.CommandBlock).
+var cmdWords = strings.NewReplacer(`<span class="cmd-t">`, "", `</span>`, "")

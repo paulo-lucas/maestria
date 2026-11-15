@@ -290,7 +290,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if !isSafe(r.Method) {
 		if !sameOrigin(r) {
-			_ = s.audit.WriteThrottled("origin:"+ip, time.Minute, "origin_reject", ip, map[string]any{"path": clip(r.URL.Path, 100)})
+			if s.audit.Allow("origin:all", 2*time.Second) {
+				_ = s.audit.WriteThrottled("origin:"+ip, time.Minute, "origin_reject", ip, map[string]any{"path": clip(r.URL.Path, 100)})
+			}
 			deny(w, http.StatusForbidden, "Forbidden")
 			return
 		}
@@ -324,7 +326,11 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !isSafe(r.Method) && !s.csrfOK(r, sess, class) {
-		_ = s.audit.Write("csrf_reject", ip, map[string]any{"path": clip(r.URL.Path, 100)})
+		// Anyone can cause this with a bad token and a matching Origin: throttled per address
+		// and for the whole server.
+		if s.audit.Allow("csrf:"+ip, time.Minute) && s.audit.Allow("csrf:all", 2*time.Second) {
+			_ = s.audit.Write("csrf_reject", ip, map[string]any{"path": clip(r.URL.Path, 100)})
+		}
 		if class == "public" {
 			s.csrfRejectPage(w, r)
 			return

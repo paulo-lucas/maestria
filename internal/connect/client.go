@@ -18,6 +18,7 @@ import (
 
 	"github.com/paulo-lucas/maestria/internal/devices"
 	"github.com/paulo-lucas/maestria/internal/relay"
+	"github.com/paulo-lucas/maestria/internal/termsafe"
 )
 
 // State is the connection state shown by `maestria connect status`.
@@ -48,6 +49,9 @@ type Client struct {
 	Log     *slog.Logger
 	// OnState is called on every connection state change. May be nil.
 	OnState func(State, error)
+	// OnPairing is called when the cloud offers a pairing that was accepted, so the machine can
+	// tell the person that a browser asked to be approved. May be nil.
+	OnPairing func(label string)
 	// HTTP overrides the dial client (tests). May be nil.
 	HTTP *http.Client
 	// Backoff bounds the reconnect delay. Zero values use 1s and 60s.
@@ -210,7 +214,12 @@ func (s *session) send(f relay.Frame) error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(s.ctx, 30*time.Second)
+	// The write's context must NOT be derived from the session's: the websocket library closes
+	// the whole connection at once when a write's context ends, so a frame being written at the
+	// moment of shutdown would tear the socket down before the close handshake (the peer then
+	// sees an abnormal closure). A stuck write is bounded by this timeout and, at shutdown, by
+	// closeGracefully, which force-closes the socket after a second.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	return s.ws.Write(ctx, websocket.MessageText, b)
 }
@@ -244,11 +253,15 @@ func (s *session) pinger() {
 		case <-s.ctx.Done():
 			return
 		case <-t.C:
-			pctx, cancel := context.WithTimeout(s.ctx, 15*time.Second)
+			// Not derived from s.ctx, for the reason given in send. A ping that fails because the
+			// session is shutting down must not force-close a socket that is closing politely.
+			pctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			err := s.ws.Ping(pctx)
 			cancel()
 			if err != nil {
-				s.ws.CloseNow()
+				if s.ctx.Err() == nil {
+					s.ws.CloseNow()
+				}
 				return
 			}
 		}
@@ -512,13 +525,19 @@ func (s *session) onPairOffer(f relay.Frame) {
 		return
 	}
 	r, err := s.c.Devices.Offer(f.Pair, f.Commit, f.Label, f.UA)
+	var paused *devices.ThrottledError
 	switch {
 	case errors.Is(err, devices.ErrTooManyPending):
 		state(relay.PairRejected, "too_many_pending")
+	case errors.As(err, &paused):
+		state(relay.PairRejected, "pairing_paused")
 	case err != nil:
 		state(relay.PairRejected, relay.ErrBadRequest)
 	default:
 		_ = s.send(relay.Frame{T: relay.TypePairChallenge, Pair: f.Pair, R: r})
+		if s.c.OnPairing != nil {
+			s.c.OnPairing(termsafe.Clean(f.Label, 80))
+		}
 	}
 }
 

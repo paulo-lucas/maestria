@@ -22,6 +22,15 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Use the toolchain go.mod pins
+        shell: bash
+        # setup-go installs the version on go.mod's "go" line; build, test and scan with the
+        # patched "toolchain" version instead (Go downloads it, verified by the checksum database).
+        run: |
+          tc="$(go mod edit -json | python3 -c 'import json,sys; print(json.load(sys.stdin).get("Toolchain") or "local")')"
+          echo "GOTOOLCHAIN=$tc" >> "$GITHUB_ENV"
+          GOTOOLCHAIN="$tc" go version
+
       - name: Build release archives, checksums, and Homebrew formula
         run: >-
           go run ./tools/release

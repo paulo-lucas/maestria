@@ -30,6 +30,15 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Use the toolchain go.mod pins
+        shell: bash
+        # setup-go installs the version on go.mod's "go" line; build, test and scan with the
+        # patched "toolchain" version instead (Go downloads it, verified by the checksum database).
+        run: |
+          tc="$(go mod edit -json | python3 -c 'import json,sys; print(json.load(sys.stdin).get("Toolchain") or "local")')"
+          echo "GOTOOLCHAIN=$tc" >> "$GITHUB_ENV"
+          GOTOOLCHAIN="$tc" go version
+
       - name: Vet
         run: go vet ./...
 
@@ -47,9 +56,26 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: go mod tidy -diff
 
-      - name: Race tests (relay, devices, connect, cloud)
+      - name: Race tests (relay, devices, connect, cloud, auth, web, runlock)
         if: matrix.os == 'ubuntu-latest'
-        run: go test -race -count=1 ./internal/relay/... ./internal/devices ./internal/connect ./internal/cloud
+        run: go test -race -count=1 ./internal/relay/... ./internal/devices ./internal/connect ./internal/cloud ./internal/auth ./internal/web ./internal/runlock
+
+      - name: Scan for known vulnerabilities (govulncheck)
+        if: matrix.os == 'ubuntu-latest'
+        # Pinned to an exact version and fetched through the Go module proxy, which checks it
+        # against the checksum database. It reports only vulnerabilities the code can reach.
+        shell: bash
+        run: |
+          set +e
+          go version
+          go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./... > govulncheck.txt 2>&1
+          status=$?
+          cat govulncheck.txt
+          if [ $status -ne 0 ]; then
+            msg=$(tail -c 3000 govulncheck.txt | sed -e 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+            echo "::error title=govulncheck::${msg}"
+          fi
+          exit $status
 
       - name: Cross-compile release archives (maestria and maestria-cloud, all 5 targets)
         if: matrix.os == 'ubuntu-latest'

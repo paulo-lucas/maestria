@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -97,6 +98,13 @@ func cmdTunnel(args []string, env *Env) error {
 		}
 		fmt.Fprintln(out)
 		return nil
+	}
+	// Lifting the kill switch re-opens remote access, so it needs a person at a terminal.
+	if err := env.requireHuman(bufio.NewReader(env.Stdin), "Turn the kill switch off and re-open remote access", []string{
+		"Browsers signed in through a tunnel or a hosted server can reach this machine again.",
+		"Do this only if you turned the kill switch on yourself, or know why it is on.",
+	}, ctrl.Audit); err != nil {
+		return err
 	}
 	res, err := ctrl.EnableLocal(ctx)
 	if err != nil {

@@ -15,7 +15,8 @@
         {{icon "i-sparkle"}}
         <div class="banner__body">
           <p class="banner__title">Maestria {{.Version}} is available</p>
-          <p class="banner__text">Update on this machine with <code>maestria update</code>.{{if .URL}} <a href="{{.URL}}" rel="noopener noreferrer">Release notes</a>{{end}}</p>
+          <p class="banner__text">Update on this machine, in a terminal:{{if .URL}} <a href="{{.URL}}" rel="noopener noreferrer">Release notes</a>{{end}}</p>
+          {{cmd "maestria update"}}
         </div>
         <form class="banner__actions" method="post" action="/updates/dismiss">
           <input type="hidden" name="_csrf" value="{{$.CSRF}}">

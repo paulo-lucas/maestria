@@ -1,6 +1,7 @@
 package devices
 
 import (
+	"errors"
 	"path/filepath"
 	"strconv"
 	"testing"
@@ -184,7 +185,7 @@ func TestRevokedExpiredAndIdle(t *testing.T) {
 	}
 
 	// Idle: no use for longer than the idle limit.
-	c.advance(7*24*time.Hour + time.Minute)
+	c.advance(DefaultIdleDays*24*time.Hour + time.Minute)
 	if got := use(); got != relay.ErrIdleExpired {
 		t.Fatalf("idle: %q", got)
 	}
@@ -197,8 +198,8 @@ func TestRevokedExpiredAndIdle(t *testing.T) {
 		t.Fatal("re-approved device must work")
 	}
 
-	// Absolute: in use every day, but approval is older than 30 days.
-	for i := 0; i < 29; i++ {
+	// Absolute: in use every day, but approval is older than the absolute limit.
+	for i := 0; i < DefaultAbsoluteDays-1; i++ {
 		c.advance(24 * time.Hour)
 		if got := use(); got != "" {
 			t.Fatalf("day %d: %q", i, got)
@@ -327,6 +328,13 @@ func TestPairingRules(t *testing.T) {
 		t.Fatal("changes must be reported once")
 	}
 
+	// The failed reveal pauses new offers, so the rest of this test waits it out.
+	var te *ThrottledError
+	if _, err := m.Offer("pair-0003", p.Commit, "x", ""); !errors.As(err, &te) {
+		t.Fatalf("an offer right after a failed reveal must be paused: %v", err)
+	}
+	c.advance(PairLockout + time.Minute)
+
 	// Not a P-256 key.
 	p2 := b.StartPairing(t)
 	_, _ = m.Offer("pair-0002", p2.Commit, "x", "")
@@ -334,18 +342,21 @@ func TestPairingRules(t *testing.T) {
 		t.Fatalf("junk key: %v", err)
 	}
 
-	// Pending limit.
+	// Pending limit (after the budget window of the earlier offers and the lockout has passed).
+	c.advance(PairLockout + PairWindow)
 	for i := 0; i < MaxPending; i++ {
 		if _, err := m.Offer("flood-000"+strconv.Itoa(i), p.Commit, "x", ""); err != nil {
 			t.Fatalf("offer %d: %v", i, err)
 		}
 	}
-	if _, err := m.Offer("flood-9999", p.Commit, "x", ""); err != ErrTooManyPending {
-		t.Fatalf("flood: %v", err)
+	// The offer budget (5 per window) and the live limit (5) both stop a sixth one.
+	if _, err := m.Offer("flood-9999", p.Commit, "x", ""); err == nil {
+		t.Fatal("flood: a sixth live offer was accepted")
 	}
 
 	// Expiry frees the slots and refuses approval.
 	c.advance(PairingTTL + time.Second)
+	c.advance(PairWindow)
 	if list, _ := m.Pending(); len(list) != 0 {
 		t.Fatalf("expired pairings listed: %d", len(list))
 	}
@@ -455,14 +466,14 @@ func TestPairCodeMatchesAcrossSides(t *testing.T) {
 	r := make([]byte, 16)
 	r[0] = 7
 	a := relay.PairCode(b.SPKI, n, r)
-	if len(a) != 6 || a != relay.PairCode(b.SPKI, n, r) {
-		t.Fatal("code must be stable and 6 digits")
+	if len(a) != 8 || a != relay.PairCode(b.SPKI, n, r) {
+		t.Fatal("code must be stable and 8 digits")
 	}
 	r[0] = 8
 	if a == relay.PairCode(b.SPKI, n, r) {
-		t.Log("collision is possible (1e-6) but unexpected")
+		t.Log("collision is possible (1e-8) but unexpected")
 	}
-	if relay.FormatPairCode("471286") != "47 · 12 · 86" || relay.NormalizePairCode("47 · 12 · 86") != "471286" {
+	if relay.FormatPairCode("47128659") != "4712 · 8659" || relay.NormalizePairCode("4712 · 8659") != "47128659" {
 		t.Fatal("format/normalize")
 	}
 }

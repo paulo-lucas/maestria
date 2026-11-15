@@ -198,6 +198,8 @@ func TestWirePairErrorsAreExplainedAndLeaveNothingBehind(t *testing.T) {
 		{"wrong key", fake.Host + "\n" + strings.Repeat("ab", 32) + "\n", "right", "does not match the one Wire presents"},
 		{"bad key text", fake.Host + "\nnot-a-key\n", "right", "security key must be"},
 		{"pairing code typed as key", fake.Host + "\n123456\n", "right", "looks like the 6-digit pairing code"},
+		// Trusting the key on this machine warns that another program could be answering.
+		{"warning before trusting", fake.Host + "\n123456\n", "right", "any program on this computer"},
 	}
 	for _, c := range cases {
 		env, cfgDir, out, errBuf := pairEnv(t, c.stdin, c.secret)

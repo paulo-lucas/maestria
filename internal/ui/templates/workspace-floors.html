@@ -53,7 +53,8 @@
         <div class="card empty empty--compact">
           <span class="empty__icon">{{icon "i-floors"}}</span>
           <p class="empty__title">No active floors</p>
-          <p class="empty__text">Start a planned floor with <code>maestria floor start &lt;name&gt;</code>.</p>
+          <p class="empty__text">Start a planned floor:</p>
+          {{cmd "maestria floor start <name>"}}
         </div>
         {{end}}
       </section>
@@ -81,7 +82,8 @@
         {{else}}
         <div class="card empty empty--compact">
           <p class="empty__title">No planned floors</p>
-          <p class="empty__text">Plan upcoming work with <code>maestria floor plan &lt;name&gt; --brief "..."</code>.</p>
+          <p class="empty__text">Plan upcoming work:</p>
+          {{cmd "maestria floor plan <name> --brief \"<what to do>\""}}
         </div>
         {{end}}
       </section>

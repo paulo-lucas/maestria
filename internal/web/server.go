@@ -57,7 +57,9 @@ type Deps struct {
 	Audit    *audit.Log
 	Sessions *auth.SessionStore
 	Limiter  *auth.LoginLimiter
-	Tunnel   *tunnel.Controller
+	// Guard bounds the password checks a stranger can start. nil uses the default budget.
+	Guard  *auth.HashGuard
+	Tunnel *tunnel.Controller
 	// Access is the optional Cloudflare Access verifier.
 	Access *auth.AccessVerifier
 	// LiveFloors optionally enriches Present floors with live runtime data (e.g. Wire).
@@ -91,12 +93,16 @@ type Server struct {
 	auth  *auth.Authenticator
 	mux   *http.ServeMux
 	hosts map[string]bool
-	env   config.Env
-	cfgMu sync.RWMutex
+	// localHosts are the loopback names of the panel itself (see directLocal).
+	localHosts map[string]bool
+	env        config.Env
+	cfgMu      sync.RWMutex
 
 	bg              sync.WaitGroup
 	broker          *sseBroker
 	ssePollInterval time.Duration
+	// sseRecheckInterval is how often an open stream re-checks its session (tests shorten it).
+	sseRecheckInterval time.Duration
 
 	sessionCookie string
 	pendingCookie string
@@ -134,6 +140,7 @@ func New(d Deps) (*Server, error) {
 	port := strconv.Itoa(d.Config.Port)
 	s.hosts["localhost:"+port] = true
 	s.hosts["127.0.0.1:"+port] = true
+	s.localHosts = map[string]bool{"localhost:" + port: true, "127.0.0.1:" + port: true}
 	for _, h := range d.Config.AllowedHosts {
 		s.hosts[h] = true
 	}
@@ -144,7 +151,11 @@ func New(d Deps) (*Server, error) {
 	s.sessionCookie = prefix + "maestria_session"
 	s.pendingCookie = prefix + "maestria_pending"
 	s.csrfCookie = prefix + "maestria_login_csrf"
-	s.auth = &auth.Authenticator{DB: d.DB, Secrets: d.Secrets, Sessions: d.Sessions, Limiter: d.Limiter, Audit: d.Audit, Now: d.Now}
+	guard := d.Guard
+	if guard == nil {
+		guard = auth.NewHashGuard(auth.GuardOptions{LocalOwner: true}, d.Now)
+	}
+	s.auth = &auth.Authenticator{DB: d.DB, Secrets: d.Secrets, Sessions: d.Sessions, Limiter: d.Limiter, Guard: guard, Audit: d.Audit, Now: d.Now}
 	s.routes()
 	return s, nil
 }
@@ -293,7 +304,9 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !isSafe(r.Method) && !sameOrigin(r) {
-		_ = s.Audit.WriteThrottled("origin:"+ip, time.Minute, "origin_reject", ip, map[string]any{"path": clip(r.URL.Path, 100)})
+		if s.Audit.Allow("origin:all", 2*time.Second) {
+			_ = s.Audit.WriteThrottled("origin:"+ip, time.Minute, "origin_reject", ip, map[string]any{"path": clip(r.URL.Path, 100)})
+		}
 		deny(w, http.StatusForbidden, "Forbidden")
 		return
 	}
@@ -335,7 +348,11 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if !isSafe(r.Method) {
 		if !s.csrfOK(w, r, sess, public) {
-			_ = s.Audit.Write("csrf_reject", ip, map[string]any{"path": clip(r.URL.Path, 100)})
+			// Anyone can cause this with a bad token and a matching Origin, so it is throttled
+			// per address and for the whole server (the address can be chosen by a sender).
+			if s.Audit.Allow("csrf:"+ip, time.Minute) && s.Audit.Allow("csrf:all", 2*time.Second) {
+				_ = s.Audit.Write("csrf_reject", ip, map[string]any{"path": clip(r.URL.Path, 100)})
+			}
 			if public {
 				s.loginCSRFReject(w, r)
 				return
@@ -373,12 +390,17 @@ func (s *Server) setSecurityHeaders(w http.ResponseWriter) {
 	// No CORS, ever: Access-Control-* headers are never set.
 }
 
-// clientIP is the connecting address, or CF-Connecting-IP when explicitly trusted.
+// clientIP is the connecting address, or CF-Connecting-IP when it is trusted (see
+// Config.TrustsCfConnectingIP). A header value that is a loopback or unspecified address is never
+// taken: a loopback client address means "this machine, no proxy" and only a real direct request
+// may have it (the global sign-in lockout never applies to it).
 func (s *Server) clientIP(r *http.Request) string {
-	if s.Config.TrustCfConnectingIP {
+	if s.Config.TrustsCfConnectingIP() {
 		if v := strings.TrimSpace(r.Header.Get("Cf-Connecting-Ip")); v != "" {
 			if a, err := netip.ParseAddr(v); err == nil {
-				return a.String()
+				if a = a.Unmap(); !a.IsLoopback() && !a.IsUnspecified() {
+					return a.String()
+				}
 			}
 		}
 	}
@@ -386,7 +408,43 @@ func (s *Server) clientIP(r *http.Request) string {
 	if err != nil {
 		return r.RemoteAddr
 	}
+	// Every request through a tunnel, ssh -R or a reverse proxy arrives from 127.0.0.1 too. Only
+	// a request that really is the person at this machine (a loopback Host name and no proxy
+	// headers) keeps the loopback address and the allowances that go with it. Everything else
+	// that arrives over loopback shares one "tunnel" bucket, so strangers can use up that
+	// bucket's limits but never the owner's.
+	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() && !s.directLocal(r) {
+		return tunnelClient
+	}
 	return host
+}
+
+// tunnelClient is the client key of requests that came over loopback but not from this machine's
+// own browser. It is not an IP address, so it never gets a local owner's allowances.
+const tunnelClient = "tunnel"
+
+// proxyHeaders are sent by tunnels and reverse proxies. A browser opening the panel directly on
+// this machine never sends them.
+var proxyHeaders = []string{
+	"Cf-Connecting-Ip", "Cf-Ray", "Cf-Visitor", "Cf-Ipcountry", "True-Client-Ip", "X-Forwarded-For",
+	"X-Forwarded-Host", "X-Forwarded-Proto", "X-Forwarded-Port", "X-Real-Ip", "Forwarded", "Via",
+	"X-Client-Ip", "X-Cluster-Client-Ip", "Fastly-Client-Ip", "X-Original-Forwarded-For",
+}
+
+// directLocal reports whether a request over loopback is the person at this machine: the Host is
+// the panel's own loopback name and port, and no proxy header is present. A tunnel or proxy that
+// rewrites Host to 127.0.0.1 and adds no header at all cannot be told apart from a browser here;
+// docs/security.md says so.
+func (s *Server) directLocal(r *http.Request) bool {
+	if !s.localHosts[strings.ToLower(r.Host)] {
+		return false
+	}
+	for _, h := range proxyHeaders {
+		if r.Header.Get(h) != "" {
+			return false
+		}
+	}
+	return true
 }
 
 func ipOf(r *http.Request) string { ip, _ := r.Context().Value(ipKey).(string); return ip }

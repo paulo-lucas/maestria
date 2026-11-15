@@ -18,6 +18,7 @@ import (
 
 	"github.com/paulo-lucas/maestria/internal/privfile"
 	"github.com/paulo-lucas/maestria/internal/relay"
+	"github.com/paulo-lucas/maestria/internal/termsafe"
 )
 
 // LinkFileName holds the cloud link (0600) in the config dir.
@@ -106,7 +107,7 @@ func (e *APIError) Error() string {
 	case "":
 		return fmt.Sprintf("the cloud answered %d", e.Status)
 	}
-	return fmt.Sprintf("the cloud refused (%s)", e.Code)
+	return fmt.Sprintf("the cloud refused (%s)", termsafe.Clean(e.Code, 60))
 }
 
 func (a *API) client() *http.Client {
@@ -164,6 +165,7 @@ func (a *API) do(ctx context.Context, method, path string, in, out any, bearer s
 func (a *API) Redeem(ctx context.Context, code string) (*relay.RedeemResponse, error) {
 	var out relay.RedeemResponse
 	err := a.do(ctx, "POST", "/api/link/redeem", relay.RedeemRequest{Code: code, Machine: a.Machine}, &out, "")
+	out.AccountHint, out.DefaultName = termsafe.Clean(out.AccountHint, 120), termsafe.Clean(out.DefaultName, 60)
 	return &out, err
 }
 
@@ -171,6 +173,7 @@ func (a *API) Redeem(ctx context.Context, code string) (*relay.RedeemResponse, e
 func (a *API) Confirm(ctx context.Context, code, token, name string) (*relay.Linked, error) {
 	var out relay.Linked
 	err := a.do(ctx, "POST", "/api/link/confirm", relay.ConfirmRequest{Code: code, Token: token, Name: name}, &out, "")
+	out.Name = termsafe.Clean(out.Name, 60)
 	return &out, err
 }
 
@@ -178,6 +181,7 @@ func (a *API) Confirm(ctx context.Context, code, token, name string) (*relay.Lin
 func (a *API) Start(ctx context.Context) (*relay.StartResponse, error) {
 	var out relay.StartResponse
 	err := a.do(ctx, "POST", "/api/link/start", relay.StartRequest{Machine: a.Machine}, &out, "")
+	out.Code, out.URL = termsafe.Clean(out.Code, 40), termsafe.Clean(out.URL, 300)
 	return &out, err
 }
 
@@ -185,6 +189,10 @@ func (a *API) Start(ctx context.Context) (*relay.StartResponse, error) {
 func (a *API) Poll(ctx context.Context, pollToken string, confirm bool, name string) (*relay.PollResponse, error) {
 	var out relay.PollResponse
 	err := a.do(ctx, "POST", "/api/link/poll", relay.PollRequest{PollToken: pollToken, Confirm: confirm, Name: name}, &out, "")
+	out.AccountHint, out.DefaultName = termsafe.Clean(out.AccountHint, 120), termsafe.Clean(out.DefaultName, 60)
+	if out.Linked != nil {
+		out.Linked.Name = termsafe.Clean(out.Linked.Name, 60)
+	}
 	return &out, err
 }
 

@@ -89,6 +89,7 @@ func TestSignupDoesNotRevealExistingAccounts(t *testing.T) {
 
 	other := b.browser("10.0.0.9")
 	other.get("/signup")
+	b.clock.advance(2 * MailCooldown) // the owner's own sign-up mail is not part of what is compared
 	again := other.form("/signup", url.Values{"email": {"ann@example.com"}, "password": {"another long password!"}})
 	fresh := other.form("/signup", url.Values{"email": {"new@example.com"}, "password": {"another long password!"}})
 	if again.StatusCode != fresh.StatusCode {
@@ -422,5 +423,138 @@ func TestEmailNormalization(t *testing.T) {
 	}
 	if MaskEmail("ann@example.com") != "a***@example.com" {
 		t.Fatal(MaskEmail("ann@example.com"))
+	}
+}
+
+// The cloud's sign-in, sign-up and verify paths run argon2id for strangers: they are counted and
+// limited per address before the work starts, and a refusal is a 429 with Retry-After that says
+// nothing about the password.
+func TestPasswordChecksAreRateLimitedPerAddress(t *testing.T) {
+	b := newBed(t)
+	x := b.browser("10.7.0.1")
+	x.get("/login")
+	before := auth.VerifyCalls()
+	var limited *resp
+	for i := 0; i < 40; i++ {
+		r := x.form("/login", url.Values{"email": {"ann@example.com"}, "password": {"wrong password here"}})
+		if r.StatusCode == 429 {
+			limited = r
+			break
+		}
+		if r.StatusCode != 303 {
+			t.Fatalf("attempt %d: %d", i, r.StatusCode)
+		}
+	}
+	if limited == nil || limited.Header.Get("Retry-After") == "" {
+		t.Fatal("forty sign-in step-1 posts from one address were all accepted")
+	}
+	if n := auth.VerifyCalls() - before; n > 11 {
+		t.Fatalf("%d password checks ran for one address in one window", n)
+	}
+	// The same budget covers the other paths that hash for strangers.
+	if r := x.form("/signup", url.Values{"email": {"new@example.com"}, "password": {testPassword}}); r.StatusCode != 429 {
+		t.Fatalf("sign-up from an address that used its budget: %d", r.StatusCode)
+	}
+	// Another address is unaffected.
+	y := b.browser("10.7.0.2")
+	y.get("/login")
+	if r := y.form("/login", url.Values{"email": {"ann@example.com"}, "password": {"x"}}); r.StatusCode != 303 {
+		t.Fatalf("another address: %d", r.StatusCode)
+	}
+	// After the window the first address can try again.
+	b.clock.advance(2 * time.Minute)
+	if r := x.form("/login", url.Values{"email": {"ann@example.com"}, "password": {"x"}}); r.StatusCode != 303 {
+		t.Fatalf("after the window: %d", r.StatusCode)
+	}
+	if !strings.Contains(auditEvents(t, b), "login_throttled") {
+		t.Fatal("throttling must be audited")
+	}
+}
+
+// Behind a reverse proxy that does not forward addresses, every visitor can look like one
+// address. One visitor's first step must not remove another visitor's pending login.
+func TestPendingLoginIsNotEvictedBySameAddress(t *testing.T) {
+	b := newBed(t)
+	secret, _ := b.browser("10.0.0.1").signup("ann@example.com", testPassword)
+	owner := b.browser("10.8.0.1")
+	owner.get("/login")
+	if r := owner.form("/login", url.Values{"email": {"ann@example.com"}, "password": {testPassword}}); r.StatusCode != 303 {
+		t.Fatalf("owner step 1: %d", r.StatusCode)
+	}
+	other := b.browser("10.8.0.1")
+	other.get("/login")
+	other.form("/login", url.Values{"email": {"ann@example.com"}, "password": {"anything at all here"}})
+
+	owner.get("/login/2fa")
+	b.clock.advance(auth.TOTPStep)
+	code, _ := auth.TOTP(secret, b.clock.now())
+	r := owner.form("/login/2fa", url.Values{"code": {code}})
+	if r.Header.Get("Location") == "/login?error=expired" || !owner.signedIn() {
+		t.Fatalf("the owner's sign-in was evicted by another visitor: %v", r.Header)
+	}
+}
+
+// Someone who types an address before its owner must not be able to keep it: the newest sign-up
+// wins until the address is verified, and unverified accounts expire.
+func TestUnverifiedAddressCannotBeSquatted(t *testing.T) {
+	b := newBed(t)
+	squatter := b.browser("10.5.0.1")
+	squatter.get("/signup")
+	squatter.form("/signup", url.Values{"email": {"victim@example.com"}, "password": {"the squatter's long password"}})
+	squatterLink := b.link(b.waitMail("victim@example.com", "Verify"))
+
+	b.clock.advance(2 * MailCooldown) // one email per address per minute
+	owner := b.browser("10.5.0.2")
+	owner.get("/signup")
+	owner.form("/signup", url.Values{"email": {"victim@example.com"}, "password": {testPassword}})
+	ownerLink := b.link(b.waitMail("victim@example.com", "Verify"))
+
+	// The squatter's link no longer works, and neither does the squatter's password.
+	if r := owner.get(squatterLink); r.StatusCode != 410 {
+		t.Fatalf("an older verification link must stop working: %d", r.StatusCode)
+	}
+	if r := owner.form(ownerLink, url.Values{"password": {"the squatter's long password"}}); r.StatusCode == 303 {
+		t.Fatal("the squatter's password verified the address")
+	}
+	// The owner, with the newest link and the newest password, finishes the sign-up.
+	if r := owner.form(ownerLink, url.Values{"password": {testPassword}}); r.StatusCode != 303 {
+		t.Fatalf("the owner could not verify: %d", r.StatusCode)
+	}
+	// Once verified, a later sign-up cannot change the password.
+	later := b.browser("10.5.0.3")
+	later.get("/signup")
+	later.form("/signup", url.Values{"email": {"victim@example.com"}, "password": {"yet another long password"}})
+	var hash string
+	_ = b.srv.db.QueryRow("SELECT password_hash FROM users WHERE email = 'victim@example.com'").Scan(&hash)
+	if !auth.VerifyPassword(testPassword, hash) {
+		t.Fatal("a sign-up after verification replaced the owner's password")
+	}
+}
+
+func TestUnverifiedAccountsExpireAfterADay(t *testing.T) {
+	b := newBed(t)
+	br := b.browser("10.5.1.1")
+	br.get("/signup")
+	br.form("/signup", url.Values{"email": {"nobody@example.com"}, "password": {testPassword}})
+	var n int
+	count := func() {
+		_ = b.srv.db.QueryRow("SELECT COUNT(*) FROM users WHERE email = 'nobody@example.com'").Scan(&n)
+	}
+	b.srv.acc.Purge()
+	if count(); n != 1 {
+		t.Fatal("an unverified account must survive its first day")
+	}
+	b.clock.advance(UnverifiedTTL + time.Minute)
+	b.srv.acc.Purge()
+	if count(); n != 0 {
+		t.Fatal("an address unverified for a day must be released")
+	}
+	// A verified account is never purged by this.
+	br2 := b.browser("10.5.1.2")
+	br2.signup("kept@example.com", testPassword)
+	b.clock.advance(3 * UnverifiedTTL)
+	b.srv.acc.Purge()
+	if u, _ := b.srv.acc.UserByEmail("kept@example.com"); u == nil {
+		t.Fatal("a verified account was purged")
 	}
 }

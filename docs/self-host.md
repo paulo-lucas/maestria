@@ -142,17 +142,21 @@ cloudflared service install
 
 (On Linux and Windows this may need an administrator terminal. See Cloudflare's [run as a service](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/configure-tunnels/local-management/as-a-service/) page.)
 
-### Step 8 (recommended). Count real visitor addresses
+### Step 8. Count real visitor addresses
 
-Behind Cloudflare, every request seems to come from your own machine, so the sign-in limits cannot tell visitors apart. Tell Maestria to trust Cloudflare's header. Open `config.json` in your config directory (`~/.config/maestria/config.json`) and add:
+Behind Cloudflare, every request seems to come from your own machine, so the sign-in limits could not tell visitors apart: one stranger's failed attempts would lock everyone out. Since you allowed a public host name (`maestria config allow-host`), Maestria now **reads the visitor's address from Cloudflare's `CF-Connecting-IP` header automatically**. You do not need to do anything. Opening the panel directly on the machine (`http://127.0.0.1:...` or `http://localhost:...`, with no proxy in between) is not locked out by strangers' failed attempts. With an HTTP tunnel that does not report visitor addresses (ngrok http, Tailscale Funnel, a plain reverse proxy), all of its visitors share one limit, so a stranger can lock the sign-in *for the tunnel*; you at the machine are unaffected. Make sure such a proxy adds an `X-Forwarded-For` header (most do).
+
+**Do not expose the panel through a raw TCP forward** (`ssh -R`, `ngrok tcp`, `socat`). It passes the visitor's bytes through unchanged, so a visitor can send `Host: 127.0.0.1:<port>` with no proxy header, and Maestria cannot tell that visitor from you at the machine. No code can fix that. Use an HTTP tunnel, preferably Cloudflare Tunnel (the setup above).
+
+If your tunnel is **not** Cloudflare's and lets a visitor send that header themselves, turn this off so a stranger cannot pick the address the limits see. Open `config.json` in your config directory (`~/.config/maestria/config.json`) and add:
 
 ```json
 {
-  "trustCfConnectingIp": true
+  "trustCfConnectingIp": false
 }
 ```
 
-Keep the other settings in the file. Then `maestria service restart`. Only turn this on when **all** traffic really comes through Cloudflare.
+Then `maestria service restart`. (Setting it to `true` also works, to force it on without a public host name.)
 
 ### Is it secure enough?
 

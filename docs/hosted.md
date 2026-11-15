@@ -126,8 +126,8 @@ Kill switch:      off
 This is the most important step, and the one that makes hosted mode safe. **Every browser or phone must be approved on each machine**, once. The server cannot do it for you.
 
 1. Open the web app in your browser. You see **Approve this browser on your machine**.
-2. It shows one **code per online machine**, like `47 · 12 · 86`.
-3. On that machine, in a terminal:
+2. It shows one **code per online machine**, like `4712 · 8659`, and the **key fingerprint** of this browser, like `a1b2 c3d4 e5f6 0718`.
+3. On that machine, in a terminal, **that you are typing in yourself**:
 
    ```sh
    maestria devices pending
@@ -136,18 +136,22 @@ This is the most important step, and the one that makes hosted mode safe. **Ever
    **What you should see:**
 
    ```text
-   47 · 12 · 86  Safari on iPhone  expires in 4m52s
+   4712 · 8659  Safari on iPhone  key a1b2 c3d4 e5f6 0718  offered 14:02:11, expires in 4m52s
 
-   Check the code matches the one your browser shows, then: maestria devices approve <code>
+   Pairings offered in the last 10 minutes: 1 of 5 allowed.
+
+   Only approve a pairing you started yourself. Check that the code and the key match what your browser shows, then: maestria devices approve <code>
    ```
 
-4. **Check that the code is the same** as the one in your browser. Then approve it:
+4. **Check that the code and the key are the same** as in your browser. Then approve it:
 
    ```sh
-   maestria devices approve 471286
+   maestria devices approve 47128659
    ```
 
-   **What you should see:** `Approved "Safari on iPhone" (device 1a2b3c4d). It may send commands for 30 days, or until it has been idle 7.`
+   It shows the browser's name, key, time and code again, and asks you to **type a short random word** it prints (for example `bakomi`). That proves a person is at the terminal. It will not work from a script, and no option skips it.
+
+   **What you should see:** `Approved "Safari on iPhone" (key a1b2 c3d4 e5f6 0718). It may send commands for 14 days, or until it has been idle 3.`
 
 5. The browser changes to **Approved** and shows your workspaces.
 
@@ -155,20 +159,24 @@ This is the most important step, and the one that makes hosted mode safe. **Ever
 
 Why compare codes? Your browser makes a secret key that never leaves it. The code is a fingerprint of that key. If the two codes match, the key on the machine is really *your* browser's key and nobody swapped it on the way. Typing the code *is* the check.
 
+**Only approve a pairing you started yourself.** An approved browser can send messages to your agents and answer their questions, which can make them run commands on your computer. If `maestria devices pending` shows a pairing you did not start, run `maestria devices reject <code>`. Your machine limits the tries: 5 offers per 10 minutes, and a pause of an hour after a key that did not match. Every offer is in the audit log.
+
 The code lasts 5 minutes. If it runs out, start again from the web app.
+
+> **Trust the server, or run your own.** A hosted server also sends your browser its web page. A dishonest or hacked server could show you a code that matches a key it holds, and you would approve it. If you do not fully trust whoever runs the server, [run your own](deploy-cloud.md) or use local mode. See [Security](security.md#what-a-hostile-or-hacked-server-can-do).
 
 **You must do this on every machine.** An offline machine says "Approve it later, when it is back."
 
 ### Staying signed in
 
-An approved browser keeps working for **30 days** in total, and stops sooner if it is unused for **7 days**. Then it asks you to approve again (same steps). You can change both numbers on the machine, in `config.json`:
+An approved browser keeps working for **14 days** in total, and stops sooner if it is unused for **3 days**. Then it asks you to approve again (same steps). You can change both numbers on the machine, in `config.json`:
 
 ```json
 {
   "relay": {
     "enabled": true,
-    "approvalAbsoluteDays": 30,
-    "idleDays": 7,
+    "approvalAbsoluteDays": 14,
+    "idleDays": 3,
     "ratePerMinute": 120
   }
 }

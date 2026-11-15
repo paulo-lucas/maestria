@@ -97,20 +97,24 @@ type Updates struct {
 
 // Config is the validated configuration.
 type Config struct {
-	ConfigDir           string
-	MaestriDir          string
+	ConfigDir  string
+	MaestriDir string
+	// Warnings are things worth telling the person about the config file itself (not errors).
+	Warnings            []string
 	Port                int
 	CookieSecure        bool
 	AllowedHosts        []string
 	TrustCfConnectingIP bool
-	Session             Session
-	Login               Login
-	CloudflareAccess    *CloudflareAccess
-	Usage               Usage
-	Standby             Standby
-	Tunnel              Tunnel
-	Relay               Relay
-	Updates             Updates
+	// TrustCfConnectingIPSet is true when config.json states trustCfConnectingIp, either way.
+	TrustCfConnectingIPSet bool
+	Session                Session
+	Login                  Login
+	CloudflareAccess       *CloudflareAccess
+	Usage                  Usage
+	Standby                Standby
+	Tunnel                 Tunnel
+	Relay                  Relay
+	Updates                Updates
 	// Cloud is the hosted Maestria URL for `maestria connect` (the --cloud flag overrides it).
 	Cloud string
 }
@@ -202,6 +206,20 @@ func isDir(p string) bool {
 	return err == nil && st.IsDir()
 }
 
+// TrustsCfConnectingIP says whether the panel reads the visitor's address from the
+// CF-Connecting-IP header. The panel only listens on 127.0.0.1, so a request that carries the header
+// came through a tunnel on this machine. When config.json says nothing, the header is trusted as
+// soon as a public host name is allowed (a tunnel is in use): without it every visitor would share
+// 127.0.0.1, and one stranger's failed sign-ins would lock everyone out. Set
+// "trustCfConnectingIp": false to turn this off, for example for a tunnel that does not strip the
+// header from the visitor's own request.
+func (c *Config) TrustsCfConnectingIP() bool {
+	if c.TrustCfConnectingIPSet {
+		return c.TrustCfConnectingIP
+	}
+	return len(c.AllowedHosts) > 0
+}
+
 // Defaults returns the default configuration for configDir.
 func Defaults(configDir string, env Env) (*Config, error) {
 	md, err := ResolveMaestriDir("", env)
@@ -225,7 +243,7 @@ func Defaults(configDir string, env Env) (*Config, error) {
 			WakeOnReset:        true,
 		},
 		Tunnel:  Tunnel{StopCommand: []string{}, StartCommand: []string{}, StatusCommand: []string{}},
-		Relay:   Relay{Enabled: true, ApprovalAbsoluteDays: 30, IdleDays: 7, RatePerMinute: 120},
+		Relay:   Relay{Enabled: true, ApprovalAbsoluteDays: 14, IdleDays: 3, RatePerMinute: 120},
 		Updates: Updates{Check: true},
 	}, nil
 }
@@ -327,6 +345,7 @@ func Parse(data []byte, configDir string, env Env) (*Config, error) {
 		if cfg.TrustCfConnectingIP, err = boolField(raw, "trustCfConnectingIp"); err != nil {
 			return nil, err
 		}
+		cfg.TrustCfConnectingIPSet = true
 	}
 	if raw, ok := top["allowedHosts"]; ok {
 		var hosts []json.RawMessage
@@ -585,7 +604,43 @@ func Load(configDir string, env Env) (*Config, error) {
 	if err != nil {
 		return nil, errorf("config: cannot read %s: %v", FilePath(configDir), err)
 	}
-	return Parse(data, configDir, env)
+	warnings, err := checkFileSafety(FilePath(configDir), env)
+	if err != nil {
+		return nil, err
+	}
+	cfg, err := Parse(data, configDir, env)
+	if err != nil {
+		return nil, err
+	}
+	cfg.Warnings = warnings
+	return cfg, nil
+}
+
+// checkFileSafety guards the one config file that holds commands which run (the tunnel's stop,
+// start and status commands): whoever can write it can run code as the owner. A file anyone can
+// write is refused. A file only the group can write is allowed, with a warning, because many
+// systems give each user a private group and editors then create it that way. On Windows the mode
+// bits mean nothing, so only a config directory chosen by MAESTRIA_CONFIG_DIR (which may sit
+// outside the protected profile) gets a warning.
+func checkFileSafety(path string, env Env) (warnings []string, err error) {
+	if env.GOOS == "windows" || runtime.GOOS == "windows" {
+		if env.Getenv != nil && env.Getenv("MAESTRIA_CONFIG_DIR") != "" {
+			warnings = append(warnings, "MAESTRIA_CONFIG_DIR is set: Windows file permissions are not checked for "+path+". It holds commands that run, so keep that folder writable only by you.")
+		}
+		return warnings, nil
+	}
+	info, statErr := os.Stat(path)
+	if statErr != nil {
+		return nil, nil
+	}
+	perm := info.Mode().Perm()
+	switch {
+	case perm&0o002 != 0:
+		return nil, errorf("config: %s is writable by everyone (mode %o). It holds commands that run, so anyone could run code as you. Run: chmod 600 %s", path, perm, path)
+	case perm&0o020 != 0:
+		warnings = append(warnings, fmt.Sprintf("%s is writable by its group (mode %o). It holds commands that run; run: chmod 600 %s", path, perm, path))
+	}
+	return warnings, nil
 }
 
 // SaveRaw validates raw JSON and writes it as config.json (0600).

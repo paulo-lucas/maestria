@@ -29,7 +29,10 @@
         <div class="card empty empty--compact">
           <span class="empty__icon">{{icon "i-folder"}}</span>
           <p class="empty__title">No workspaces registered yet</p>
-          <p class="empty__text">Run <code>maestria init</code> inside a Maestri workspace or <code>maestria workspace add &lt;name&gt; &lt;path&gt;</code> on this machine.</p>
+          <p class="empty__text">Inside a Maestri workspace, run:</p>
+          {{cmd "maestria init"}}
+          <p class="empty__text">Or, on this machine:</p>
+          {{cmd "maestria workspace add <name> <path>"}}
         </div>
         {{end}}
       </section>
@@ -144,7 +147,7 @@
               <span class="empty__icon">{{icon .Wire.Icon}}</span>
               <p class="empty__title">{{.Wire.Heading}}</p>
               <p class="empty__text">{{.Wire.Steps}}</p>
-              {{range .Wire.Commands}}<div class="code-inline"><code>{{.}}</code><button class="btn btn--ghost btn--icon btn--sm" type="button" data-copy aria-label="Copy command" title="Copy command">{{icon "i-copy"}}</button></div>{{end}}
+              {{range .Wire.Commands}}{{cmd .}}{{end}}
             </div>
             {{else if .AgentLines}}
             <ul class="list">

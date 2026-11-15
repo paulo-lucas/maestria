@@ -109,8 +109,31 @@ func (s *Server) apiStream(w http.ResponseWriter, r *http.Request) {
 	pollTicker := time.NewTicker(pollInterval)
 	defer pollTicker.Stop()
 
-	pingTicker := time.NewTicker(20 * time.Second)
+	pingEvery := s.sseRecheckInterval
+	if pingEvery <= 0 {
+		pingEvery = 20 * time.Second
+	}
+	pingTicker := time.NewTicker(pingEvery)
 	defer pingTicker.Stop()
+
+	// The session was checked once, when the stream opened. A stream opened by a browser (it has
+	// the session cookie) is checked again on every ping, so signing out, signing out
+	// everywhere, an expired session and the kill switch end it within one interval. A relayed
+	// stream has no cookie: the connector re-checks the device itself.
+	sessionToken := ""
+	if c, err := r.Cookie(s.sessionCookie); err == nil {
+		sessionToken = c.Value
+	}
+	stillSignedIn := func() bool {
+		if sessionToken == "" {
+			return true
+		}
+		if s.Tunnel.Killed() {
+			return false
+		}
+		sess, err := s.Sessions.Validate(sessionToken)
+		return err == nil && sess != nil
+	}
 
 	for {
 		select {
@@ -134,6 +157,9 @@ func (s *Server) apiStream(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		case <-pingTicker.C:
+			if !stillSignedIn() {
+				return
+			}
 			if _, err := fmt.Fprint(w, ": ping\n\n"); err != nil {
 				return
 			}

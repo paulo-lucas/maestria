@@ -10,7 +10,7 @@
       <div class="qr"><svg viewBox="0 0 {{.QRSize}} {{.QRSize}}" role="img" aria-label="QR code for your authenticator app" shape-rendering="crispEdges"><path d="{{.QRPath}}"/></svg></div>
       <div class="field">
         <span class="field__label">Can't scan? Enter this key</span>
-        <div class="code-inline"><code>{{.Secret}}</code><button class="btn btn--ghost btn--icon btn--sm" type="button" data-copy aria-label="Copy key" title="Copy key">{{icon "i-copy"}}</button></div>
+        <div class="code-inline"><code>{{.Secret}}</code><button class="btn btn--ghost btn--sm" type="button" data-copy data-copy-nospace aria-label="Copy key" title="Copy key">{{icon "i-copy"}}<span data-copy-label>Copy</span></button></div>
         <p class="field__hint">Time-based (TOTP), 6 digits, 30 seconds.</p>
       </div>
     </div>

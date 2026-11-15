@@ -61,7 +61,7 @@ func (n *node) linkWithCLICode(br *browser) {
 	ctx, cancel := context.WithCancel(context.Background())
 	env := n.env
 	env.Ctx = ctx
-	env.Stdin = strings.NewReader(n.name + "\ny\n")
+	env.Stdin = strings.NewReader(testWord + "\n" + n.name + "\ny\n")
 	env.Stdout, env.Stderr = n.out, n.out
 	done := make(chan int, 1)
 	go func() { done <- cli.Run([]string{"connect", "--cloud", n.cloud}, env) }()
@@ -199,20 +199,20 @@ func TestConnectorRefusesWhatItShould(t *testing.T) {
 		want("route "+rt[0]+" "+rt[1], n.send(br, sign(rt[0], rt[1], "", nil)), 403, relay.ErrRouteForbidden)
 	}
 
-	// Expired approval: absolute (30 days) and idle (7 days), then re-approval fixes it.
-	clock.advance(8 * 24 * time.Hour)
+	// Expired approval: absolute (14 days) and idle (3 days), then re-approval fixes it.
+	clock.advance(4 * 24 * time.Hour)
 	want("idle", n.send(br, sign("GET", "/api/workspaces", "", nil)), 403, relay.ErrIdleExpired)
 	f.b.pair(br, dev, n)
 	if r := n.send(br, sign("GET", "/api/workspaces", "", nil)); r.StatusCode != 200 {
 		t.Fatalf("after re-approval: %d %s", r.StatusCode, r.body)
 	}
-	for i := 0; i < 5; i++ { // in use every few days: no idle expiry
-		clock.advance(5 * 24 * time.Hour)
+	for i := 0; i < 6; i++ { // in use every other day: no idle expiry
+		clock.advance(2 * 24 * time.Hour)
 		if r := n.send(br, sign("GET", "/api/workspaces", "", nil)); r.StatusCode != 200 {
-			t.Fatalf("day %d: %d %s", (i+1)*5, r.StatusCode, r.body)
+			t.Fatalf("day %d: %d %s", (i+1)*2, r.StatusCode, r.body)
 		}
 	}
-	clock.advance(6 * 24 * time.Hour)
+	clock.advance(2 * 24 * time.Hour)
 	want("absolute", n.send(br, sign("GET", "/api/workspaces", "", nil)), 403, relay.ErrApprovalExpired)
 
 	// Revoked device.
@@ -693,7 +693,7 @@ func TestCloudCannotSwapDeviceKeyAtPairing(t *testing.T) {
 		t.Fatalf("the machine shows the same code as the genuine browser: a swapped key would be approved\n%s", pending)
 	}
 	// So typing what the browser shows approves nothing.
-	if code, out := n.cli("", "devices", "approve", relay.FormatPairCode(shown)); code == 0 {
+	if code, out := n.cli(testWord+"\n", "devices", "approve", relay.FormatPairCode(shown)); code == 0 {
 		t.Fatalf("the genuine code approved a swapped key: %s", out)
 	}
 	if code, out := n.cli("", "devices", "list"); code != 0 || !strings.Contains(out, "No approved devices") {

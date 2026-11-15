@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -484,20 +485,6 @@ func TestPairingMessages(t *testing.T) {
 	if ch.Pair != "pair-msg-01" || ch.R == "" {
 		t.Fatalf("challenge: %+v", ch)
 	}
-	// A reveal with the wrong key is a mismatch and never produces a code the user could approve.
-	evil := relaytest.NewBrowser(t)
-	writeFrame(t, r.conn, relay.Frame{T: relay.TypePairReveal, Pair: "pair-msg-01", SPKI: relay.Enc(evil.SPKI), Nonce: relay.Enc(p.Nonce)})
-	for {
-		f := readFrame(t, r.conn)
-		if f.T == relay.TypePairState && f.State == relay.PairMismatch {
-			break
-		}
-	}
-	pend, _ := r.dev.Pending()
-	if len(pend) != 0 {
-		t.Fatalf("mismatched pairing is still pending: %+v", pend)
-	}
-
 	// The good path: reveal, local approval, then the cloud hears "approved".
 	p2 := r.browser.StartPairing(t)
 	writeFrame(t, r.conn, relay.Frame{T: relay.TypePairOffer, Pair: "pair-msg-02", Commit: p2.Commit, Label: "Safari"})
@@ -521,6 +508,36 @@ func TestPairingMessages(t *testing.T) {
 		if f.T == relay.TypePairState && f.Pair == "pair-msg-02" && f.State == relay.PairApproved {
 			if f.Code != "" {
 				t.Fatal("the code must never be sent to the cloud")
+			}
+			break
+		}
+	}
+
+	// A reveal with the wrong key is a mismatch and never produces a code the user could approve.
+	evil := relaytest.NewBrowser(t)
+	writeFrame(t, r.conn, relay.Frame{T: relay.TypePairReveal, Pair: "pair-msg-01", SPKI: relay.Enc(evil.SPKI), Nonce: relay.Enc(p.Nonce)})
+	for {
+		f := readFrame(t, r.conn)
+		if f.T == relay.TypePairState && f.State == relay.PairMismatch {
+			break
+		}
+	}
+	pend, _ := r.dev.Pending()
+	if len(pend) != 0 {
+		t.Fatalf("mismatched pairing is still pending: %+v", pend)
+	}
+
+	// A failed reveal pauses pairing: the next offer is refused and no challenge is sent.
+	p3 := r.browser.StartPairing(t)
+	writeFrame(t, r.conn, relay.Frame{T: relay.TypePairOffer, Pair: "pair-msg-03", Commit: p3.Commit, Label: "Safari"})
+	for {
+		f := readFrame(t, r.conn)
+		if f.T == relay.TypePairChallenge && f.Pair == "pair-msg-03" {
+			t.Fatal("an offer right after a failed reveal got a challenge")
+		}
+		if f.T == relay.TypePairState && f.Pair == "pair-msg-03" {
+			if f.State != relay.PairRejected || f.Code != "pairing_paused" {
+				t.Fatalf("paused offer: %+v", f)
 			}
 			break
 		}
@@ -632,4 +649,99 @@ func TestSocketURLRules(t *testing.T) {
 			t.Errorf("%q must be refused", bad)
 		}
 	}
+}
+
+// A hostile cloud controls the strings the CLI prints while linking; none of them may carry a
+// terminal control sequence.
+func TestLinkAPIStripsControlSequencesFromCloudStrings(t *testing.T) {
+	evil := "x\x1b]52;c;ZXZpbA==\x07\x1b[2K\ry"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/link/redeem":
+			_ = json.NewEncoder(w).Encode(relay.RedeemResponse{AccountHint: "a***@" + evil, DefaultName: evil, Token: "t"})
+		case "/api/link/start":
+			_ = json.NewEncoder(w).Encode(relay.StartResponse{Code: evil, PollToken: "p", URL: "https://x/" + evil})
+		case "/api/link/poll":
+			_ = json.NewEncoder(w).Encode(relay.PollResponse{Status: "claimed", AccountHint: evil, DefaultName: evil, Linked: &relay.Linked{Name: evil}})
+		default:
+			w.WriteHeader(http.StatusTeapot)
+			_ = json.NewEncoder(w).Encode(relay.ErrorBody{Error: evil})
+		}
+	}))
+	defer srv.Close()
+	api := &API{Cloud: srv.URL, Machine: relay.Machine{Version: "t"}, HTTP: srv.Client()}
+	ctx := context.Background()
+	bad := func(what string, vals ...string) {
+		t.Helper()
+		for _, v := range vals {
+			if strings.ContainsAny(v, "\x1b\x07\r\n") {
+				t.Errorf("%s: control characters survived: %q", what, v)
+			}
+		}
+	}
+	red, _ := api.Redeem(ctx, "ABCD-EFGH")
+	bad("redeem", red.AccountHint, red.DefaultName)
+	st, _ := api.Start(ctx)
+	bad("start", st.Code, st.URL)
+	p, _ := api.Poll(ctx, "p", false, "")
+	bad("poll", p.AccountHint, p.DefaultName, p.Linked.Name)
+	_, err := api.Confirm(ctx, "c", "t", "n")
+	if err == nil {
+		t.Fatal("expected the teapot refusal")
+	}
+	bad("error", err.Error())
+}
+
+// The close handshake must survive replies being written at the very moment of shutdown: a write
+// whose context is cancelled makes the websocket library tear the connection down at once, which
+// the peer sees as an abnormal closure (StatusCode -1) instead of a normal one.
+func TestCleanShutdownWhileRepliesAreBeingWritten(t *testing.T) {
+	for i := 0; i < 25; i++ {
+		r := newRig(t, api())
+		stop := make(chan struct{})
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() { // the cloud keeps asking for pairings, so the connector keeps answering
+			defer wg.Done()
+			for n := 0; ; n++ {
+				select {
+				case <-stop:
+					return
+				default:
+				}
+				p := r.browser.StartPairing(t)
+				_ = writeFrameE(r.conn, relay.Frame{T: relay.TypePairOffer, Pair: "stress-" + strings.Repeat("a", 4) + strconv.Itoa(i) + "-" + strconv.Itoa(n), Commit: p.Commit, Label: "x"})
+			}
+		}()
+		closed := make(chan websocket.StatusCode, 1)
+		go func() {
+			defer wg.Done()
+			for {
+				if _, _, err := r.conn.Read(context.Background()); err != nil {
+					closed <- websocket.CloseStatus(err)
+					return
+				}
+			}
+		}()
+		time.Sleep(time.Duration(i%5) * time.Millisecond)
+		r.cancel()
+		select {
+		case <-r.done:
+		case <-time.After(5 * time.Second):
+			t.Fatal("did not stop")
+		}
+		close(stop)
+		if got := <-closed; got != websocket.StatusNormalClosure {
+			t.Fatalf("round %d: the connector must close with a normal closure, got %v", i, got)
+		}
+		wg.Wait()
+	}
+}
+
+func writeFrameE(c *websocket.Conn, f relay.Frame) error {
+	b, _ := json.Marshal(f)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	return c.Write(ctx, websocket.MessageText, b)
 }

@@ -694,7 +694,16 @@ func (m *Manager) Answer(ctx context.Context, source, wsID, terminalID, promptHa
 		case promptHash != "" && promptHash != PromptHash(t.Prompt):
 			err = ErrPromptChanged
 		case approve:
-			err = owner.Approve(ctx, terminalID)
+			// The cached feed can be up to a snapshot old, and Wire's approve answers whatever is
+			// pending at that moment. Read the prompt afresh right before approving, and only
+			// approve if it is still the one the human saw.
+			want := promptHash
+			if want == "" {
+				want = PromptHash(t.Prompt)
+			}
+			if err = m.recheckPrompt(ctx, wsID, terminalID, want); err == nil {
+				err = owner.Approve(ctx, terminalID)
+			}
 		default:
 			err = owner.Reject(ctx, terminalID)
 		}
@@ -702,6 +711,40 @@ func (m *Manager) Answer(ctx context.Context, source, wsID, terminalID, promptHa
 	m.audit("wire."+verb, source, detail, err)
 	return err
 }
+
+// recheckPrompt reads the feed of the workspace once more (guest) and confirms the terminal still
+// waits on the prompt with hash want. It fails closed: when the feed cannot be read, nothing is
+// approved.
+func (m *Manager) recheckPrompt(ctx context.Context, wsID, terminalID, want string) error {
+	m.mu.RLock()
+	guest := m.guest
+	var wireID string
+	if w, ok := m.workers[wsID]; ok {
+		wireID = w.wireID
+	}
+	m.mu.RUnlock()
+	if guest == nil || wireID == "" {
+		return ErrPromptUnverified
+	}
+	rctx, cancel := context.WithTimeout(ctx, recheckTimeout)
+	defer cancel()
+	snap, err := guest.Feed(rctx, wireID)
+	if err != nil {
+		m.opts.Logf("wire: re-checking a prompt before approving it failed: %v", err)
+		return fmt.Errorf("%w", ErrPromptUnverified)
+	}
+	t, found := snap.Terminal(terminalID)
+	switch {
+	case !found:
+		return ErrPromptChanged
+	case !t.Pending || PromptHash(t.Prompt) != want:
+		return ErrPromptChanged
+	}
+	return nil
+}
+
+// recheckTimeout bounds the extra read before an approval.
+const recheckTimeout = 5 * time.Second
 
 // Interrupt sends Escape to a terminal.
 func (m *Manager) Interrupt(ctx context.Context, source, wsID, terminalID string) error {

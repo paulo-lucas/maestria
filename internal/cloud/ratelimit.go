@@ -22,6 +22,12 @@ func newRateLimiter(now func() time.Time) *rateLimiter {
 
 // Allow records one hit for key and reports whether it is within max hits per window.
 func (r *rateLimiter) Allow(key string, max int, window time.Duration) bool {
+	ok, _ := r.Take(key, max, window)
+	return ok
+}
+
+// Take is Allow that also says, when the hit is refused, how long until one is allowed again.
+func (r *rateLimiter) Take(key string, max int, window time.Duration) (bool, time.Duration) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	t := r.now()
@@ -33,13 +39,18 @@ func (r *rateLimiter) Allow(key string, max int, window time.Duration) bool {
 	}
 	if len(kept) >= max {
 		r.hits[key] = kept
-		return false
+		// The hit that frees a place is the one `max` places from the newest.
+		retry := kept[len(kept)-max].Add(window).Sub(t)
+		if retry < time.Second {
+			retry = time.Second
+		}
+		return false, retry
 	}
 	if len(r.hits) > 50000 {
 		r.hits = map[string][]time.Time{}
 	}
 	r.hits[key] = append(kept, t)
-	return true
+	return true, 0
 }
 
 // Prune drops idle keys.

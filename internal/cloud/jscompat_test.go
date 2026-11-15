@@ -33,7 +33,7 @@ const K = require(process.argv[2]);
   console.log(JSON.stringify({
     spki: K.toB64u(spki), id: rec.id, headers: hdr,
     commit: await K.pairCommit(spki, nonce), code: await K.pairCode(spki, nonce, r),
-    nonce: K.toB64u(nonce), r: K.toB64u(r), formatted: K.formatCode('471286'),
+    nonce: K.toB64u(nonce), r: K.toB64u(r), formatted: K.formatCode('47128659'), fingerprint: K.fingerprint(rec.id),
     bodyHash: await K.bodyHash(body),
   }));
 })();
@@ -56,8 +56,8 @@ const K = require(process.argv[2]);
 		t.Fatalf("node: %v\n%s", err, out)
 	}
 	var got struct {
-		SPKI, ID, Commit, Code, Nonce, R, Formatted, BodyHash string
-		Headers                                               map[string]string
+		SPKI, ID, Commit, Code, Nonce, R, Formatted, Fingerprint, BodyHash string
+		Headers                                                            map[string]string
 	}
 	if err := json.Unmarshal(out, &got); err != nil {
 		t.Fatalf("%v\n%s", err, out)
@@ -91,7 +91,13 @@ const K = require(process.argv[2]);
 	if relay.PairCode(spki, nonce, r) != got.Code {
 		t.Fatalf("pair code: go %s, js %s", relay.PairCode(spki, nonce, r), got.Code)
 	}
-	if relay.FormatPairCode("471286") != got.Formatted {
-		t.Fatalf("format: %q vs %q", relay.FormatPairCode("471286"), got.Formatted)
+	if len(got.Code) != relay.PairCodeDigits {
+		t.Fatalf("code %q is not %d digits", got.Code, relay.PairCodeDigits)
+	}
+	if relay.FormatPairCode("47128659") != got.Formatted {
+		t.Fatalf("format: %q vs %q", relay.FormatPairCode("47128659"), got.Formatted)
+	}
+	if relay.Fingerprint(got.ID) != got.Fingerprint {
+		t.Fatalf("fingerprint: go %q, js %q", relay.Fingerprint(got.ID), got.Fingerprint)
 	}
 }

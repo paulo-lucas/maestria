@@ -936,9 +936,14 @@ a.agent-line:hover { background: var(--surface-2); }
   letter-spacing: 0.12em;
   white-space: nowrap;
 }
+/* Command block: a command the person runs in a terminal, with a Copy button. The whole line is
+   what the button copies, so it never has a placeholder the person must edit unless it is shown
+   as <angle brackets>. Long commands wrap (anywhere, so a URL or a code never needs a sideways
+   scroll on a phone). One component for every page; the click is handled by a script file
+   (data-copy), never inline. */
 .code-inline {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--space-2);
   padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
   border: 1px solid var(--line);
@@ -947,8 +952,26 @@ a.agent-line:hover { background: var(--surface-2); }
   font-family: var(--font-mono);
   font-size: var(--fs-sm);
 }
-.code-inline code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; font-size: inherit; }
+.code-inline code {
+  flex: 1;
+  min-width: 0;
+  align-self: center;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: inherit;
+  user-select: all;
+}
 .code-inline .btn { flex: none; }
+/* Each word of the command is kept whole (a line never breaks inside "--link"); only a word
+   longer than the line, like a URL, breaks anywhere. The text of the block is still the plain
+   command, which is what Copy takes. */
+.code-inline .cmd-t { display: inline-block; max-width: 100%; overflow-wrap: anywhere; }
+/* In prose, between a sentence and what follows. */
+.code-inline { margin-block: var(--space-2); }
+.code-inline:first-child { margin-top: 0; }
+.code-inline:last-child { margin-bottom: 0; }
+.code-inline .btn[data-copy] { gap: var(--space-1); }
+.code-inline .btn[data-copy].is-copied { color: light-dark(oklch(0.42 0.13 150), oklch(0.82 0.13 150)); }
 
 .recovery-codes {
   display: grid;

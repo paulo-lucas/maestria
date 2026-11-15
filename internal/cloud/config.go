@@ -60,6 +60,10 @@ type Config struct {
 
 	Login Limits `json:"login"`
 	SMTP  SMTP   `json:"smtp"`
+	// MailDailyLimit is the most emails the server sends in any 24 hours (verification, sign-up
+	// notices and password resets together). It protects the SMTP provider's quota and stops the
+	// server from being used to bomb inboxes. MAESTRIA_CLOUD_MAIL_DAILY_LIMIT overrides it.
+	MailDailyLimit int `json:"mailDailyLimit"`
 	// DevEmail writes emails instead of sending them: "stdout" or "file:<path>".
 	DevEmail string `json:"devEmail"`
 }
@@ -73,6 +77,7 @@ func Defaults() *Config {
 		SessionAbsoluteHours: 24 * 7,
 		Login:                Limits{MaxFailuresPerIP: 5, MaxFailuresPerAccount: 8, MaxFailuresGlobal: 100, WindowSeconds: 900, LockoutSeconds: 900},
 		SMTP:                 SMTP{Port: 587},
+		MailDailyLimit:       200,
 	}
 }
 
@@ -134,6 +139,13 @@ func LoadConfig(dir string, getenv func(string) string) (*Config, error) {
 			}
 			cfg.SMTP.Port = n
 		}
+		if v := env("MAIL_DAILY_LIMIT"); v != "" {
+			n, err := strconv.Atoi(v)
+			if err != nil {
+				return nil, errors.New("MAESTRIA_CLOUD_MAIL_DAILY_LIMIT must be a number")
+			}
+			cfg.MailDailyLimit = n
+		}
 		if v := env("SMTP_TLS"); v != "" {
 			cfg.SMTP.TLS = v == "1" || strings.EqualFold(v, "true")
 		}
@@ -156,6 +168,9 @@ func (c *Config) Validate() error {
 	}
 	if c.SessionIdleMinutes < 1 || c.SessionAbsoluteHours < 1 {
 		return errors.New("session limits must be positive")
+	}
+	if c.MailDailyLimit < 1 || c.MailDailyLimit > 1_000_000 {
+		return errors.New("mailDailyLimit (MAESTRIA_CLOUD_MAIL_DAILY_LIMIT) must be between 1 and 1000000")
 	}
 	l := c.Login
 	if l.MaxFailuresPerIP < 1 || l.MaxFailuresPerAccount < 1 || l.MaxFailuresGlobal < 1 || l.WindowSeconds < 1 || l.LockoutSeconds < 1 {

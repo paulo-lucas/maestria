@@ -69,7 +69,8 @@
                     <button class="btn btn--sm" type="button" data-action="agent-answer" data-answer="reject" data-prompt-hash="{{.PromptHash}}">{{icon "i-x"}}Reject</button>
                   </div>
                   {{else}}
-                  <p class="subtle">Answering from here is off: this connector only has read access. Run <code>maestria wire pair</code> to allow it.</p>
+                  <p class="subtle">Answering from here is off: this connector only has read access. To allow it, run:</p>
+                  {{cmd "maestria wire pair"}}
                   {{end}}
                   <p class="field__error" hidden data-agent-error></p>
                 </div>

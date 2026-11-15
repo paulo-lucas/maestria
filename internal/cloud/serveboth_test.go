@@ -258,7 +258,7 @@ func TestConnectWhileServeRunsExplainsTheRestart(t *testing.T) {
 	r := br.api("POST", "/api/link/codes", nil)
 	var c struct{ Code string }
 	_ = json.Unmarshal([]byte(r.body), &c)
-	code, out := n.cli("Workstation\ny\n", "connect", "--link", c.Code, "--cloud", b.ts.URL)
+	code, out := n.cli(testWord+"\nWorkstation\ny\n", "connect", "--link", c.Code, "--cloud", b.ts.URL)
 	if code != 0 || !strings.Contains(out, "Linked as") || !strings.Contains(out, "Restart it") {
 		t.Fatalf("link next to a running serve: %d\n%s", code, out)
 	}

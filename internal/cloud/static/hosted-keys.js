@@ -13,7 +13,7 @@
   var enc = new TextEncoder();
   var SIGNING_VERSION = 'maestria-relay-v1';
   var COMMIT_TAG = 'maestria-pair-commit-v1';
-  var SAS_TAG = 'maestria-pair-sas-v1';
+  var SAS_TAG = 'maestria-pair-sas-v2';
   var DB_NAME = 'maestria-keys';
   var STORE = 'keys';
   var KEY_ID = 'device';
@@ -83,12 +83,20 @@
 
   async function pairCode(spki, nonce, r) {
     var d = await sha256(concat(enc.encode(SAS_TAG), spki, nonce, r));
-    var n = ((d[0] << 24) | (d[1] << 16) | (d[2] << 8) | d[3]) >>> 0;
-    return String(n % 1000000).padStart(6, '0');
+    // The first six bytes as one 48-bit number: exact in a JavaScript number, no bit operators.
+    var n = 0;
+    for (var i = 0; i < 6; i++) n = n * 256 + d[i];
+    return String(n % 100000000).padStart(8, '0');
   }
 
   function formatCode(code) {
-    return code.length === 6 ? code.slice(0, 2) + ' · ' + code.slice(2, 4) + ' · ' + code.slice(4, 6) : code;
+    return code.length === 8 ? code.slice(0, 4) + ' · ' + code.slice(4, 8) : code;
+  }
+
+  // The first 16 hex characters of a device id in groups of four, as the machine shows them.
+  function fingerprint(deviceId) {
+    var d = deviceId.slice(0, 16).toLowerCase();
+    return d.slice(0, 4) + ' ' + d.slice(4, 8) + ' ' + d.slice(8, 12) + ' ' + d.slice(12, 16);
   }
 
   // ---- IndexedDB ----
@@ -162,7 +170,7 @@
 
   var api = {
     toB64u: toB64u, fromB64u: fromB64u, toHex: toHex, bodyHash: bodyHash, canonical: canonical, deviceIdFor: deviceIdFor,
-    pairCommit: pairCommit, pairCode: pairCode, formatCode: formatCode, randomBytes: randomBytes,
+    pairCommit: pairCommit, pairCode: pairCode, formatCode: formatCode, fingerprint: fingerprint, randomBytes: randomBytes,
     load: load, create: create, ensure: ensure, forget: forget, sign: sign
   };
   root.MaestriaKeys = api;

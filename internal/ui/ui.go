@@ -92,6 +92,9 @@ func New() (*UI, error) {
 			}
 			return template.HTML(`<svg class="` + template.HTMLEscapeString(cls) + `" aria-hidden="true"><use href="#` + template.HTMLEscapeString(id) + `"/></svg>`)
 		},
+		// cmd renders a command block: the line to run, with a Copy button (see copy.js). Every
+		// page that shows a command uses it, so the markup is the same everywhere.
+		"cmd":    CommandBlock,
 		"sprite": func() template.HTML { return u.icons },
 		"plural": func(n int, one, many string) string {
 			if n == 1 {
@@ -183,6 +186,19 @@ func (u *UI) AssetURL(name string) string {
 		panic("ui: unknown asset " + name)
 	}
 	return "/static/" + name + "?v=" + a.hash
+}
+
+// CommandBlock is the markup of a command the person runs in a terminal: the whole line and a
+// Copy button that copies it. The click is handled by static/copy.js (no inline script). The
+// browser-side builder MaestriaCmd.html in copy.js produces the same markup.
+func CommandBlock(command string) template.HTML {
+	words := strings.Split(command, " ")
+	for i, w := range words {
+		words[i] = `<span class="cmd-t">` + template.HTMLEscapeString(w) + `</span>`
+	}
+	return template.HTML(`<div class="code-inline"><code>` + strings.Join(words, " ") + `</code>` +
+		`<button class="btn btn--ghost btn--sm" type="button" data-copy aria-label="Copy command" title="Copy command">` +
+		`<svg class="icon" aria-hidden="true"><use href="#i-copy"/></svg><span data-copy-label>Copy</span></button></div>`)
 }
 
 // Render executes a page template into w (buffered, so a template error never sends half a page).

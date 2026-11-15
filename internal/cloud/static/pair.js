@@ -42,7 +42,7 @@
   }
 
   var label = browserLabel();
-  var pairing = null, expires = 0, revealed = {}, codes = {}, nonce = null, rec = null, finished = false;
+  var pairing = null, expires = 0, revealed = {}, codes = {}, nonce = null, rec = null, finished = false, lastHTML = '';
 
   function row(m) {
     var meta, right = '';
@@ -56,7 +56,7 @@
         meta = '<span class="status" data-status="ok">Approved</span>'; right = '';
         break;
       case 'rejected':
-        meta = m.reason === 'kill_switch' ? 'The kill switch is on for this machine.' : m.reason === 'too_many_pending' ? 'This machine has too many pairings waiting. Approve or reject one first.' : 'Rejected on the machine.';
+        meta = m.reason === 'kill_switch' ? 'The kill switch is on for this machine.' : m.reason === 'too_many_pending' ? 'This machine has too many pairings waiting. Approve or reject one first.' : m.reason === 'pairing_paused' ? 'This machine paused pairing after too many tries. Wait a while, then start again.' : 'Rejected on the machine.';
         right = '';
         break;
       case 'expired': meta = 'The code expired. Start again.'; break;
@@ -79,17 +79,31 @@
     } else if (pending.length > 1) {
       big = '<div class="field"><span class="field__label">Each machine shows its own code. Check it matches the one next to its name.</span></div>';
     }
+    // The command to run on each machine, with that machine's own code inside it, so one click
+    // copies the whole line. The machine still looks the pairing up by this code and shows the
+    // key fingerprint and asks for a typed word, so pasting it does not skip any check: a pairing
+    // whose key was swapped on the way has a different code and is not found.
+    var commands = pending.filter(function (m) { return codes[m.connectorId]; }).map(function (m) {
+      var digits = codes[m.connectorId].replace(/\D/g, '');
+      return '<div class="field"><span class="field__label">' + (pending.length > 1 ? 'On ' + esc(m.name) + ', in a terminal you type in' : 'On the machine, in a terminal you type in') + '</span>' +
+        window.MaestriaCmd.html('maestria devices approve ' + digits) + '</div>';
+    }).join('');
     var html = big +
-      '<dl class="kv"><dt>This device</dt><dd>' + esc(label) + '</dd><dt>Approve with</dt><dd>on the machine: <code>maestria devices pending</code>, then <code>maestria devices approve</code> with the code shown here</dd></dl>' +
+      '<dl class="kv"><dt>This device</dt><dd>' + esc(label) + '</dd><dt>Device key</dt><dd><code>' + esc(K.fingerprint(rec.id)) + '</code> (the machine shows the same fingerprint when you approve)</dd></dl>' +
+      commands +
       '<ul class="card list">' + view.machines.map(row).join('') + '</ul>';
     if (!online.length) {
-      html += '<div class="banner" data-status="info">' + icon('i-offline') + '<div class="banner__body"><p class="banner__title">No machine is online</p><p class="banner__text">Start the connector on a machine, then come back. <code>maestria connect</code></p></div></div>';
+      html += '<div class="banner" data-status="info">' + icon('i-offline') + '<div class="banner__body"><p class="banner__title">No machine is online</p><p class="banner__text">Start the connector on a machine, then come back:</p>' + window.MaestriaCmd.html('maestria connect') + '</div></div>';
     }
     if (approved.length && !pending.length) {
       html += '<a class="btn btn--primary btn--block" href="/">Continue to Maestria</a>';
     }
-    html += '<p class="auth-card__alt">' + (left > 0 ? 'The code expires in <span class="num">' + fmt(left) + '</span>. ' : 'The code expired. <a href="/pair?new=0">Start again</a>. ') + '<a href="/">Cancel</a></p>';
-    root.innerHTML = html;
+    html += '<p class="auth-card__alt">' + (left > 0 ? 'The code expires in <span class="num" data-left></span>. ' : 'The code expired. <a href="/pair?new=0">Start again</a>. ') + '<a href="/">Cancel</a></p>';
+    // The page is drawn again on every poll. Only touch it when something but the countdown
+    // changed, so a Copy button keeps its "Copied" feedback and a selection is not lost.
+    if (html !== lastHTML) { root.innerHTML = html; lastHTML = html; }
+    var leftEl = root.querySelector('[data-left]');
+    if (leftEl) leftEl.textContent = fmt(left);
   }
 
   async function start() {

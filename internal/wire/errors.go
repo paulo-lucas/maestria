@@ -23,6 +23,9 @@ var (
 	ErrUnknownTerminal = errors.New("wire: terminal is not in this workspace")
 	// ErrPromptChanged means the Y/n the human saw is no longer the one pending.
 	ErrPromptChanged = errors.New("wire: the prompt changed")
+	// ErrPromptUnverified means the prompt could not be read afresh from Maestri right before an
+	// approval, so nothing was approved. Try again.
+	ErrPromptUnverified = errors.New("wire: could not re-check the prompt just before approving it")
 	// ErrAmbiguous means a send may or may not have been delivered. It is never retried.
 	ErrAmbiguous = errors.New("wire: delivery unconfirmed")
 )
