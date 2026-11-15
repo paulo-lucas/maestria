@@ -216,7 +216,7 @@ var migrations = []string{
 	`
 	CREATE TABLE IF NOT EXISTS usage_samples (
 		provider  TEXT NOT NULL,
-		account   TEXT NOT NULL,
+		account   TEXT NOT NULL,          -- a hash of the provider account key, never the key itself
 		window_id TEXT NOT NULL,
 		used_pct  REAL NOT NULL,
 		reset_at  INTEGER,                -- epoch ms, when known

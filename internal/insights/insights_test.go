@@ -2,6 +2,7 @@ package insights
 
 import (
 	"database/sql"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -118,34 +119,44 @@ func TestDelivery(t *testing.T) {
 	}
 }
 
-func TestQualityAveragesFloorsAndApprovals(t *testing.T) {
+func TestQualityRatesFloorsAndOnlyShowsApprovals(t *testing.T) {
 	db := openDB(t)
 	day := now.Add(-24 * time.Hour)
 	for _, n := range []string{"a", "b", "c"} {
 		addFloor(t, db, n, "landed", day, day.Add(time.Hour))
 	}
 	addFloor(t, db, "d", "cancelled", day, day.Add(time.Hour)) // 75% landed: level 4
-	for i := range 9 {
-		addTask(t, db, "approve", "Yes", day.Add(time.Duration(i)*time.Minute), time.Minute)
+	// Half the approvals answered No: shown, never rated (rejecting a risky proposal is good practice).
+	for _, r := range []string{"Yes", "No", "Yes", "No"} {
+		addTask(t, db, "approve", r, day, time.Minute)
 	}
-	addTask(t, db, "approve", "No", day, time.Minute) // 10% rejected: level 5
 
 	rep, err := Compute(db, now)
 	if err != nil {
 		t.Fatal(err)
 	}
 	a := area(t, rep, AreaQuality)
-	if a.Level != 5 { // round((4+5)/2)
-		t.Fatalf("quality = %+v, want level 5", a)
+	if a.Level != 4 {
+		t.Fatalf("quality = %+v, want level 4 from floors alone", a)
 	}
-	if !strings.Contains(a.Value, "3 of 4 floors landed") || !strings.Contains(a.Value, "1 of 10 approvals rejected") {
+	if a.Value != "3 of 4 floors landed · 2 of 4 approvals answered No (not rated)" {
 		t.Errorf("quality value = %q", a.Value)
 	}
-	if a.Next != "Higher at ≥ 80% landed · ≤ 5% rejected" {
-		t.Errorf("quality next = %q", a.Next)
+	if a.Next != "Level 5 at ≥ 80%" || !strings.Contains(a.Tip, "Cancelled") || strings.Contains(a.Tip, "approv") {
+		t.Errorf("quality next/tip = %q / %q", a.Next, a.Tip)
 	}
-	if !strings.Contains(a.Tip, "Cancelled") {
-		t.Errorf("tip should target the weaker part (cancelled floors): %q", a.Tip)
+
+	// Approvals alone never rate the area.
+	db2 := openDB(t)
+	for range 5 {
+		addTask(t, db2, "approve", "No", day, time.Minute)
+	}
+	rep2, err := Compute(db2, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a := area(t, rep2, AreaQuality); a.Level != 0 || a.Missing == "" {
+		t.Errorf("quality from approvals only = %+v, want not rated", a)
 	}
 }
 
@@ -212,7 +223,9 @@ func TestConsumed(t *testing.T) {
 	}{
 		{"growth", point{used: 10, at: 0}, point{used: 13, at: min5}, 3},
 		{"flat", point{used: 10, at: 0}, point{used: 10, at: min5}, 0},
-		{"reset by time", point{used: 80, resetAt: 1000, at: 0}, point{used: 85, resetAt: 1000 + 5*3600*1000, at: min5}, 85},
+		{"reset by time", point{used: 80, resetAt: 1000, at: 0}, point{used: 3, resetAt: 1000 + 5*3600*1000, at: min5}, 3},
+		{"jittery reset time is not a reset", point{used: 80, resetAt: 1000, at: 0}, point{used: 85, resetAt: 1000 + 5*3600*1000, at: min5}, 5},
+		{"small dip alone is noise", point{used: 80, at: 0}, point{used: 79.5, at: min5}, 0},
 		{"reset by drop", point{used: 80, at: 0}, point{used: 4, at: min5}, 4},
 		{"gap", point{used: 10, at: 0}, point{used: 60, at: maxGap.Milliseconds() + 1}, 0},
 	} {
@@ -289,5 +302,54 @@ func TestRecordUsage(t *testing.T) {
 	}
 	if err := RecordUsage(db, usage.Snapshot{}, now.Add(time.Hour)); err != nil || count() != 4 {
 		t.Fatalf("an unavailable snapshot must record nothing (err %v)", err)
+	}
+
+	// The account key (it can come from an email address) is never stored, only a hash of it.
+	var acct string
+	if err := db.QueryRow(`SELECT DISTINCT account FROM usage_samples`).Scan(&acct); err != nil || acct == "claude:a" || len(acct) != 16 {
+		t.Fatalf("stored account = %q (err %v), want a 16-character hash", acct, err)
+	}
+}
+
+// After the clock jumps back, a sample dated in the future must not silence its window, and it
+// must be pruned.
+func TestRecordUsageIgnoresAndPrunesFutureSamples(t *testing.T) {
+	db := openDB(t)
+	snap := usage.Snapshot{Available: true, Accounts: []usage.AccountGroup{
+		{Key: "claude:a", Provider: "claude", Windows: []usage.Window{{ID: "session", UsedPercent: 42}}},
+	}}
+	if _, err := db.Exec(`INSERT INTO usage_samples (provider, account, window_id, used_pct, at) VALUES ('claude', ?, 'session', 1, ?)`,
+		accountHash("claude:a"), ms(now.Add(2*time.Hour))); err != nil {
+		t.Fatal(err)
+	}
+	if err := RecordUsage(db, snap, now); err != nil {
+		t.Fatal(err)
+	}
+	var future, current int
+	if err := db.QueryRow(`SELECT COALESCE(SUM(at > ?), 0), COALESCE(SUM(at = ?), 0) FROM usage_samples`, ms(now), ms(now)).Scan(&future, &current); err != nil {
+		t.Fatal(err)
+	}
+	if future != 0 || current != 1 {
+		t.Fatalf("future samples = %d, samples now = %d; want 0 and 1", future, current)
+	}
+}
+
+func TestRecordUsageIsBounded(t *testing.T) {
+	db := openDB(t)
+	var snap usage.Snapshot
+	snap.Available = true
+	for i := range maxAccounts + 8 {
+		a := usage.AccountGroup{Key: fmt.Sprintf("p:%d", i), Provider: "p"}
+		for j := range maxWindowsPerAccount + 4 {
+			a.Windows = append(a.Windows, usage.Window{ID: fmt.Sprintf("w%d", j), UsedPercent: 1})
+		}
+		snap.Accounts = append(snap.Accounts, a)
+	}
+	if err := RecordUsage(db, snap, now); err != nil {
+		t.Fatal(err)
+	}
+	var n int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM usage_samples`).Scan(&n); err != nil || n != maxAccounts*maxWindowsPerAccount {
+		t.Fatalf("samples = %d (err %v), want at most %d", n, err, maxAccounts*maxWindowsPerAccount)
 	}
 }

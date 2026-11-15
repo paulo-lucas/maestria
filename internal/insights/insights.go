@@ -8,7 +8,9 @@
 package insights
 
 import (
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"math"
 	"sort"
@@ -33,8 +35,12 @@ const (
 	maxGap = 20 * time.Minute
 
 	minFloors  = 3   // landed (delivery) or ended (quality) floors needed for a level
-	minAnswers = 3   // answered tasks or approvals needed for a level
+	minAnswers = 3   // answered tasks needed for a level
 	minSpend   = 5.0 // percentage points of usage needed for a level
+
+	// The usage file is outside Maestria's control: bound what one sample may write.
+	maxAccounts          = 32
+	maxWindowsPerAccount = 16
 )
 
 // Area ids, in display order.
@@ -93,8 +99,8 @@ func (s scale) level(v float64) int {
 	return 1
 }
 
-// target is the threshold of the level above lvl ("≤ 8 h"), "" at the top.
-func (s scale) target(lvl int) string {
+// next says what the level above lvl needs, "" at the top.
+func (s scale) next(lvl int) string {
 	if lvl >= MaxLevel {
 		return ""
 	}
@@ -102,21 +108,12 @@ func (s scale) target(lvl int) string {
 	if s.lower {
 		op = "≤"
 	}
-	return op + " " + s.unit(s.limits[MaxLevel-1-lvl])
-}
-
-// next says what the level above lvl needs, "" at the top.
-func (s scale) next(lvl int) string {
-	if lvl >= MaxLevel {
-		return ""
-	}
-	return fmt.Sprintf("Level %d at %s", lvl+1, s.target(lvl))
+	return fmt.Sprintf("Level %d at %s %s", lvl+1, op, s.unit(s.limits[MaxLevel-1-lvl]))
 }
 
 var (
 	leadScale     = scale{limits: [6]float64{4, 8, 24, 48, 96, 168}, lower: true, unit: hoursText}
 	landedScale   = scale{limits: [6]float64{95, 90, 80, 70, 60, 50}, unit: pctText}
-	rejectScale   = scale{limits: [6]float64{2, 5, 10, 15, 25, 40}, lower: true, unit: pctText}
 	spendScale    = scale{limits: [6]float64{90, 80, 70, 60, 45, 30}, unit: pctText}
 	responseScale = scale{limits: [6]float64{5, 15, 30, 60, 180, 480}, lower: true, unit: minutesText}
 )
@@ -139,7 +136,7 @@ func Compute(db *sql.DB, now time.Time) (Report, error) {
 	if err != nil {
 		return rep, err
 	}
-	spend, err := spendArea(db, ivs, from)
+	spend, err := spendArea(db, ivs, from, to)
 	if err != nil {
 		return rep, err
 	}
@@ -222,8 +219,9 @@ func deliveryArea(ivs []interval, from int64) (Area, error) {
 	return a, nil
 }
 
-// qualityArea: floors that landed rather than being cancelled, and the Maestro's approvals that
-// were accepted. Each part is rated on its own scale and the area is their rounded mean.
+// qualityArea: floors that landed rather than being cancelled. Approvals answered No are shown
+// for context but not rated: rejecting a risky proposal is good practice, and rating it would
+// reward approving everything.
 func qualityArea(db *sql.DB, ivs []interval, from int64) (Area, error) {
 	a := Area{ID: AreaQuality, Title: "Work that holds"}
 	landed, ended := 0, 0
@@ -244,53 +242,18 @@ func qualityArea(db *sql.DB, ivs []interval, from int64) (Area, error) {
 		return a, err
 	}
 
-	var parts []string
-	var levels []int
-	var nexts []string
-	tip := ""
-	low := MaxLevel + 1
-	if ended >= minFloors {
-		share := 100 * float64(landed) / float64(ended)
-		l := landedScale.level(share)
-		levels = append(levels, l)
-		parts = append(parts, fmt.Sprintf("%d of %d floors landed", landed, ended))
-		if n := landedScale.target(l); n != "" {
-			nexts = append(nexts, n+" landed")
-		}
-		if l < low {
-			low = l
-			tip = "Cancelled floors are usage that shipped nothing. Agree on the brief and when it is done before a floor starts."
-		}
-	}
-	if yes+no >= minAnswers {
-		share := 100 * float64(no) / float64(yes+no)
-		l := rejectScale.level(share)
-		levels = append(levels, l)
-		parts = append(parts, fmt.Sprintf("%d of %d approvals rejected", no, yes+no))
-		if n := rejectScale.target(l); n != "" {
-			nexts = append(nexts, n+" rejected")
-		}
-		if l < low {
-			low = l
-			tip = "A rejected approval is work the Maestro proposed that you did not want. Put the constraints in the floor brief up front."
-		}
-	}
-	if len(levels) == 0 {
-		a.Missing = fmt.Sprintf("Needs %d ended floors or %d answered approvals in the last %d days (has %d and %d).", minFloors, minAnswers, Days, ended, yes+no)
+	if ended < minFloors {
+		a.Missing = fmt.Sprintf("Needs %d ended floors in the last %d days (has %d).", minFloors, Days, ended)
 		return a, nil
 	}
-	sum := 0
-	for _, l := range levels {
-		sum += l
+	a.Level = landedScale.level(100 * float64(landed) / float64(ended))
+	a.Value = fmt.Sprintf("%d of %d floors landed", landed, ended)
+	if yes+no > 0 {
+		a.Value += fmt.Sprintf(" · %d of %d approvals answered No (not rated)", no, yes+no)
 	}
-	a.Level = int(math.Round(float64(sum) / float64(len(levels))))
-	a.Value = strings.Join(parts, " · ")
-	// Each part has its own scale, so name the targets rather than a level number.
-	if len(nexts) > 0 {
-		a.Next = "Higher at " + strings.Join(nexts, " · ")
-	}
+	a.Next = landedScale.next(a.Level)
 	if a.Level < MaxLevel {
-		a.Tip = tip
+		a.Tip = "Cancelled floors are usage that shipped nothing. Agreeing on the brief, and on when it is done, before a floor starts helps it land."
 	}
 	return a, nil
 }
@@ -298,9 +261,9 @@ func qualityArea(db *sql.DB, ivs []interval, from int64) (Area, error) {
 // spendArea: the share of usage spent while a floor that later landed was being worked on.
 // Usage while only unfinished or ongoing floors run is still undecided and left out; usage on
 // cancelled floors or with no floor at all is overhead.
-func spendArea(db *sql.DB, ivs []interval, from int64) (Area, error) {
+func spendArea(db *sql.DB, ivs []interval, from, to int64) (Area, error) {
 	a := Area{ID: AreaSpend, Title: "Usage that ships"}
-	series, err := loadSeries(db, from)
+	series, err := loadSeries(db, from, to)
 	if err != nil {
 		return a, err
 	}
@@ -437,11 +400,11 @@ type series struct {
 
 // loadSeries returns one window per provider account: the session window when there is one
 // (it moves in finer steps), otherwise the first by name.
-func loadSeries(db *sql.DB, from int64) ([]series, error) {
+func loadSeries(db *sql.DB, from, to int64) ([]series, error) {
 	rows, err := db.Query(`
 		SELECT provider, account, window_id, used_pct, COALESCE(reset_at, 0), at FROM usage_samples
-		WHERE at >= ? ORDER BY provider, account, window_id, at
-	`, from)
+		WHERE at >= ? AND at <= ? ORDER BY provider, account, window_id, at
+	`, from, to)
 	if err != nil {
 		return nil, err
 	}
@@ -480,8 +443,10 @@ func consumed(prev, cur point) float64 {
 	if cur.at-prev.at > maxGap.Milliseconds() || cur.at <= prev.at {
 		return 0
 	}
-	// The window reset in between: what it shows now was all used since the reset.
-	if (prev.resetAt != 0 && cur.resetAt > prev.resetAt+time.Minute.Milliseconds()) || cur.used < prev.used-1 {
+	// The window reset in between: what it shows now was all used since the reset. A reset always
+	// lowers the percentage, so a reset time that only moved (a jittery provider) is not one.
+	resetMoved := prev.resetAt != 0 && cur.resetAt > prev.resetAt+time.Minute.Milliseconds()
+	if cur.used < prev.used && (resetMoved || cur.used < prev.used-1) {
 		return cur.used
 	}
 	return max(0, cur.used-prev.used)
@@ -499,11 +464,17 @@ func RecordUsage(db *sql.DB, snap usage.Snapshot, now time.Time) error {
 		return err
 	}
 	defer tx.Rollback()
-	for _, a := range snap.Accounts {
+	// Expired samples, and samples dated in the future (the clock jumped back), which would
+	// otherwise never be pruned.
+	if _, err := tx.Exec(`DELETE FROM usage_samples WHERE at < ? OR at > ?`, nowMs-KeepSamples.Milliseconds(), nowMs); err != nil {
+		return err
+	}
+	for _, a := range snap.Accounts[:min(len(snap.Accounts), maxAccounts)] {
 		if a.Stale || a.Error != "" {
 			continue
 		}
-		for _, w := range a.Windows {
+		account := accountHash(a.Key)
+		for _, w := range a.Windows[:min(len(a.Windows), maxWindowsPerAccount)] {
 			var reset any
 			if w.ResetAt != nil {
 				reset = *w.ResetAt
@@ -512,18 +483,23 @@ func RecordUsage(db *sql.DB, snap usage.Snapshot, now time.Time) error {
 				INSERT INTO usage_samples (provider, account, window_id, used_pct, reset_at, at)
 				SELECT ?, ?, ?, ?, ?, ?
 				WHERE NOT EXISTS (
-					SELECT 1 FROM usage_samples WHERE provider = ? AND account = ? AND window_id = ? AND at > ?
+					SELECT 1 FROM usage_samples
+					WHERE provider = ? AND account = ? AND window_id = ? AND at > ? AND at <= ?
 				)
-			`, a.Provider, a.Key, w.ID, w.UsedPercent, reset, nowMs,
-				a.Provider, a.Key, w.ID, nowMs-SampleEvery.Milliseconds()); err != nil {
+			`, a.Provider, account, w.ID, w.UsedPercent, reset, nowMs,
+				a.Provider, account, w.ID, nowMs-SampleEvery.Milliseconds(), nowMs); err != nil {
 				return err
 			}
 		}
 	}
-	if _, err := tx.Exec(`DELETE FROM usage_samples WHERE at < ?`, nowMs-KeepSamples.Milliseconds()); err != nil {
-		return err
-	}
 	return tx.Commit()
+}
+
+// accountHash stands in for a provider account key, which can be derived from an email address.
+// Samples only need to tell accounts apart.
+func accountHash(key string) string {
+	sum := sha256.Sum256([]byte(key))
+	return hex.EncodeToString(sum[:8])
 }
 
 func median(v []float64) float64 {
