@@ -106,3 +106,86 @@ jobs:
             dist/release/SHA256SUMS
             dist/release/SHA256SUMS.sigstore.json
             dist/release/maestria.rb
+
+  homebrew:
+    name: Publish Homebrew formula
+    needs: release
+    # Prereleases (v1.3.0-rc.1) never reach the tap: brew users follow stable releases.
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: ubuntu-latest
+    # A separate job on purpose: the deploy key never shares a runner with the build, the OIDC
+    # token or the signing step. This job can only read the repository.
+    permissions:
+      contents: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAP_REPOSITORY: paulo-lucas/homebrew-tap
+    steps:
+      - name: Check for the deploy key
+        id: key
+        env:
+          DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+        run: |
+          if [ -z "${DEPLOY_KEY}" ]; then
+            echo "::warning title=Homebrew tap not updated::The HOMEBREW_TAP_DEPLOY_KEY secret is not set, so ${TAP_REPOSITORY} was not updated. The release itself is fine."
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download the published formula and checksums
+        if: steps.key.outputs.present == 'true'
+        run: |
+          mkdir formula
+          gh release download "${GITHUB_REF_NAME}" -R "${GITHUB_REPOSITORY}" -D formula -p maestria.rb -p SHA256SUMS
+
+      - name: Check the formula is what this repository's release workflow built
+        if: steps.key.outputs.present == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd formula
+          # 1. Provenance: built by release.yml of this repository, from this tag.
+          gh attestation verify maestria.rb -R "${GITHUB_REPOSITORY}" \
+            --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release.yml" \
+            --source-ref "refs/tags/${GITHUB_REF_NAME}"
+          # 2. It points at this repository's release downloads and nowhere else.
+          grep -qxF "  REPO = \"${GITHUB_REPOSITORY}\"" maestria.rb
+          test "$(grep -cE '^[[:space:]]*url ' maestria.rb)" = 4
+          test "$(grep -E '^[[:space:]]*url ' maestria.rb | grep -cF 'url "https://github.com/#{REPO}/releases/download/v#{version}/maestria_#{version}_')" = 4
+          # 3. Its checksums are the release's checksums, and there is one per target.
+          test "$(grep -cE '^[[:space:]]*sha256 "[0-9a-f]{64}"$' maestria.rb)" = 4
+          grep -E '^[[:space:]]*sha256 "' maestria.rb | sed -E 's/^[[:space:]]*sha256 "([0-9a-f]{64})"$/\1/' | while read -r sum; do
+            grep -E "^${sum}  maestria_[^ ]*\.tar\.gz$" SHA256SUMS > /dev/null
+          done
+
+      - name: Push the formula to the tap
+        if: steps.key.outputs.present == 'true'
+        shell: bash
+        env:
+          DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "${RUNNER_TEMP}/ssh"
+          umask 077
+          printf '%s\n' "${DEPLOY_KEY}" > "${RUNNER_TEMP}/ssh/tap_key"
+          # github.com's ed25519 host key, pinned here instead of fetched with ssh-keyscan.
+          # Source: https://api.github.com/meta (ssh_keys); fingerprint
+          # SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU, published at
+          # https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints
+          printf '%s\n' 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' > "${RUNNER_TEMP}/ssh/known_hosts"
+          export GIT_SSH_COMMAND="ssh -i ${RUNNER_TEMP}/ssh/tap_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=${RUNNER_TEMP}/ssh/known_hosts"
+          git clone "git@github.com:${TAP_REPOSITORY}.git" tap
+          cd tap
+          git checkout -B main
+          mkdir -p Formula
+          cp ../formula/maestria.rb Formula/maestria.rb
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "The tap already has this formula."
+            exit 0
+          fi
+          git add Formula/maestria.rb
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -m "maestria ${GITHUB_REF_NAME#v}"
+          git push origin HEAD:main
+          rm -f "${RUNNER_TEMP}/ssh/tap_key"
