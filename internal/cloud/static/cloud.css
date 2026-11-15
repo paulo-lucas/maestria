@@ -6,3 +6,9 @@ a.btn.is-disabled { opacity: 0.5; pointer-events: none; }
 .chip-row a.chip { text-decoration: none; color: inherit; }
 #pair-body { display: contents; }
 .nowrap { white-space: nowrap; }
+.stack { display: grid; gap: var(--space-4); }
+.invite-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); padding: var(--space-3) var(--space-4); }
+.invite-row__main { flex: 1 1 220px; min-width: 0; }
+.invite-row__title { font-weight: var(--fw-medium); overflow-wrap: anywhere; }
+.invite-row__meta { color: var(--text-3); font-size: var(--fs-xs); overflow-wrap: anywhere; }
+#invite-link { white-space: normal; overflow-wrap: anywhere; }

@@ -276,6 +276,7 @@
     if (p === '/') return { name: 'overview' };
     if (p === '/connectors') return { name: 'connectors', server: true };
     if (p === '/connectors/link') return { name: 'link', server: true };
+    if (p === '/admin/invites') return { name: 'invites', server: true };
     if (p === '/security') return { name: 'security' };
     if (p === '/usage') return { name: 'usage' };
     if ((m = p.match(/^\/c\/(cn_[0-9a-f]{32})\/usage$/))) return { name: 'usage', cid: m[1] };

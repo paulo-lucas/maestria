@@ -128,8 +128,12 @@ func (s *Server) shellData(r *http.Request, title, nav string) *pageData {
 	if sess.User.Email != "" {
 		initial = strings.ToUpper(sess.User.Email[:1])
 	}
-	return &pageData{Title: title, Nav: nav, CSRF: sess.CSRFToken, Email: sess.User.Email, Initial: initial,
-		Scripts: []string{"hosted-keys.js", "hosted.js", "panel.js"}, PublicURL: s.cfg.PublicURL,
+	scripts := []string{"hosted-keys.js", "hosted.js", "panel.js"}
+	if sess.User.IsAdmin {
+		scripts = append(scripts, "invites.js")
+	}
+	return &pageData{Title: title, Nav: nav, CSRF: sess.CSRFToken, Email: sess.User.Email, Initial: initial, Admin: sess.User.IsAdmin,
+		Scripts: scripts, PublicURL: s.cfg.PublicURL,
 		ServerVersion: displayVersion(s.version), ServerUpdate: s.updateFor(s.version)}
 }
 
@@ -149,6 +153,11 @@ func (s *Server) getApp(w http.ResponseWriter, r *http.Request) {
 		nav, page, title = "connectors", "connectors", "Connectors"
 	case path == "/connectors/link":
 		nav, page, title = "connectors", "connector-link", "Link a machine"
+	case path == "/admin/invites":
+		if s.adminOnly(w, r, false) == nil {
+			return
+		}
+		nav, page, title = "invites", "invites", "Invite someone"
 	case path == "/security":
 		nav, title = "security", "Devices & security"
 	case path == "/pair":
@@ -162,6 +171,15 @@ func (s *Server) getApp(w http.ResponseWriter, r *http.Request) {
 		nav, title = "workspace", "Workspace"
 	}
 	d := s.shellData(r, title, nav)
+	if page == "invites" {
+		var err error
+		if d.Invites, err = s.invitePages(); err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+		d.SignupMode = s.cfg.Signup
+		d.CanEmail = s.cfg.mailConfigured()
+	}
 	if page == "connectors" {
 		views, err := s.views(sessionFrom(r).User.ID)
 		if err != nil {

@@ -1,0 +1,78 @@
+{{define "page"}}{{template "app" .}}{{end}}
+{{define "content"}}
+    <div class="page page--narrow" data-view="invites">
+
+      <header class="page-head">
+        <div class="page-head__title">
+          <h1>Invite someone</h1>
+          <p class="page-head__sub">A link that lets one person create an account on this server. It works once and expires.</p>
+        </div>
+      </header>
+
+      {{if eq .SignupMode "open"}}<div class="banner" data-status="warn">{{icon "i-alert"}}<div class="banner__body"><p class="banner__title">Sign-up is open</p><p class="banner__text">Anyone who can reach this server can create an account, so invitations are not needed. Set <code>signup</code> to <code>invite</code> to require them.</p></div></div>{{end}}
+      {{if eq .SignupMode "closed"}}<div class="banner" data-status="warn">{{icon "i-alert"}}<div class="banner__body"><p class="banner__title">Sign-up is closed</p><p class="banner__text">Nobody can create an account right now, not even with an invitation. Set <code>signup</code> to <code>invite</code> to use them.</p></div></div>{{end}}
+
+      <section class="card panel" aria-labelledby="new-title">
+        <header class="panel__head"><h2 class="panel__title" id="new-title">{{icon "i-user"}}New invitation</h2></header>
+        <div class="panel__body">
+          <form class="stack" id="invite-form" action="/api/invites" method="post" novalidate>
+            <div class="field">
+              <label class="field__label" for="invite-email">Email <span class="subtle">(optional)</span></label>
+              <input class="input" id="invite-email" name="email" type="email" autocomplete="off" placeholder="friend@example.com" maxlength="254">
+              <p class="field__hint">With an address, only that address can use the link.</p>
+            </div>
+            <div class="field">
+              <label class="field__label" for="invite-note">Note <span class="subtle">(optional)</span></label>
+              <input class="input" id="invite-note" name="note" type="text" autocomplete="off" maxlength="200" placeholder="Who is this for?">
+              <p class="field__hint">For your own list. If you email the invitation, the note goes in it too.</p>
+            </div>
+            <div class="field">
+              <label class="field__label" for="invite-expires">Expires</label>
+              <select class="select" id="invite-expires" name="expires">
+                <option value="1d">In 1 day</option>
+                <option value="3d">In 3 days</option>
+                <option value="7d" selected>In 7 days</option>
+                <option value="14d">In 14 days</option>
+                <option value="30d">In 30 days</option>
+              </select>
+            </div>
+            <label class="check"><input type="checkbox" id="invite-send" name="sendEmail" disabled{{if not .CanEmail}} data-no-mail{{end}}><span>Email the invitation to this address{{if not .CanEmail}} <span class="subtle">(this server cannot send email)</span>{{end}}</span></label>
+            <p class="field__error" id="invite-error" role="alert" hidden></p>
+            <div class="btn-row"><button class="btn btn--primary" type="submit" id="invite-submit">Create invitation</button></div>
+          </form>
+        </div>
+      </section>
+
+      <section class="card panel" id="invite-result" aria-labelledby="result-title" hidden>
+        <header class="panel__head"><h2 class="panel__title" id="result-title">{{icon "i-check"}}Invitation ready</h2></header>
+        <div class="panel__body">
+          <p class="field__hint" id="invite-result-note">Copy the link now: it is shown only once.</p>
+          <div class="code-inline"><code id="invite-link"></code><button class="btn btn--ghost btn--sm" type="button" data-copy aria-label="Copy link" title="Copy link">{{icon "i-copy"}}<span data-copy-label>Copy</span></button></div>
+        </div>
+      </section>
+
+      <section class="card panel" aria-labelledby="list-title">
+        <header class="panel__head"><h2 class="panel__title" id="list-title">{{icon "i-inbox"}}Invitations</h2></header>
+        <div id="invite-list">
+          {{if .Invites}}
+          <ul class="list">
+            {{range .Invites}}
+            <li class="invite-row" data-invite="{{.ID}}">
+              <div class="invite-row__main">
+                <p class="invite-row__title">{{if .Note}}{{.Note}}{{else}}<span class="subtle">No note</span>{{end}}</p>
+                <p class="invite-row__meta">{{.For}} · {{if eq .Status "used"}}used{{if .UsedBy}} by {{.UsedBy}}{{end}}{{else}}expires {{.Expires}}{{end}} · <span class="mono">{{.ID}}</span></p>
+              </div>
+              <span class="status status--badge" data-status="{{if eq .Status "used"}}ok{{else if eq .Status "active"}}working{{else}}offline{{end}}">{{.StatusLabel}}</span>
+              {{if .CanRevoke}}<button class="btn btn--sm" type="button" data-action="revoke-invite" data-id="{{.ID}}">Revoke</button>{{end}}
+            </li>
+            {{end}}
+          </ul>
+          {{else}}
+          <div class="empty"><p class="empty__title">No invitations yet</p><p class="empty__text">Create one above and send the link to the person you want on this server.</p></div>
+          {{end}}
+        </div>
+      </section>
+
+      <p class="field__hint">Adding an administrator is done on the server: <code>maestria-cloud user promote EMAIL</code>.</p>
+    </div>
+{{end}}

@@ -55,6 +55,7 @@
       <a class="nav__item" href="/usage" data-nav="usage"{{if eq .Nav "usage"}} aria-current="page"{{end}}>{{icon "i-gauge"}} Usage &amp; standby</a>
       <a class="nav__item" href="/connectors" data-nav="connectors"{{if eq .Nav "connectors"}} aria-current="page"{{end}}>{{icon "i-plug"}} Connectors</a>
       <a class="nav__item" href="/security" data-nav="security"{{if eq .Nav "security"}} aria-current="page"{{end}}>{{icon "i-shield"}} Devices &amp; security</a>
+      {{if .Admin}}<a class="nav__item" href="/admin/invites" data-nav="invites"{{if eq .Nav "invites"}} aria-current="page"{{end}}>{{icon "i-user"}} Invite someone</a>{{end}}
     </nav>
     <div class="sidebar__foot">
       <a class="conn-card" href="/connectors" id="conn-card">
@@ -102,6 +103,7 @@
     <a class="bottomnav__item" href="/usage" data-nav="usage"{{if eq .Nav "usage"}} aria-current="page"{{end}}>{{icon "i-gauge"}}Usage</a>
     <a class="bottomnav__item" href="/connectors" data-nav="connectors"{{if eq .Nav "connectors"}} aria-current="page"{{end}}>{{icon "i-plug"}}Connectors</a>
     <a class="bottomnav__item" href="/security" data-nav="security"{{if eq .Nav "security"}} aria-current="page"{{end}}>{{icon "i-shield"}}Security</a>
+    {{if .Admin}}<a class="bottomnav__item" href="/admin/invites" data-nav="invites"{{if eq .Nav "invites"}} aria-current="page"{{end}}>{{icon "i-user"}}Invite</a>{{end}}
   </nav>
 </div>
 </body>
