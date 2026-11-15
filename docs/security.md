@@ -53,7 +53,7 @@ You do not have to understand the rest to use Maestria safely. Use a long passwo
 
 ### Commands that need you at the keyboard
 
-A few commands change who may control your machine: `maestria devices approve`, `maestria tunnel on`, linking the machine to a hosted server (`maestria connect --link …` or the code flow), and replacing the panel's password and authenticator (`maestria auth setup --force`, or `auth setup` when credentials already exist, which also covers the same choice in `maestria init`). Setting up credentials for the first time, when there is nothing to replace, does not ask. On a computer that also runs AI agents, an agent that read a hostile web page or file could be talked into running them. So each one:
+A few commands change who may control your machine: `maestria devices approve`, `maestria tunnel on`, linking the machine to a hosted server (`maestria connect --link …` or the code flow), and replacing the panel's password and authenticator (`maestria auth setup --force`, or `auth setup` when credentials already exist, which also covers the same choice in `maestria init`). Only a genuinely fresh install, where no setup was ever done, skips the question. That is read from the database, so deleting `auth-v2.json` does not make a replacement look like a first setup. On a computer that also runs AI agents, an agent that read a hostile web page or file could be talked into running them. So each one:
 
 - **refuses unless it is run in an interactive terminal** (not from a script, a pipe or a service);
 - prints what is about to happen and a **short random word**, and goes on only when you type that word back;

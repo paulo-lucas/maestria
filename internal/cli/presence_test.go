@@ -2,6 +2,7 @@ package cli
 
 import (
 	"io"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -262,5 +263,88 @@ func TestFirstTimeSetupDoesNotNeedAConfirmationWord(t *testing.T) {
 	env.Stdin = &codeFeeder{f: f}
 	if c := f.run(env, "auth", "setup"); c != 0 {
 		t.Fatalf("first setup: exit %d\n%s", c, f.errOut.String())
+	}
+}
+
+// Deleting auth-v2.json must not turn replacing the credentials into a first-time setup: whether
+// setup ever happened is read from the database, which the file's removal does not touch.
+func TestDeletingTheSecretsFileDoesNotSkipThePresenceCheck(t *testing.T) {
+	f := newFixture(t)
+	// A real first-time setup on a fresh directory needs no word.
+	env := f.env("", "correct horse battery", "correct horse battery")
+	env.Stdin = &codeFeeder{f: f}
+	if c := f.run(env, "auth", "setup"); c != 0 {
+		t.Fatalf("first setup: exit %d\n%s", c, f.errOut.String())
+	}
+	original := storedHash(t, f)
+
+	remove := func() {
+		t.Helper()
+		if err := os.Remove(auth.SecretsPath(f.dir)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	remove()
+	// Without a terminal: refused, nothing shown, nothing written.
+	script := f.env(testWord+"\n", "attacker password here", "attacker password here")
+	if c := f.run(script, "auth", "setup"); c == 0 || !strings.Contains(f.errOut.String(), "interactive terminal") {
+		t.Fatalf("setup after deleting the secrets file, no terminal: exit %d, %s", c, f.errOut.String())
+	}
+	if strings.Contains(f.out.String(), "manually") {
+		t.Fatal("the new authenticator key was shown to a script")
+	}
+	if _, err := os.Stat(auth.SecretsPath(f.dir)); !os.IsNotExist(err) {
+		t.Fatal("credentials were written without a person")
+	}
+	// At a terminal with the wrong word: refused too.
+	wrong := f.humanEnv("")
+	wrong.Stdin = strings.NewReader("nope\n")
+	if c := f.run(wrong, "auth", "setup"); c == 0 {
+		t.Fatal("a wrong word must refuse")
+	}
+	// A person typing the word can set it up again.
+	human := f.env("", "correct horse battery", "correct horse battery")
+	human.IsTTY = func() bool { return true }
+	human.ConfirmWord = func() string { return testWord }
+	human.Stdin = &wordThen{word: testWord, next: &codeFeeder{f: f}}
+	if c := f.run(human, "auth", "setup"); c != 0 {
+		t.Fatalf("setup by a person: exit %d\n%s\n%s", c, f.out.String(), f.errOut.String())
+	}
+	if storedHash(t, f) == original {
+		t.Fatal("the credentials were not replaced")
+	}
+
+	// An install from before the marker existed has recovery codes in the database but no row:
+	// those count as well.
+	db, err := store.Open(f.dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("DELETE FROM kv WHERE key = ?", kvAuthSetupDone); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	remove()
+	if c := f.run(f.env(testWord+"\n", "x", "x"), "auth", "setup"); c == 0 {
+		t.Fatal("recovery codes in the database must count as a setup that happened")
+	}
+}
+
+// Only a directory where nothing was ever set up skips the check.
+func TestAuthSetupEverDone(t *testing.T) {
+	f := newFixture(t)
+	if authSetupEverDone(f.dir) {
+		t.Fatal("a fresh directory must not look set up")
+	}
+	db, err := store.Open(f.dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetKV(db, kvAuthSetupDone, "1"); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	if !authSetupEverDone(f.dir) {
+		t.Fatal("the marker must count")
 	}
 }

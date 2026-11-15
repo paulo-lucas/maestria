@@ -34,8 +34,10 @@ func runAuthSetup(in *bufio.Reader, force bool, env *Env) error {
 	}
 	// Replacing credentials lets whoever runs this set a password they know and read the new
 	// authenticator key from the screen, so it needs a person at a terminal, like approving a
-	// device. First-time setup (nothing to replace) does not.
-	if existing != nil || force {
+	// device. Only a genuinely fresh install (nothing to replace, and no setup ever done here)
+	// skips that. "Ever done" is read from the database, not from the secrets file, because
+	// deleting the file must not turn a replacement into a first-time setup.
+	if existing != nil || force || authSetupEverDone(dir) {
 		log, closeLog := openAudit(env, dir)
 		defer closeLog()
 		if err := env.requireHuman(in, "Replace the password and the authenticator app of this panel", []string{
@@ -106,6 +108,10 @@ func runAuthSetup(in *bufio.Reader, force bool, env *Env) error {
 	if err := auth.SaveSecrets(dir, &auth.Secrets{PasswordHash: hash, TOTPSecret: secret, CreatedAt: env.now().UTC().Format("2006-01-02T15:04:05Z")}); err != nil {
 		return err
 	}
+	// The durable mark that credentials were set up here (see authSetupEverDone).
+	if err := store.SetKV(db, kvAuthSetupDone, "1"); err != nil {
+		return err
+	}
 	if err := auth.ReplaceRecoveryCodes(db, codes, env.now()); err != nil {
 		return err
 	}
@@ -167,4 +173,27 @@ func cmdAuthResetSessions(args []string, env *Env) error {
 	}
 	fmt.Fprintf(env.Stdout, "Invalidated %d session%s.\n", n, plural)
 	return nil
+}
+
+// kvAuthSetupDone is the database row that remembers credentials were set up in this config
+// directory. Deleting auth-v2.json does not remove it.
+const kvAuthSetupDone = "auth_setup_done"
+
+// authSetupEverDone reports whether credentials were ever set up in this config directory: the
+// kv row written by `auth setup`, or any recovery code in the database (an install from before
+// the row existed has those). When that cannot be read it answers true, so it fails closed.
+func authSetupEverDone(dir string) bool {
+	db, err := store.Open(dir)
+	if err != nil {
+		return true
+	}
+	defer db.Close()
+	if v, ok, err := store.GetKV(db, kvAuthSetupDone); err != nil || (ok && v != "") {
+		return true
+	}
+	var n int
+	if err := db.QueryRow("SELECT COUNT(*) FROM recovery_codes").Scan(&n); err != nil || n > 0 {
+		return true
+	}
+	return false
 }
