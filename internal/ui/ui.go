@@ -66,16 +66,7 @@ func New() (*UI, error) {
 			return nil, err
 		}
 		sum := sha256.Sum256(body)
-		ct := mime.TypeByExtension(path.Ext(e.Name()))
-		switch path.Ext(e.Name()) {
-		case ".css":
-			ct = "text/css; charset=utf-8"
-		case ".js":
-			ct = "text/javascript; charset=utf-8"
-		case ".svg":
-			ct = "image/svg+xml"
-		}
-		u.assets[e.Name()] = asset{body: body, hash: hex.EncodeToString(sum[:])[:10], contentType: ct}
+		u.assets[e.Name()] = asset{body: body, hash: hex.EncodeToString(sum[:])[:10], contentType: contentType(e.Name())}
 	}
 	sprite, ok := u.assets["icons.svg"]
 	if !ok {
@@ -167,16 +158,26 @@ func (u *UI) Layout() (*template.Template, error) { return u.base.Clone() }
 // AddAsset registers another static file (served by ServeStatic and returned by AssetURL).
 func (u *UI) AddAsset(name string, body []byte) {
 	sum := sha256.Sum256(body)
-	ct := mime.TypeByExtension(path.Ext(name))
-	switch path.Ext(name) {
+	u.assets[name] = asset{body: body, hash: hex.EncodeToString(sum[:])[:10], contentType: contentType(name)}
+}
+
+// contentType is the media type a static asset is served as. The common ones are fixed here so
+// the answer never depends on the operating system's MIME database.
+func contentType(name string) string {
+	switch ext := path.Ext(name); ext {
 	case ".css":
-		ct = "text/css; charset=utf-8"
+		return "text/css; charset=utf-8"
 	case ".js":
-		ct = "text/javascript; charset=utf-8"
+		return "text/javascript; charset=utf-8"
 	case ".svg":
-		ct = "image/svg+xml"
+		return "image/svg+xml"
+	case ".png":
+		return "image/png"
+	case ".webmanifest":
+		return "application/manifest+json"
+	default:
+		return mime.TypeByExtension(ext)
 	}
-	u.assets[name] = asset{body: body, hash: hex.EncodeToString(sum[:])[:10], contentType: ct}
 }
 
 // AssetURL returns the cache-busted URL of a static asset.
@@ -446,6 +447,11 @@ type Data struct {
 	// Update is a pending "new release" note (Security page); nil when there is none.
 	Update *UpdateNote
 
+	// Version is the running build as shown in the sidebar footer ("v1.2.3", or "dev"), and
+	// UpdateVersion the newer release known from the cached check ("" when up to date).
+	Version       string
+	UpdateVersion string
+
 	// Security page.
 	Listen            string
 	SessionExpires    string
@@ -612,4 +618,13 @@ type ChatThreadChip struct {
 	HasMessages bool
 	Unread      bool
 	Disabled    bool // other threads can't be read on this Maestri
+}
+
+// DisplayVersion shows 2.0.3 and v2.0.3 as "v2.0.3" and leaves names like "dev" alone.
+func DisplayVersion(v string) string {
+	v = strings.TrimSpace(v)
+	if v != "" && v[0] >= '0' && v[0] <= '9' {
+		return "v" + v
+	}
+	return v
 }

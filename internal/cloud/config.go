@@ -64,6 +64,10 @@ type Config struct {
 	// notices and password resets together). It protects the SMTP provider's quota and stops the
 	// server from being used to bomb inboxes. MAESTRIA_CLOUD_MAIL_DAILY_LIMIT overrides it.
 	MailDailyLimit int `json:"mailDailyLimit"`
+	// UpdateCheck lets the server ask GitHub (at most once a day) which release is newest, so the
+	// Connectors page can say a machine is behind. false never touches the network. Browsers never
+	// make that request.
+	UpdateCheck bool `json:"updateCheck"`
 	// DevEmail writes emails instead of sending them: "stdout" or "file:<path>".
 	DevEmail string `json:"devEmail"`
 }
@@ -78,6 +82,7 @@ func Defaults() *Config {
 		Login:                Limits{MaxFailuresPerIP: 5, MaxFailuresPerAccount: 8, MaxFailuresGlobal: 100, WindowSeconds: 900, LockoutSeconds: 900},
 		SMTP:                 SMTP{Port: 587},
 		MailDailyLimit:       200,
+		UpdateCheck:          true,
 	}
 }
 

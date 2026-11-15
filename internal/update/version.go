@@ -155,3 +155,22 @@ func IsDevBuild(version string) bool {
 	}
 	return len(v.Pre) > 0 && v.Pre[0] == "dev"
 }
+
+// Behind reports whether the build "current" is an older release than "latest". It is false when
+// either is not a plain release version (development builds, unknown names) and when latest is a
+// prerelease of nothing newer, so a hint built on it never nags about something that is not an
+// update.
+func Behind(current, latest string) bool {
+	if IsDevBuild(current) {
+		return false
+	}
+	cur, err := ParseVersion(current)
+	if err != nil {
+		return false
+	}
+	lat, err := ParseVersion(latest)
+	if err != nil {
+		return false
+	}
+	return cur.Compare(lat) < 0
+}

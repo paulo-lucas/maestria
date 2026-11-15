@@ -136,3 +136,15 @@ func (n *Notifier) Dismiss(version string) {
 	s.Dismissed = CleanVersion(version)
 	n.save(s)
 }
+
+// LatestKnown is the newest release seen on the last successful check, from the cache with no
+// network access ("" when none was seen, the check is off, or this is a development build). Unlike
+// Cached it ignores a dismissed note: it answers "what is the newest release", not "should I nag".
+func (n *Notifier) LatestKnown() string {
+	if n.off() {
+		return ""
+	}
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return CleanVersion(n.load().Latest)
+}

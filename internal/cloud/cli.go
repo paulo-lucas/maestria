@@ -14,6 +14,8 @@ import (
 	"syscall"
 	"text/tabwriter"
 	"time"
+
+	"github.com/paulo-lucas/maestria/internal/update"
 )
 
 const help = `maestria-cloud: the hosted Maestria server (accounts, relay, device pairing)
@@ -68,32 +70,41 @@ func Run(args []string, env Env) int {
 }
 
 func openAll(env *Env) (*Config, *Server, func(), error) {
+	cfg, srv, _, closeAll, err := openAllWithReleases(env)
+	return cfg, srv, closeAll, err
+}
+
+func openAllWithReleases(env *Env) (*Config, *Server, *update.Notifier, func(), error) {
 	dir := DefaultDataDir(env.Getenv, env.Home)
 	cfg, err := LoadConfig(dir, env.Getenv)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	db, err := OpenDB(dir)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	var mailer Mailer
 	if cfg.mailConfigured() {
 		mailer, err = NewMailer(cfg, env.Stdout)
 		if err != nil {
 			db.Close()
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, err
 		}
 	} else {
 		mailer = &failMailer{}
 	}
 	log := slog.New(slog.NewTextHandler(env.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
-	srv, err := New(Deps{Config: cfg, DB: db, Mailer: mailer, Log: log, Now: env.Now})
+	notifier := &update.Notifier{
+		Updater: &update.Updater{Binary: "maestria-cloud", Current: env.Version},
+		Channel: update.ChannelStable, Dir: dir, Enabled: cfg.UpdateCheck, Now: env.Now,
+	}
+	srv, err := New(Deps{Config: cfg, DB: db, Mailer: mailer, Log: log, Now: env.Now, Version: env.Version, Releases: notifier})
 	if err != nil {
 		db.Close()
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
-	return cfg, srv, func() { srv.Close(); db.Close() }, nil
+	return cfg, srv, notifier, func() { srv.Close(); db.Close() }, nil
 }
 
 type failMailer struct{}
@@ -134,7 +145,7 @@ func cmdServe(args []string, env *Env) error {
 	if err := fs.Parse(args); err != nil || fs.NArg() > 0 {
 		return errors.New("usage: maestria-cloud serve")
 	}
-	cfg, srv, closeAll, err := openAll(env)
+	cfg, srv, releases, closeAll, err := openAllWithReleases(env)
 	if err != nil {
 		return err
 	}
@@ -171,6 +182,7 @@ func cmdServe(args []string, env *Env) error {
 	}
 	defer stop()
 	srv.StartBackground(ctx)
+	go watchReleases(ctx, releases)
 	errc := make(chan error, 1)
 	go func() { errc <- httpSrv.Serve(ln) }()
 	select {
@@ -234,4 +246,20 @@ func cmdUser(args []string, env *Env) error {
 		return nil
 	}
 	return fmt.Errorf("unknown user command %q", args[0])
+}
+
+// watchReleases keeps the cached "newest release" fresh for the version hints. The notifier
+// itself limits the network to one request a day (an hour after a failure), and none at all for
+// a development build or with updateCheck turned off.
+func watchReleases(ctx context.Context, n *update.Notifier) {
+	for {
+		rctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		_, _ = n.Refresh(rctx)
+		cancel()
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(time.Hour):
+		}
+	}
 }

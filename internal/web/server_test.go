@@ -61,6 +61,8 @@ type opts struct {
 	mutate func(*config.Config)
 	// updates supplies the "newer release" note.
 	updates UpdateNotes
+	// version is the running build shown in the sidebar footer.
+	version string
 	access  *auth.AccessVerifier
 	// activity builds the Wire service once the database, audit log and config exist.
 	activity func(cfg *config.Config, db *sql.DB, aud *audit.Log) *activity.Service
@@ -85,6 +87,7 @@ func newHarness(t *testing.T, o ...opts) *harness {
 	var access *auth.AccessVerifier
 	var actFn func(cfg *config.Config, db *sql.DB, aud *audit.Log) *activity.Service
 	var updates UpdateNotes
+	var version string
 	if len(o) > 0 {
 		if o[0].mutate != nil {
 			o[0].mutate(cfg)
@@ -92,6 +95,7 @@ func newHarness(t *testing.T, o ...opts) *harness {
 		access = o[0].access
 		actFn = o[0].activity
 		updates = o[0].updates
+		version = o[0].version
 	}
 
 	secret, _ := auth.GenerateTOTPSecret()
@@ -120,7 +124,7 @@ func newHarness(t *testing.T, o ...opts) *harness {
 	}
 	srv, err := New(Deps{
 		Config: cfg, DB: db, Secrets: &auth.Secrets{PasswordHash: hash, TOTPSecret: secret, CreatedAt: "now"},
-		Audit: aud, Sessions: sessions, Limiter: limiter, Tunnel: tun, Access: access, Activity: act, Updates: updates, Now: clock.now,
+		Audit: aud, Sessions: sessions, Limiter: limiter, Tunnel: tun, Access: access, Activity: act, Updates: updates, Version: version, Now: clock.now,
 	})
 	if err != nil {
 		t.Fatal(err)

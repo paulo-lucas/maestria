@@ -846,3 +846,25 @@ func TestBeforeSwapRunsFirstAndCanStopTheUpdate(t *testing.T) {
 		t.Error("a failed BeforeSwap must leave the install untouched")
 	}
 }
+
+func TestBehind(t *testing.T) {
+	for _, c := range []struct {
+		current, latest string
+		want            bool
+	}{
+		{"1.0.0", "1.1.0", true},
+		{"v1.0.0", "1.0.1", true},
+		{"1.1.0", "1.1.0", false},
+		{"1.2.0", "1.1.0", false},
+		{"1.0.0-rc.1", "1.0.0", true},
+		{"dev", "9.0.0", false},
+		{"2.0.0-dev+abc1234", "9.0.0", false},
+		{"", "1.0.0", false},
+		{"1.0.0", "", false},
+		{"1.0.0", "not-a-version", false},
+	} {
+		if got := Behind(c.current, c.latest); got != c.want {
+			t.Errorf("Behind(%q, %q) = %v, want %v", c.current, c.latest, got, c.want)
+		}
+	}
+}

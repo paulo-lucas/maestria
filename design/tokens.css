@@ -52,7 +52,9 @@
   --radius-pill: 999px;
 
   /* Layout */
-  --sidebar-w: 248px;
+  --sidebar-w-min: 248px;
+  --sidebar-w-max: 496px;                /* 2x the minimum; the resizer in sidebar.js reads both */
+  --sidebar-w: var(--sidebar-w-min);     /* the resizer overrides this on <html> (CSSOM, CSP-safe) */
   --topbar-h: 56px;
   --bottomnav-h: 60px;
   --content-max: 1240px;

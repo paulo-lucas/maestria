@@ -6,12 +6,19 @@
   <meta name="color-scheme" content="light dark">
   <meta name="referrer" content="same-origin">
   <title>{{.Title}} · Maestria</title>
+  <link rel="icon" href="{{asset "favicon.svg"}}" type="image/svg+xml">
+  <link rel="icon" href="{{asset "favicon-32.png"}}" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="{{asset "apple-touch-icon.png"}}">
+  <link rel="manifest" href="{{asset "manifest.webmanifest"}}">
+  <meta name="theme-color" content="#f9f8f5" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0d0e11" media="(prefers-color-scheme: dark)">
   <link rel="stylesheet" href="{{asset "tokens.css"}}">
   <link rel="stylesheet" href="{{asset "base.css"}}">
   <link rel="stylesheet" href="{{asset "components.css"}}">
   <link rel="stylesheet" href="{{asset "shell.css"}}">
   <link rel="stylesheet" href="{{asset "cloud.css"}}">
   <script src="{{asset "app.js"}}"></script>
+  <script src="{{asset "sidebar.js"}}"></script>
   <script src="{{asset "copy.js"}}" defer></script>
   {{range .Scripts}}<script src="{{asset .}}" defer></script>
   {{end}}
@@ -38,7 +45,7 @@
 <a class="skip-link" href="#main">Skip to content</a>
 
 <div class="app">
-  <aside class="sidebar" aria-label="Main">
+  <aside class="sidebar" id="sidebar" aria-label="Main">
     <a class="brand" href="/">{{template "brandmark"}} Maestria</a>
     <nav class="nav" id="nav">
       <a class="nav__item" href="/" data-nav="overview"{{if eq .Nav "overview"}} aria-current="page"{{end}}>{{icon "i-overview"}} Overview <span class="count" data-status="needs" title="Needs you" id="nav-needs" hidden></span></a>
@@ -58,12 +65,16 @@
       </a>
       <div class="account-row">
         <span class="avatar avatar--sm" data-tone="slate">{{.Initial}}</span>
-        <span class="account-row__name truncate" title="{{.Email}}">{{.Email}}</span>
+        <span class="account-row__id">
+          <span class="account-row__name truncate" title="{{.Email}}">{{.Email}}</span>
+          {{if .ServerVersion}}<span class="account-row__ver" title="Server {{.ServerVersion}}"><span>Server {{.ServerVersion}}</span>{{if .ServerUpdate}}<a class="ver-dot" data-status="info" href="/connectors" aria-label="{{.ServerUpdate}} is available" title="{{.ServerUpdate}} is available"></a>{{end}}</span>{{end}}
+        </span>
         <form method="post" action="/logout"><input type="hidden" name="_csrf" value="{{.CSRF}}"><button class="btn btn--ghost btn--icon btn--sm" type="submit" aria-label="Log out" title="Log out">{{icon "i-arrow-right"}}</button></form>
         {{template "themetoggle" " btn--sm"}}
       </div>
     </div>
   </aside>
+  <div class="sidebar-resizer" data-sidebar-resizer role="separator" aria-orientation="vertical" aria-label="Resize sidebar" aria-controls="sidebar" tabindex="0" title="Drag to resize, double-click to reset" hidden></div>
 
   <header class="topbar">
     <a class="brand" href="/" aria-label="Maestria overview">{{template "brandmark"}}</a>

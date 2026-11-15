@@ -29,6 +29,12 @@ func (s *Server) populateShell(d *ui.Data, scope string) ([]workspaces.Workspace
 	nowMs := now.UnixMilli()
 	d.NowISO = now.Format(time.RFC3339)
 	d.NowLabel = "just now"
+	d.Version = ui.DisplayVersion(s.Version)
+	if s.Updates != nil {
+		if n := s.Updates.Cached(); n != nil {
+			d.UpdateVersion = ui.DisplayVersion(n.Version)
+		}
+	}
 
 	list, _ := s.mergedWorkspaces()
 	counts, _ := inbox.CountsByWorkspace(s.DB, nowMs)

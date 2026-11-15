@@ -21,9 +21,9 @@ const sprite = readFileSync(join(root, 'assets/icons.svg'), 'utf8').trim();
 const ICONS = `<!--icons:start (copy of assets/icons.svg)-->\n${sprite}\n<!--icons:end-->`;
 
 // Content hash per asset, appended as ?v= so browsers never show stale CSS/JS after a rebuild.
-const ASSETS = ['tokens.css', 'base.css', 'components.css', 'shell.css', 'sheet.css', 'assets/mock.js'];
+const ASSETS = ['tokens.css', 'base.css', 'components.css', 'shell.css', 'sheet.css', 'assets/mock.js', 'assets/sidebar.js'];
 const VER = Object.fromEntries(ASSETS.map((a) => [a, createHash('sha1').update(readFileSync(join(root, a))).digest('hex').slice(0, 8)]));
-const bust = (html) => html.replace(/((?:href|src)="(?:\.\.\/)?)((?:tokens|base|components|shell|sheet)\.css|assets\/mock\.js)(?:\?v=[0-9a-f]+)?"/g, (_, pre, a) => `${pre}${a}?v=${VER[a]}"`);
+const bust = (html) => html.replace(/((?:href|src)="(?:\.\.\/)?)((?:tokens|base|components|shell|sheet)\.css|assets\/(?:mock|sidebar)\.js)(?:\?v=[0-9a-f]+)?"/g, (_, pre, a) => `${pre}${a}?v=${VER[a]}"`);
 
 const icon = (id, cls = '') => `<svg class="icon${cls ? ' ' + cls : ''}" aria-hidden="true"><use href="#${id}"/></svg>`;
 const BRAND_MARK = '<svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true"><rect class="brand__bg" width="24" height="24" rx="6"/><path class="brand__bars" d="M7 14.5v2.5M10.3 11v6M13.7 7.5V17M17 10v7"/></svg>';
@@ -91,14 +91,14 @@ function sidebar(m) {
   const item = (n) => `<a class="nav__item" href="${n.href}"${current(m.nav === n.id)}>${icon(n.icon)} ${n.label}${n.count && needs ? ` <span class="count" data-status="needs" title="Needs you">${needs}</span>` : ''}</a>`;
   const wsItems = ws.map((w) => {
     const trail = w.needs ? `<span class="count">${w.needs}</span>` : '';
-    let html = `<a class="nav__item" href="workspace-activity.html" data-ws="${w.color}"><span class="swatch"></span> ${w.name} ${trail}</a>`;
+    let html = `<a class="nav__item" href="workspace-activity.html" data-ws="${w.color}"><span class="swatch"></span> <span class="nav__label" title="${w.name}">${w.name}</span> ${trail}</a>`;
     if (m.scope === w.id) {
       html += `\n      <div class="nav__sub">\n${WS_NAV.map((n) => `        <a class="nav__item" href="${n.href}"${current(m.nav === n.id)}>${icon(n.icon)} ${n.label}${n.count && w.needs ? ` <span class="count" data-status="needs">${w.needs}</span>` : ''}</a>`).join('\n')}\n      </div>`;
     }
     return '      ' + html;
   }).join('\n');
   const mc = machinesFor(m);
-  return `<aside class="sidebar" aria-label="Main">
+  return `<aside class="sidebar" id="sidebar" aria-label="Main">
     <a class="brand" href="overview.html">${BRAND_MARK} Maestria</a>
     <nav class="nav">
       ${item(g('overview'))}
@@ -118,11 +118,15 @@ ${wsItems || `      <p class="nav__empty">${m.conn === 'none' ? 'Shown while a m
       </a>
       <div class="account-row">
         <span class="avatar avatar--sm" data-tone="slate">Y</span>
-        <span class="account-row__name truncate">Your account</span>
+        <span class="account-row__id">
+          <span class="account-row__name truncate">Your account</span>
+          <span class="account-row__ver"><span>Server v1.4.0</span></span>
+        </span>
         ${themeToggle(' btn--sm')}
       </div>
     </div>
-  </aside>`;
+  </aside>
+  <div class="sidebar-resizer" data-sidebar-resizer role="separator" aria-orientation="vertical" aria-label="Resize sidebar" aria-controls="sidebar" tabindex="0" title="Drag to resize, double-click to reset" hidden></div>`;
 }
 
 function topbar(m) {
@@ -176,6 +180,7 @@ function head(m, prefix) {
   <link rel="stylesheet" href="${prefix}base.css">
   <link rel="stylesheet" href="${prefix}components.css">
   <link rel="stylesheet" href="${prefix}shell.css">
+  <script src="${prefix}assets/sidebar.js"></script>
   <script src="${prefix}assets/mock.js"></script>
 </head>`;
 }

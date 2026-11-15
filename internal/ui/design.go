@@ -14,4 +14,13 @@ var DesignAssets = map[string]string{
 	"components.css": "components.css",
 	"shell.css":      "shell.css",
 	"icons.svg":      "assets/icons.svg",
+	"sidebar.js":     "assets/sidebar.js",
+
+	// Favicon set and web manifest (linked from both shells; see the "head" template).
+	"favicon.svg":          "assets/favicon.svg",
+	"favicon-32.png":       "assets/favicon-32.png",
+	"apple-touch-icon.png": "assets/apple-touch-icon.png",
+	"icon-192.png":         "assets/icon-192.png",
+	"icon-512.png":         "assets/icon-512.png",
+	"manifest.webmanifest": "assets/manifest.webmanifest",
 }
