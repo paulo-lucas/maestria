@@ -369,7 +369,7 @@ Pushing a release tag is enough: the server picks it up on its own ([Releasing](
 MAESTRIA_REQUIRE_SIGNATURE=1
 ```
 
-cosign needs to reach `tuf-repo-cdn.sigstore.dev` to fetch Sigstore's trusted root, and keeps a cache of it. The update unit gives it `/var/lib/maestria-cloud-update` for that (`StateDirectory`, with `HOME` and `TUF_ROOT` pointing there), because the unit cannot write to root's home. A VM set up before this existed needs `setup-cloud.sh` run once more to get that unit. After installing cosign, run `sudo systemctl start maestria-cloud-update.service` and read `journalctl -u maestria-cloud-update -n 30`: you should see `Verified the release signature`.
+cosign needs to reach `tuf-repo-cdn.sigstore.dev` to fetch Sigstore's trusted root, and keeps a cache of it. The update unit gives it `/var/lib/maestria-cloud-update` for that (`StateDirectory`, with `HOME` and `TUF_ROOT` pointing there), because the unit cannot write to root's home. A VM set up before this existed needs `setup-cloud.sh` run once more to get that unit. After installing cosign, run `sudo systemctl start maestria-cloud-update.service` and read `journalctl -u maestria-cloud-update -n 30`: you should see `Verified the release signature` on the next update (when the VM is already up to date nothing is downloaded, so nothing is verified; `sudo maestria-cloud update --yes --force` reinstalls the latest release to try it).
 
 **An older version, or a rollback:** `sudo maestria-cloud update --yes --force --version v0.2.0` installs a specific release, even an older one ([how to roll back](releasing.md#roll-back)).
 
