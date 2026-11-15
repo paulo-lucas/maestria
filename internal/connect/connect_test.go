@@ -206,6 +206,11 @@ func api() http.Handler {
 		w.Header().Set("Content-Type", "application/octet-stream")
 		w.Write([]byte(strings.Repeat("x", 3*relay.MaxResponseBody)))
 	})
+	mux.HandleFunc("POST /api/inbox/dismiss-notices", func(w http.ResponseWriter, r *http.Request) {
+		// A write that executes but whose response is too large for the relay.
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Write([]byte(strings.Repeat("x", 3*relay.MaxResponseBody)))
+	})
 	mux.HandleFunc("GET /api/floors", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(strings.Repeat("y", 200*1024)))
 	})
@@ -375,6 +380,21 @@ func TestResponseLimitsAndFlowControl(t *testing.T) {
 	f, _ := r.do(r.browser.Sign(t, cid, "GET", "/api/usage", "", nil))
 	if f.T != relay.TypeErr || f.Code != relay.ErrTooLarge {
 		t.Fatalf("oversize: %+v", f)
+	}
+	// A write whose response is too large has still executed: it must be audited.
+	f, _ = r.do(r.browser.Sign(t, cid, "POST", "/api/inbox/dismiss-notices", "", nil))
+	if f.T != relay.TypeErr || f.Code != relay.ErrTooLarge {
+		t.Fatalf("oversize write: %+v", f)
+	}
+	entries, _ := r.audit.Recent(10)
+	audited := false
+	for _, e := range entries {
+		if e.Event == "relay_write" && strings.Contains(e.Detail, "dismiss-notices") {
+			audited = true
+		}
+	}
+	if !audited {
+		t.Fatal("an executed write with an oversize response was not audited")
 	}
 	// Oversized request bodies are refused before anything runs.
 	big := make([]byte, relay.MaxRequestBody+1)

@@ -486,6 +486,10 @@ func (s *session) serve(in *inflight) {
 	tooLarge := in.rw.tooLarge
 	status := in.rw.status
 	in.rw.mu.Unlock()
+	// Audit before the response completes (and whatever its outcome): the write has already
+	// run, so a client must never be able to see it finish while it is still unaudited, and a
+	// response that turns out too large must not leave an executed write unrecorded.
+	s.c.Gate.Wrote(dev.ID, in.req.Method, in.req.Path, status)
 	if tooLarge {
 		_ = s.send(relay.Frame{T: relay.TypeErr, ID: in.id, Code: relay.ErrTooLarge, Status: 413})
 		return
@@ -493,7 +497,6 @@ func (s *session) serve(in *inflight) {
 	if in.ctx.Err() == nil {
 		_ = in.rw.finish()
 	}
-	s.c.Gate.Wrote(dev.ID, in.req.Method, in.req.Path, status)
 }
 
 func (s *session) onPairOffer(f relay.Frame) {
