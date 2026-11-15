@@ -7,7 +7,7 @@ Maestria lets you steer AI agents that run commands on your computer. That is po
 1. **Your data stays on your machine.** Tasks, chat, floors and docs live in a small database on your computer. A hosted server never stores them.
 2. **Nothing listens to the internet.** The panel only answers on `127.0.0.1`, an address that works from your own machine and nowhere else. The hosted setup connects *out*. No port is opened.
 3. **Signing in takes two things.** A password you know and a 6-digit code from an app you own. There are no accounts without the code.
-4. **Your machine has the last word.** In the hosted setup the website cannot give orders by itself. Each order is signed by a browser *you approved on your own machine*, and your machine checks it.
+4. **Your machine has the last word.** In the hosted setup the website cannot give orders by itself. Each order is signed by a browser *you approved on your own machine*, and your machine checks it. But the hosted server also sends that browser its page, so only use a hosted server you trust, or run your own (see [what a hostile server can do](#what-a-hostile-or-hacked-server-can-do)).
 5. **There is an emergency stop.** The kill switch cuts off remote access in one click. Only someone at your machine can turn it back on.
 6. **Everything is written down.** Every change goes into an audit log you can read in the panel.
 
@@ -16,8 +16,14 @@ You do not have to understand the rest to use Maestria safely. Use a long passwo
 ## What Maestria can and cannot do to your machine
 
 - It **can**: show you what agents do, let you answer them, send a message to your Maestro, interrupt agents, and pause work near your usage limits.
-- It **cannot**: run arbitrary commands, delete floors, push code, or read your files. The only things it may do through Maestri Wire are on a short fixed list (see [Wire](wire.md#what-maestria-can-and-cannot-do-through-wire)).
+- It **cannot**, by itself: delete floors, push code, or read your files. The only things it may do through Maestri Wire are on a short fixed list (see [Wire](wire.md#what-maestria-can-and-cannot-do-through-wire)).
 - It **never changes** Maestri's usage files. That folder is read-only for Maestria.
+
+**Read this part twice.** Anyone who is signed in to the panel, and any browser you approved in hosted mode, can **type a message to any of your agents and answer their Y/n questions**. An agent is a program that runs commands on your computer with your rights. So a signed-in session can, in practice, **make an agent run commands on your machine**. The fixed list above limits what Maestria does *itself*; it does not limit what an agent does when it is told to. Treat a signed-in session, and an approved browser, like a terminal on your computer:
+
+- protect the password, the authenticator app and the recovery codes accordingly;
+- approve only browsers you control;
+- use the [kill switch](#the-kill-switch) the moment a phone or laptop with a signed-in session is lost.
 
 ## Local mode (self-hosted)
 
@@ -28,7 +34,9 @@ You do not have to understand the rest to use Maestria safely. Use a long passwo
 | **Loopback only** | The panel binds `127.0.0.1` and refuses anything else. This cannot be changed in settings, on purpose. To go beyond your machine, put a tunnel in front. |
 | **Password** | Hashed with **argon2id** (a slow hash that makes guessing expensive). At least 12 characters. |
 | **Two-factor, always** | A **TOTP** code (6 digits, 30 seconds, from an authenticator app). Each code works once. You get **10 recovery codes**, each usable once. |
-| **Login limits** | By default, 5 failed sign-ins from one address, or 20 in total, lock sign-in for 15 minutes. |
+| **Login limits** | By default, 5 failed sign-ins from one address, or 20 in total, lock sign-in for 15 minutes. Opening the panel on the machine itself is never locked out by strangers' failures: only its own address counts. |
+| **Password-check limits** | Checking a password is expensive on purpose, so a stranger could use it to exhaust memory. Each address may start about 10 password checks a minute (the whole server about 300), and only 2 run at the same time. Past that the panel answers "try again in a moment" (HTTP `429` with `Retry-After`), which says nothing about whether the password was right. |
+| **Real visitor address** | Behind a tunnel, every visitor reaches the panel from your own machine. When you allow a public host name, the panel reads the visitor's address from Cloudflare's `CF-Connecting-IP` header, so one stranger cannot lock everyone out. (Turn this off with `"trustCfConnectingIp": false` if your tunnel is not Cloudflare's and lets visitors set the header themselves.) |
 | **No hints** | A wrong password and a wrong code look the same, so nobody learns which was right. |
 | **Sessions** | A random cookie, stored on the server only as a hash. `HttpOnly`, `SameSite=Strict`, and `Secure` over https. By default it ends after 60 minutes idle or 12 hours in total. You can sign out everywhere (**Security** page, or `maestria auth reset-sessions`). |
 | **CSRF protection** | Every change needs a secret token tied to your session, and a same-origin request. A page on another website cannot make your browser change anything. |
@@ -43,31 +51,65 @@ You do not have to understand the rest to use Maestria safely. Use a long passwo
 
 `maestria tunnel off` (or the power button in the panel) does three things: it signs out every browser, it refuses every sign-in, and it runs your stop command for the tunnel if you set one. **Only the local command `maestria tunnel on` clears it.** There is no web page or API route that can turn it off. See [Self-host](self-host.md#4-the-kill-switch).
 
+### Commands that need you at the keyboard
+
+A few commands change who may control your machine: `maestria devices approve`, `maestria tunnel on` and linking the machine to a hosted server (`maestria connect --link …` or the code flow). On a computer that also runs AI agents, an agent that read a hostile web page or file could be talked into running them. So each one:
+
+- **refuses unless it is run in an interactive terminal** (not from a script, a pipe or a service);
+- prints what is about to happen and a **short random word**, and goes on only when you type that word back;
+- has **no flag that skips this**, `--yes` included;
+- writes the result (confirmed, wrong word, refused) to the audit log.
+
+Be honest about the limit: an agent that has been given a real terminal session can read the word and type it. The word is random and printed at that moment so it cannot be put in a script or a prompt ahead of time, and every confirmation is audited, but this is friction and a trail, not a lock. Never tell an agent to run these commands for you.
+
 ## Hosted mode
 
 ### Who is trusted with what
 
-The key idea: **the connector on your machine is the authority.** The server is a relay that is not trusted for anything that matters.
+The key idea: **the connector on your machine is the authority.** The server is a relay. It cannot make your machine run a request that a browser you approved did not sign. But it is **not** an innocent bystander: it sends your browser its web page and it sees what you look at while you look. Choose the server the way you would choose who to give a terminal on your computer to.
 
 | Party | Trusted for | Not trusted for |
 | --- | --- | --- |
 | **Connector** (your machine) | Everything on that machine: your data, the rules, the allowlist, the kill switch | n/a |
 | **Browser device key** | Signing the requests you make | n/a (the key cannot be exported from the browser) |
-| **Server** | Accounts, sign-in, who is online, routing | Forging a command, reading your data, reaching a route you did not allow, choosing which keys are approved |
+| **Server** | Accounts, sign-in, who is online, routing | Forging a request *without* a browser you approved, or reaching a route you did not allow. **Not** safe from: seeing what you view, showing you altered pages, and (through the page it serves) getting a key approved when you start a pairing. See below. |
+
+### What a hostile or hacked server can do
+
+Be clear-eyed about this. In hosted mode the server operator ships the code of the web page that runs in your browser and that signs your requests. So a dishonest or hacked server can, **without breaking any of the protocol's cryptography**:
+
+- **Abuse a browser you already approved, while its page is open.** It can serve a hostile page that uses that browser's key to send anything on the allowlist: prompt your agents and answer their Y/n questions, which can make an agent run commands (see [above](#what-maestria-can-and-cannot-do-to-your-machine)).
+- **Get its own key approved when you start a pairing.** Pairing asks you to compare a code and then confirm on your machine. The page that shows you the code is also served by the server, so a hostile page can pair a key it holds and show you the matching code. You would approve a key you think is your browser's.
+- **See what you look at** (chat, tasks, docs, the audit log) while it passes through, and show you altered answers. Responses are not signed by your machine, so it could show you a harmless Y/n prompt while the real one is different. Read the full prompt text, and prefer to approve important prompts where you can see them on the machine.
+
+What your machine still enforces whatever the server does: only requests signed by an approved key run; only the allowlisted routes; a rate limit; approvals that expire (14 days, 3 idle by default); a pairing attempt budget (see below); the kill switch; and a local audit log of every change and every pairing.
+
+**If you do not trust the operator, do not use a server you do not control.** Run [your own hosted server](deploy-cloud.md), or use local mode, where the page comes from your own machine and none of this applies.
+
+### Pairing: how attempts are limited
+
+Approving a browser is the most sensitive step, so your machine limits it itself, whatever the server sends:
+
+- At most **5 pairings offered per 10 minutes** and 20 per day.
+- After a pairing whose key did not match its commitment, **no new pairing for an hour**.
+- The comparison code is **8 digits** (`1234 · 5678`), so even the few allowed tries are hopeless to grind.
+- 5 wrong codes typed into `maestria devices approve` within 10 minutes pause it.
+- Every offer, refusal, failure and approval is in the local audit log. `maestria devices pending` shows how many pairings were offered recently, and a running connector prints a line when a browser asks to pair.
+- `devices approve` shows the browser's name, its **key fingerprint**, the time and the code, and asks you to type a random word. The pairing page in your browser shows the same fingerprint. If you did not just start a pairing, do not approve it. `maestria devices list` shows the fingerprint of every approved browser.
 
 ### How a request is protected
 
 1. Your browser holds a private key that **never leaves it**.
-2. You approve that browser **on each machine** by comparing a short code (step 3 of [Use a hosted Maestria](hosted.md#3-approve-your-browser-on-the-machine)). The code is built so that a hostile server cannot swap the key without the codes differing.
+2. You approve that browser **on each machine** by comparing a short code and the key fingerprint (step 3 of [Use a hosted Maestria](hosted.md#3-approve-your-browser-on-the-machine)). The code is built so that a server that only relays cannot swap the key without the codes differing. A server that also serves the page can still do more: see [What a hostile or hacked server can do](#what-a-hostile-or-hacked-server-can-do).
 3. Every request is **signed** by the browser, covering the method, path, query, body, machine, device, time and a one-time number.
 4. Your machine checks the signature, the time (within 60 seconds), that the number was not used before, that the approval has not expired, that the action is on its **allowlist**, and that the device is not over its **rate limit**. Only then it runs the request.
 5. The machine records every change in its own audit log, with the device, method, path and result, never the content.
 
-So a hostile or hacked server **cannot invent, change or replay a command**. It can only refuse to relay.
+So a server that only relays **cannot invent, change or replay a command**. It can only refuse to relay. (A server that also serves the page can do more; see the next section.)
 
 ### What the server stores
 
-Your email, a hash of your password, your encrypted 2FA secret, your linked machines (name, system, version, last seen), the public keys of your approved browsers, and an account audit log. **No workspace data.** What you look at passes through while you look, and is not logged or stored.
+Your email, a hash of your password, your encrypted 2FA secret, your linked machines (name, system, version, last seen), the public keys of your approved browsers, and an account audit log. **No workspace data is stored.** What you look at passes through the server in clear while you look, is not logged or stored by Maestria's server, and could be read or changed by a hostile operator.
 
 ### The allowlist
 
@@ -92,10 +134,14 @@ Through the relay, the web app can read the panel's pages and data, answer tasks
 | DNS rebinding | Host allowlist. |
 | Hostile server forges or edits a command | Device signature. The connector refuses it. |
 | Hostile server replays a command | 60-second window, one-time numbers, and the machine id inside the signature. |
-| Hostile server swaps a browser key | The code you compare on your machine. |
+| Relay-only server swaps a browser key | The code and key fingerprint you compare on your machine, and the pairing attempt budget. |
+| **Hostile server that also serves the page** (pairs its own key, abuses an open session) | **Not stopped by the protocol.** Bounded by the allowlist, rate limit, short approvals, the pairing budget, the kill switch and the audit log. Run your own server, or use local mode. |
 | Hostile server reaches other actions | The allowlist on your machine. |
-| Hostile server reads your data | It stores none, and logs no bodies. |
-| Stolen phone or browser | Revoke the device on the machine, or use the kill switch. Approvals expire (30 days, or 7 idle). |
+| Hostile server reads or alters what you view | **Not stopped.** It stores none and logs no bodies, but it sees what passes through. Run your own server for anything sensitive. |
+| An AI agent on your machine approves a device, links a cloud or lifts the kill switch | Those commands need an interactive terminal and a random word typed back, and are audited. Not a lock against an agent with a real terminal. |
+| A stranger exhausts memory with sign-in attempts | Password checks are rate limited per address and globally, and at most 2 run at once. |
+| A stranger locks you out | Visitor addresses are used behind a tunnel, and direct local access is never locked out by others' failures. |
+| Stolen phone or browser | Revoke the device on the machine, or use the kill switch. Approvals expire (14 days, or 3 idle). |
 | Leaked link code | Lasts 10 minutes, works once, needs confirmation at your machine. |
 | Leaked connector credential | It only lets a machine connect. It cannot sign for a user. Revoke it in the web app. |
 | Flooding | Limits on message size, requests in flight, per-device rate and cache size. |
@@ -103,9 +149,9 @@ Through the relay, the web app can read the panel's pages and data, answer tasks
 
 ### The one limit we cannot remove
 
-In hosted mode, **the server sends your browser the web page itself**. A server that has been hacked, or is run by someone dishonest, could send a hostile page to a browser you already approved, and use its key while the page is open. No protocol can prevent that. It is limited by the rules your machine enforces: the allowlist, a rate limit, short approvals, the kill switch and the local audit log. The practical advice:
+In hosted mode, **the server sends your browser the web page itself**. A server that has been hacked, or is run by someone dishonest, can always send a hostile page, and use a key you approved while the page is open, or get its own key approved when you start a pairing (see [What a hostile or hacked server can do](#what-a-hostile-or-hacked-server-can-do)). No protocol can prevent that. It is limited by the rules your machine enforces: the allowlist, a rate limit, short approvals, the pairing budget, the kill switch and the local audit log. The practical advice:
 
-- **Use a hosted server you trust**, or run your own ([Run your own hosted server](deploy-cloud.md)).
+- **Use a hosted server you trust completely, or run your own** ([Run your own hosted server](deploy-cloud.md)). If you do not trust the operator, use local mode or self-host the cloud.
 - Use the **kill switch** if something looks wrong.
 - Check the **audit log** on the Security page from time to time.
 

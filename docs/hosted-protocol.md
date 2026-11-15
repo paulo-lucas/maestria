@@ -17,7 +17,7 @@ Companion docs: `docs/v2-spec.md` (decisions), `docs/v2-architecture.md` (overvi
 | --- | --- | --- |
 | Connector | Everything on its machine: data, policy, allowlist, kill switch | n/a |
 | Browser device key | Signing requests the user makes | n/a (non-extractable key) |
-| Cloud | Accounts, sign-in, presence, routing | Forging a command, reading workspace data at rest, reaching a route outside the connector's allowlist, choosing device keys |
+| Cloud | Accounts, sign-in, presence, routing | Forging a command without an approved device, storing workspace data, reaching a route outside the connector's allowlist, choosing device keys. **Not** trusted to keep what it relays private, or to serve an honest frontend (see below) |
 
 Consequences, each covered by tests:
 
@@ -26,7 +26,13 @@ Consequences, each covered by tests:
 3. **Live mirror.** An offline connector's workspaces vanish from every view and nothing is queued. A request for an offline connector fails at once (`503 connector_offline`).
 4. **Local kill switch.** While it is on, the connector refuses every relayed request (`kill_switch`). Only the local CLI turns it off.
 
-Known limit (inherent, not fixable by protocol): the cloud serves the frontend JavaScript. A compromised cloud can serve hostile JS to a browser that already holds an approved device key and use that key while the page is open. Mitigations are connector-side: allowlist, per-device rate limit, short device sessions (absolute and idle limits), the kill switch, the local audit log, and device revocation from the machine.
+Known limit (inherent, not fixable by protocol): **the cloud serves the frontend JavaScript, so the operator of the cloud can always act as a paired browser.** A malicious or compromised cloud can:
+
+1. serve hostile JS to a browser that already holds an approved device key and use that key while the page is open;
+2. **get its own key approved**: during pairing the page that shows the comparison code is the cloud's page, so hostile JS can create an extractable key (or post the commitment of a key the cloud holds) and show the code that matches. The person approves it on the machine believing it is their browser's key. Commit-then-reveal and the code protect against a cloud that only *relays* between an honest browser and the connector, not against one that also writes the browser's code;
+3. read and alter everything it relays (responses are TLS-protected to the cloud, not signed by the connector), for instance showing a harmless agent prompt while a different one is pending.
+
+What an approved device can send is everything on the allowlist (section 8), and that includes `agents/*/prompt` and `agents/*/approve`: **a session or an approved device can prompt any agent with free text and answer its Y/n question, which can make an agent run commands on the machine.** The cloud must therefore be trusted like a terminal on the machine. **Users who do not trust the operator must run the cloud themselves (`maestria-cloud`, see `docs/deploy-cloud.md`) or use local mode.** Mitigations are connector-side and only bound the damage: allowlist, per-device rate limit, short device sessions (absolute and idle limits, 14 and 3 days by default), the pairing attempt budget (6.2), the human-presence check on `devices approve` (a random word typed in an interactive terminal), the kill switch, the local audit log, and device revocation from the machine.
 
 ## 2. Identifiers, encodings, keys
 
@@ -82,7 +88,7 @@ A link code has 8 symbols from `abcdefghjkmnpqrstuvwxyz23456789` (no look-alikes
 2. The user types the code on the "Link a machine" page: `POST /api/link/claim` (session + CSRF) binds the code to the user's account.
 3. The CLI polls `POST /api/link/poll` with `{pollToken}` every 2 s. Once claimed it receives `{status:"claimed", accountHint}`, asks for confirmation on the machine, then calls `POST /api/link/poll` with `{pollToken, confirm:true, name}` and receives `{connectorId, credential}` once.
 
-Both modes require machine-side confirmation, so a leaked code alone does not link a machine without someone at that terminal (and in mode 4.1 the code is shown only to the signed-in user). Unlinking: `maestria connect unlink` (calls `DELETE /api/connector` with the credential, then deletes the local credential) or **Revoke** in the web (`POST /api/connectors/<id>/revoke`): the credential is marked revoked, the socket is closed, and later dials get `401`. Both are audited.
+Both modes require machine-side confirmation: `maestria connect` refuses to link unless it runs in an interactive terminal and the person types a random word it prints at that moment (no flag skips this, `--yes` included, which only skips the name and yes/no questions). So a leaked code alone does not link a machine without someone at that terminal (and in mode 4.1 the code is shown only to the signed-in user). Unlinking: `maestria connect unlink` (calls `DELETE /api/connector` with the credential, then deletes the local credential) or **Revoke** in the web (`POST /api/connectors/<id>/revoke`): the credential is marked revoked, the socket is closed, and later dials get `401`. Both are audited.
 
 ## 5. The connector socket
 
@@ -128,18 +134,31 @@ A short code can only be compared by a human if the attacker (here: a hostile cl
 ### 6.2 Flow
 
 1. The browser creates the key pair and a random nonce `n` (16 bytes). It sends `commit = b64u(sha256("maestria-pair-commit-v1" ‖ spki ‖ n))` and a `label` ("Safari on iPhone") to `POST /api/pair` (session + CSRF). The cloud creates a pairing (5 min, in memory) and sends `pair_offer {pair, commit, label, ua}` to **every online connector** of the account.
-2. Each connector stores a pending pairing (max 5 pending, 5 min TTL, none while the kill switch is on), generates `r` (16 random bytes) and answers `pair_challenge {pair, r}`.
+2. Each connector stores a pending pairing (max 5 pending, 5 min TTL, none while the kill switch is on), generates `r` (16 random bytes) and answers `pair_challenge {pair, r}`. The offer must fit the connector's **attempt budget** (section 6.2.1); otherwise the connector answers `pair_state rejected` with code `pairing_paused`. `label` and `ua` are stripped of control characters and clipped before they are stored or shown.
 3. The browser polls `GET /api/pair/<pair>` (or follows the presence stream) and, for each connector that answered, computes its code and reveals the key: `POST /api/pair/<pair>/reveal {connectorId, spki, nonce}`. The cloud sends `pair_reveal {pair, spki, n}` to that connector.
 4. The connector checks `sha256("maestria-pair-commit-v1" ‖ spki ‖ n) == commit`, that `deviceId = sha256(spki)[0:32]`, and that `spki` parses as a P-256 public key. Any failure → `pair_state mismatch`. Otherwise it computes the **code**.
-5. **Code**: `d = sha256("maestria-pair-sas-v1" ‖ spki ‖ n ‖ r)`; take the first 4 bytes as a big-endian `uint32`, `mod 10^6`, zero padded to 6 digits, shown as `47 · 12 · 86`. The browser computes the same value, so each machine row on the waiting screen shows its own code.
-6. The user compares and runs **`maestria devices approve <code>`** on that machine. The CLI accepts only a code of a live, revealed pairing. Typing the code the browser shows *is* the comparison. `maestria devices pending` lists them, `reject <code>` drops one.
-7. On approval the connector stores the device (`id`, `spki`, `label`, `approvedAt`), sends `pair_state approved`, and the waiting screen turns that row to "Approved". From now on the browser may sign requests for that connector.
+5. **Code**: `d = sha256("maestria-pair-sas-v2" ‖ spki ‖ n ‖ r)`; take the first 6 bytes as a big-endian 48-bit integer, `mod 10^8`, zero padded to 8 digits, shown as `4712 · 8659`. The browser computes the same value, so each machine row on the waiting screen shows its own code. The browser also shows the **key fingerprint**: the first 16 hex characters of the device id in groups of four (`a1b2 c3d4 e5f6 0718`).
+6. The user compares and runs **`maestria devices approve <code>`** on that machine. The CLI accepts only a code of a live, revealed pairing, then shows the device name (as the cloud described it, control characters removed), the key fingerprint, the time the pairing was offered and the code, and requires a person at an interactive terminal to type a random word printed at that moment (no flag skips this, `--yes` included; refused when stdin is not a terminal). Typing the code the browser shows *is* the comparison; the fingerprint lets the person also compare the key. `maestria devices pending` lists pairings with their fingerprint, offer time and how much of the budget is used; `reject <code>` drops one.
+7. On approval the connector stores the device (`id`, `spki`, `label`, `approvedAt`), sends `pair_state approved`, and the waiting screen turns that row to "Approved". From now on the browser may sign requests for that connector. `devices list` shows each device's fingerprint.
 
-Why a hostile cloud cannot win: it must give the connector a commit for *its* key before it sees `r`, and the user's browser computes its code from the *real* key, nonce and the same `r`. Matching codes then happen with probability 10⁻⁶ per attempt, and the attempt is visible as a pending request the user does not approve. A wrong code typed on the machine simply finds no pairing.
+Why a cloud that only relays cannot win: it must give the connector a commit for *its* key before it sees `r`, and the user's browser computes its code from the *real* key, nonce and the same `r`. Matching codes then happen with probability 10⁻⁸ per attempt, and the attempt is visible as a pending request the user does not approve. A wrong code typed on the machine simply finds no pairing. **This holds only against a cloud that does not also control the browser's page; see the known limit in section 1.**
+
+#### 6.2.1 Attempt budget (connector side)
+
+A pairing offer is a request to put a key on this machine's approved list, so the connector rations it itself and counts every try, whatever the cloud does. The counters are kept in the connector database (`pair_events`), so a restart or a reconnect does not reset them.
+
+| Rule | Value |
+| --- | --- |
+| Offers accepted per window | 5 per 10 minutes, and 20 per 24 hours (repeating a known pairing id is not a new offer) |
+| After a failed reveal (`mismatch`) | no new offer for 1 hour |
+| Wrong codes typed at `devices approve` / `Lookup` | 5 per 10 minutes, then even a right code is refused until the window passes |
+| Live pairings | 5 |
+
+A refused offer answers `pair_state rejected` with code `pairing_paused`. Every offer, refusal (throttled to one entry a minute), mismatch, wrong code and approval is written to the local audit log (`pair_offered`, `pair_refused`, `pair_mismatch`, `pair_bad_code`, `device_approved`), and a connector that is running prints a line when a browser asked to pair. A bad reveal therefore does not free the slot to try again: it pauses pairing.
 
 ### 6.3 Re-approval and expiry
 
-A device keeps working for the connector's **session policy**: absolute lifetime since approval (default **30 days**) and idle limit since last use (default **7 days**). After either, requests get `approval_expired` / `idle_expired`, the device moves to `expired`, and the browser repeats pairing (same key, new approval). Both limits are configurable on the machine (`relay` section of `config.json`), never from the web.
+A device keeps working for the connector's **session policy**: absolute lifetime since approval (default **14 days**) and idle limit since last use (default **3 days**). The defaults are short on purpose: re-approving takes one command and a typed word, and the shorter the approval, the shorter a mistaken or abused one lives. After either, requests get `approval_expired` / `idle_expired`, the device moves to `expired`, and the browser repeats pairing (same key, new approval). Both limits are configurable on the machine (`relay` section of `config.json`), never from the web.
 
 ### 6.4 Revocation
 
@@ -267,14 +286,17 @@ Connector, unauthenticated by cookie (rate limited, no `Origin`): `POST /api/lin
 | DNS rebinding | Host allowlist |
 | Hostile cloud forges or edits a command | Device signature over method/path/query/body hash; refused by the connector |
 | Hostile cloud replays | ±60 s window, nonce cache that fails closed, connector id in the signed string |
-| Hostile cloud swaps a key at pairing | Commit-then-reveal code verified by the user on the machine |
+| Relaying cloud swaps a key at pairing | Commit-then-reveal 8-digit code and key fingerprint verified by the user on the machine |
+| Cloud grinds pairing offers to match a code | Connector attempt budget (5 offers / 10 min, 1 hour pause after a failed reveal, wrong-code limit), audited |
+| **Hostile cloud that serves the page pairs its own key or abuses an open session** | **Out of protocol scope.** Bounded by allowlist, rate limit, short approvals, pairing budget, human-presence check on approval, kill switch, local audit. Run your own cloud or use local mode |
 | Hostile cloud reaches other routes | Connector allowlist; no approve / reset / config routes |
-| Hostile cloud reads data at rest | The cloud stores none; bodies never logged |
+| Hostile cloud reads or alters what it relays | Not prevented (TLS ends at the cloud). It stores none at rest and logs no bodies |
+| AI agent on the machine approves a device or links a cloud | Interactive terminal and a random typed word required, audited (friction and a trail, not a lock against an agent with a real terminal) |
 | Stolen browser or phone | Device revoke from the machine or a trusted device; absolute and idle expiry; kill switch |
 | Leaked link code | 10 minutes, single use, hashed, confirmation on the machine, rate limited |
 | Leaked connector credential | Hashed server-side; revoke in the web; it only lets a machine dial in, it cannot sign for a user |
 | Flooding | Frame, body and in-flight limits, per-device rate limit, bounded caches |
-| Compromised cloud serves hostile JS | Out of protocol scope; bounded by allowlist, rate limit, short device sessions, kill switch, local audit |
+| Compromised cloud serves hostile JS | Out of protocol scope (see section 1); bounded by allowlist, rate limit, short device sessions, pairing budget, kill switch, local audit |
 
 ## 12. Implementation notes
 

@@ -142,17 +142,19 @@ cloudflared service install
 
 (On Linux and Windows this may need an administrator terminal. See Cloudflare's [run as a service](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/configure-tunnels/local-management/as-a-service/) page.)
 
-### Step 8 (recommended). Count real visitor addresses
+### Step 8. Count real visitor addresses
 
-Behind Cloudflare, every request seems to come from your own machine, so the sign-in limits cannot tell visitors apart. Tell Maestria to trust Cloudflare's header. Open `config.json` in your config directory (`~/.config/maestria/config.json`) and add:
+Behind Cloudflare, every request seems to come from your own machine, so the sign-in limits could not tell visitors apart: one stranger's failed attempts would lock everyone out. Since you allowed a public host name (`maestria config allow-host`), Maestria now **reads the visitor's address from Cloudflare's `CF-Connecting-IP` header automatically**. You do not need to do anything. Opening the panel directly on the machine (`http://127.0.0.1:...`) is never locked out by strangers' failed attempts.
+
+If your tunnel is **not** Cloudflare's and lets a visitor send that header themselves, turn this off so a stranger cannot pick the address the limits see. Open `config.json` in your config directory (`~/.config/maestria/config.json`) and add:
 
 ```json
 {
-  "trustCfConnectingIp": true
+  "trustCfConnectingIp": false
 }
 ```
 
-Keep the other settings in the file. Then `maestria service restart`. Only turn this on when **all** traffic really comes through Cloudflare.
+Then `maestria service restart`. (Setting it to `true` also works, to force it on without a public host name.)
 
 ### Is it secure enough?
 
