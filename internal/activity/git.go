@@ -81,7 +81,9 @@ func BranchTip(dir, branch string) string {
 }
 
 // CommitLanded reports whether commit is an ancestor of the repository's default branch in dir:
-// the same test as BranchLanded, for a commit that outlived its branch.
+// the same test as BranchLanded, for a commit that outlived its branch. Like BranchLanded it
+// cannot tell a floor that was merged from one that never got a commit of its own (its tip is
+// already in the default branch): such a floor reads as landed.
 func CommitLanded(dir, commit string) bool {
 	if dir == "" || !validSHA(commit) {
 		return false
