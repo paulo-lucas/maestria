@@ -4,6 +4,10 @@ All notable changes to Maestria are listed here. The format follows [Keep a Chan
 
 ## [Unreleased]
 
+### Fixed
+
+- **`maestria update` failed on Windows with "Access is denied"** when a program was still running from the binary the last update had set aside (`maestria.exe.previous`), for example an agent's `maestria wait` started before that update. Windows lets such a file be renamed but not deleted, so the update now moves it out of the way and deletes it on a later update, once nothing runs from it.
+
 ## [0.1.7] - 2026-11-18
 
 ### Changed

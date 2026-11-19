@@ -868,3 +868,61 @@ func TestBehind(t *testing.T) {
 		}
 	}
 }
+
+// On Windows a binary that a process still runs from (a "maestria wait" started before the last
+// update) can be renamed but not removed or replaced. The swap moves such a .previous aside
+// instead of failing, and a later swap deletes it once nothing holds it.
+func TestWindowsSwapWithThePreviousBinaryInUse(t *testing.T) {
+	dir := t.TempDir()
+	exe := filepath.Join(dir, "maestria.exe")
+	write := func(p, s string) {
+		t.Helper()
+		if err := os.WriteFile(p, []byte(s), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(exe, "V2")
+	write(exe+".previous", "V1 still running")
+	staged := filepath.Join(dir, "staged")
+	write(staged, "V3")
+
+	inUse := map[string]bool{exe + ".previous": true}
+	removeFile = func(p string) error {
+		if inUse[p] {
+			return &os.PathError{Op: "remove", Path: p, Err: errors.New("Access is denied.")}
+		}
+		return os.Remove(p)
+	}
+	t.Cleanup(func() { removeFile = os.Remove })
+
+	prev, err := swapIn(exe, staged, "windows")
+	if err != nil {
+		t.Fatalf("swapIn: %v", err)
+	}
+	if b, _ := os.ReadFile(exe); string(b) != "V3" {
+		t.Errorf("exe = %q, want V3", b)
+	}
+	if b, _ := os.ReadFile(prev); prev != exe+".previous" || string(b) != "V2" {
+		t.Errorf("previous %s = %q, want V2", prev, b)
+	}
+	stale, _ := filepath.Glob(exe + ".stale-*")
+	if len(stale) != 1 {
+		t.Fatalf("stale files = %v, want the old previous moved aside", stale)
+	}
+	if b, _ := os.ReadFile(stale[0]); string(b) != "V1 still running" {
+		t.Errorf("stale = %q", b)
+	}
+
+	// The process exits; the next update cleans up.
+	inUse = map[string]bool{}
+	write(staged, "V4")
+	if _, err := swapIn(exe, staged, "windows"); err != nil {
+		t.Fatalf("second swapIn: %v", err)
+	}
+	if left, _ := filepath.Glob(exe + ".stale-*"); len(left) != 0 {
+		t.Errorf("stale files left: %v", left)
+	}
+	if b, _ := os.ReadFile(exe + ".previous"); string(b) != "V3" {
+		t.Errorf("previous = %q, want V3", b)
+	}
+}

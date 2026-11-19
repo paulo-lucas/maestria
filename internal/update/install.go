@@ -10,11 +10,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 const (
@@ -264,10 +266,13 @@ func extractZip(srcPath, want string, dst io.Writer) error {
 // can rename it, so the old one is moved aside and staged takes its place.
 func swapIn(exe, staged, goos string) (string, error) {
 	prev := exe + ".previous"
-	_ = os.Remove(prev)
 	if goos == "windows" {
+		removeStale(exe)
+		if err := clearForRename(exe, prev); err != nil {
+			return "", fmt.Errorf("move the previous binary out of the way: %w", err)
+		}
 		if err := os.Rename(exe, prev); err != nil {
-			return "", fmt.Errorf("move the running binary aside: %w", err)
+			return "", fmt.Errorf("move the running binary aside: %w (is an antivirus or another program holding %s?)", err, filepath.Base(exe))
 		}
 		if err := os.Rename(staged, exe); err != nil {
 			_ = os.Rename(prev, exe)
@@ -275,6 +280,7 @@ func swapIn(exe, staged, goos string) (string, error) {
 		}
 		return prev, nil
 	}
+	_ = os.Remove(prev)
 	if err := os.Link(exe, prev); err != nil {
 		if err := copyFile(exe, prev); err != nil {
 			return "", fmt.Errorf("keep the previous binary: %w", err)
@@ -287,11 +293,40 @@ func swapIn(exe, staged, goos string) (string, error) {
 	return prev, nil
 }
 
+// removeFile is os.Remove; tests replace it to act like Windows with a file in use.
+var removeFile = os.Remove
+
+// clearForRename makes way for a rename to target on Windows. A process still running from
+// target (a "maestria wait" or "serve" started before the last update) keeps it from being
+// removed or replaced, but not from being renamed, so it moves to a unique stale name that a
+// later update removes.
+func clearForRename(exe, target string) error {
+	err := removeFile(target)
+	if err == nil || errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	stale := fmt.Sprintf("%s.stale-%d", exe, time.Now().UnixNano())
+	if rerr := os.Rename(target, stale); rerr != nil {
+		return fmt.Errorf("%w (a program may still be running from %s: close it and try again)", err, filepath.Base(target))
+	}
+	return nil
+}
+
+// removeStale deletes what clearForRename moved aside, once nothing runs from it.
+func removeStale(exe string) {
+	matches, _ := filepath.Glob(exe + ".stale-*")
+	for _, m := range matches {
+		_ = removeFile(m)
+	}
+}
+
 // restorePrevious puts prev back as exe.
 func restorePrevious(exe, prev, goos string) error {
 	if goos == "windows" {
 		failed := exe + ".failed"
-		_ = os.Remove(failed)
+		if err := clearForRename(exe, failed); err != nil {
+			return err
+		}
 		if err := os.Rename(exe, failed); err != nil {
 			return err
 		}
