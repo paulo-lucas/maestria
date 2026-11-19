@@ -4,6 +4,8 @@ All notable changes to Maestria are listed here. The format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-11-19
+
 ### Changed
 
 - **An approved browser stays approved until you revoke it.** Approvals no longer end after 14 days, or after 3 days unused, by default. To have them end, set limits on the machine with the new `maestria devices limits --days N --idle-days N` (0 is no limit; restart Maestria after a change). `maestria devices limits` alone shows them. A machine whose `config.json` already sets `approvalAbsoluteDays` or `idleDays` keeps those numbers. A browser whose approval already expired asks to be approved once more. The hosted Security page shows "until revoked" and "never" for a limit that is off.
