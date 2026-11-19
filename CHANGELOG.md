@@ -4,6 +4,14 @@ All notable changes to Maestria are listed here. The format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-11-18
+
+### Fixed
+
+- **The background service did not install on Windows.** `maestria service install` (and option 1 of `maestria init`) failed with "The task XML is malformed", and then "Access is denied" for a user without administrator rights, so `service start` and `restart` said "cannot find the file specified". The task file is now written in the UTF-16 that Task Scheduler reads, and the task belongs to your account, so no administrator rights are needed. **After updating,** run `maestria service install` and then `maestria service restart`.
+- On Windows, `maestria service status` said the service was installed and running when only its script existed and a `maestria serve` started by hand answered. It now checks the scheduled task, and says when the panel answers but not through the service. `service start` and `restart` without the task say to run `maestria service install`.
+- When `maestria init` cannot install the background service, it now says plainly that the service was not installed, shows why, and how to start the panel.
+
 ## [0.1.5] - 2026-11-15
 
 ### Added

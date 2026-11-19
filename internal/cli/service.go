@@ -217,6 +217,9 @@ func cmdServiceStatus(args []string, env *Env) error {
 	reach := fmt.Sprintf("unreachable (%s)", report.Server.URL)
 	if report.Server.Reachable {
 		reach = fmt.Sprintf("reachable (%s)", report.Server.URL)
+		if !report.Running {
+			reach += ", but not through the service"
+		}
 	}
 	fmt.Fprintf(env.Stdout, "Service (%s): %s\n", report.Manager, inst)
 	fmt.Fprintf(env.Stdout, "State: %s\n", state)

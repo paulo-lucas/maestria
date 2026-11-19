@@ -922,7 +922,8 @@ func initServiceStep(in *bufio.Reader, flagService, mode string, hasFlagService,
 	if err != nil {
 		var se *service.Error
 		if errors.As(err, &se) {
-			fmt.Fprintf(env.Stdout, "Warning: could not set up background service (%v).\n", err)
+			fmt.Fprintf(env.Stdout, "\nThe background service was NOT installed:\n  %v\n", err)
+			fmt.Fprintln(env.Stdout, `Start the panel with "maestria serve" for now. "maestria service install" shows this error again.`)
 			return "skipped", nil
 		}
 		return "", err

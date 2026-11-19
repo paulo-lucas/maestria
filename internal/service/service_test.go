@@ -1,8 +1,11 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"encoding/xml"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -13,6 +16,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf16"
 
 	"github.com/paulo-lucas/maestria/internal/config"
 )
@@ -116,9 +120,12 @@ func TestRenderWindowsServiceScriptAndTaskXML(t *testing.T) {
 	taskXML := RenderWindowsTaskXML(
 		`C:\Users\alice\AppData\Roaming\maestria\maestria-service.cmd`,
 		`C:\Users\alice\AppData\Roaming\maestria`,
+		`DESKTOP-1\a&b`,
 	)
 	for _, want := range []string{
-		`<LogonTrigger>`,
+		`<?xml version="1.0" encoding="UTF-16"?>`,
+		"<LogonTrigger>\r\n      <Enabled>true</Enabled>\r\n      <UserId>DESKTOP-1\\a&amp;b</UserId>\r\n    </LogonTrigger>",
+		"<Principal id=\"Author\">\r\n      <UserId>DESKTOP-1\\a&amp;b</UserId>",
 		`<RunLevel>LeastPrivilege</RunLevel>`,
 		`<ExecutionTimeLimit>PT0S</ExecutionTimeLimit>`,
 		`<Command>cmd.exe</Command>`,
@@ -129,8 +136,36 @@ func TestRenderWindowsServiceScriptAndTaskXML(t *testing.T) {
 			t.Errorf("task XML missing %q\n%s", want, taskXML)
 		}
 	}
-	if err := xml.Unmarshal([]byte(taskXML), new(any)); err != nil {
+	if err := parseUTF16XML(EncodeWindowsTaskXML(taskXML)); err != nil {
 		t.Fatalf("task XML is not valid XML: %v", err)
+	}
+}
+
+// parseUTF16XML checks that b is UTF-16 LE with a byte order mark, as schtasks needs, and
+// that it parses as XML.
+func parseUTF16XML(b []byte) error {
+	if len(b) < 2 || b[0] != 0xFF || b[1] != 0xFE || len(b)%2 != 0 {
+		return fmt.Errorf("not UTF-16 LE with a BOM: % x", b[:min(len(b), 4)])
+	}
+	units := make([]uint16, 0, len(b)/2-1)
+	for i := 2; i < len(b); i += 2 {
+		units = append(units, uint16(b[i])|uint16(b[i+1])<<8)
+	}
+	dec := xml.NewDecoder(strings.NewReader(string(utf16.Decode(units))))
+	dec.CharsetReader = func(label string, r io.Reader) (io.Reader, error) {
+		if !strings.EqualFold(label, "UTF-16") {
+			return nil, fmt.Errorf("declared encoding %q, want UTF-16", label)
+		}
+		return r, nil // already decoded above
+	}
+	return dec.Decode(new(any))
+}
+
+func TestEncodeWindowsTaskXML(t *testing.T) {
+	got := EncodeWindowsTaskXML("<é\U0001F600")
+	want := []byte{0xFF, 0xFE, '<', 0x00, 0xE9, 0x00, 0x3D, 0xD8, 0x00, 0xDE}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("EncodeWindowsTaskXML = % x, want % x", got, want)
 	}
 }
 
@@ -340,11 +375,22 @@ func TestLifecycleWindows(t *testing.T) {
 	opts := Options{
 		ConfigDir:  cfgDir,
 		HomeDir:    tmp,
-		Env:        testEnv("windows", nil),
+		Env:        testEnv("windows", map[string]string{"USERDOMAIN": "DESKTOP-1", "USERNAME": "alice"}),
 		BinaryPath: binPath,
 		Runner: func(_ context.Context, argv []string) CmdResult {
 			switch argv[1] {
 			case "/Create":
+				// Read what schtasks reads, and refuse it the way schtasks does.
+				b, err := os.ReadFile(argv[5])
+				if err != nil {
+					return CmdResult{OK: false, Code: 1, Stderr: err.Error()}
+				}
+				if err := parseUTF16XML(b); err != nil {
+					return CmdResult{OK: false, Code: 1, Stderr: "ERROR: The task XML is malformed. " + err.Error()}
+				}
+				if strings.Count(string(utf16Text(b)), "<UserId>") != 2 {
+					return CmdResult{OK: false, Code: 1, Stderr: "ERROR: Access is denied."}
+				}
 				taskExists = true
 				return CmdResult{OK: true}
 			case "/Run":
@@ -406,6 +452,83 @@ func TestLifecycleWindows(t *testing.T) {
 	}
 	if _, err := os.Stat(WindowsTaskXMLPath(cfgDir)); !os.IsNotExist(err) {
 		t.Fatalf("task xml should be removed, err=%v", err)
+	}
+}
+
+func utf16Text(b []byte) string {
+	units := make([]uint16, 0, len(b)/2)
+	for i := 2; i+1 < len(b); i += 2 {
+		units = append(units, uint16(b[i])|uint16(b[i+1])<<8)
+	}
+	return string(utf16.Decode(units))
+}
+
+// The wrapper script without its scheduled task (an install that schtasks refused) is not an
+// installed service, even while a "maestria serve" started by hand answers on the port.
+func TestWindowsWithoutTheTask(t *testing.T) {
+	tmp := t.TempDir()
+	cfgDir := filepath.Join(tmp, "cfg")
+	if err := os.MkdirAll(cfgDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(WindowsServiceScriptPath(cfgDir), []byte("@echo off\r\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var ran []string
+	opts := Options{
+		ConfigDir:  cfgDir,
+		HomeDir:    tmp,
+		Env:        testEnv("windows", map[string]string{"USERNAME": "alice"}),
+		BinaryPath: filepath.Join(tmp, "maestria.exe"),
+		Runner: func(_ context.Context, argv []string) CmdResult {
+			ran = append(ran, argv[1])
+			return CmdResult{OK: false, Code: 1, Stderr: "ERROR: The system cannot find the file specified."}
+		},
+		ReachabilityCheck: func(host string, port int) Reachability {
+			return Reachability{Reachable: true, URL: "http://" + host + ":" + strconv.Itoa(port)}
+		},
+	}
+	ctx := context.Background()
+	if IsInstalled(opts) {
+		t.Error("IsInstalled = true without the task")
+	}
+	st, err := Status(ctx, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Installed || st.Loaded || st.Running || !st.Server.Reachable {
+		t.Errorf("status without the task: %+v", st)
+	}
+	for name, run := range map[string]func() error{
+		"start":   func() error { return Start(ctx, opts) },
+		"restart": func() error { return Restart(ctx, opts) },
+	} {
+		ran = nil
+		err := run()
+		if err == nil || !strings.Contains(err.Error(), `the MaestriaPanel task does not exist`) || !strings.Contains(err.Error(), "maestria service install") {
+			t.Errorf("%s: err = %v", name, err)
+		}
+		if len(ran) != 1 || ran[0] != "/Query" {
+			t.Errorf("%s ran %v, want only the query", name, ran)
+		}
+	}
+}
+
+func TestWindowsUserID(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("on Windows the user comes from the account, not the environment")
+	}
+	for _, tc := range []struct {
+		vars map[string]string
+		want string
+	}{
+		{map[string]string{"USERDOMAIN": "DESKTOP-1", "USERNAME": "alice"}, `DESKTOP-1\alice`},
+		{map[string]string{"USERNAME": "alice"}, "alice"},
+		{nil, ""},
+	} {
+		if got := windowsUserID(testEnv("windows", tc.vars)); got != tc.want {
+			t.Errorf("windowsUserID(%v) = %q, want %q", tc.vars, got, tc.want)
+		}
 	}
 }
 

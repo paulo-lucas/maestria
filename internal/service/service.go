@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/user"
 	"path"
 	"path/filepath"
 	"runtime"
@@ -19,6 +20,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf16"
 
 	"github.com/paulo-lucas/maestria/internal/config"
 	"github.com/paulo-lucas/maestria/internal/privfile"
@@ -371,13 +373,17 @@ func unitFileFromCtx(ctx resolvedContext) string {
 	}
 }
 
-// IsInstalled reports whether the service definition file exists.
+// IsInstalled reports whether the service is installed: its definition file exists, and on
+// Windows the scheduled task exists (the wrapper script alone does not run anything).
 func IsInstalled(opts Options) bool {
-	u, err := UnitFile(opts)
+	c, err := resolveContext(opts)
 	if err != nil {
 		return false
 	}
-	_, err = os.Stat(u)
+	if c.goos == "windows" {
+		return windowsTask(context.Background(), c).OK
+	}
+	_, err = os.Stat(unitFileFromCtx(c))
 	return err == nil
 }
 
@@ -566,10 +572,14 @@ func RenderWindowsServiceScript(binaryPath, mode, configDir string, env config.E
 	return strings.Join(lines, "\r\n")
 }
 
-// RenderWindowsTaskXML renders a per-user Windows Task Scheduler XML definition (no admin required).
-func RenderWindowsTaskXML(scriptPath, configDir string) string {
+// RenderWindowsTaskXML renders a per-user Windows Task Scheduler XML definition (no admin
+// required). userID is the account it belongs to (DOMAIN\user): a logon trigger without one
+// means "any user", which only an administrator may register. The text declares UTF-16, so
+// write it with EncodeWindowsTaskXML: schtasks refuses a UTF-8 file.
+func RenderWindowsTaskXML(scriptPath, configDir, userID string) string {
+	user := xmlEscape(userID)
 	lines := []string{
-		`<?xml version="1.0" encoding="UTF-8"?>`,
+		`<?xml version="1.0" encoding="UTF-16"?>`,
 		`<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">`,
 		`  <RegistrationInfo>`,
 		`    <Description>Maestria control panel</Description>`,
@@ -577,10 +587,12 @@ func RenderWindowsTaskXML(scriptPath, configDir string) string {
 		`  <Triggers>`,
 		`    <LogonTrigger>`,
 		`      <Enabled>true</Enabled>`,
+		`      <UserId>` + user + `</UserId>`,
 		`    </LogonTrigger>`,
 		`  </Triggers>`,
 		`  <Principals>`,
 		`    <Principal id="Author">`,
+		`      <UserId>` + user + `</UserId>`,
 		`      <LogonType>InteractiveToken</LogonType>`,
 		`      <RunLevel>LeastPrivilege</RunLevel>`,
 		`    </Principal>`,
@@ -612,6 +624,44 @@ func RenderWindowsTaskXML(scriptPath, configDir string) string {
 		"",
 	}
 	return strings.Join(lines, "\r\n")
+}
+
+// EncodeWindowsTaskXML returns s as UTF-16 little-endian with a byte order mark, the encoding
+// "schtasks /Create /XML" reads.
+func EncodeWindowsTaskXML(s string) []byte {
+	units := utf16.Encode([]rune(s))
+	out := make([]byte, 2, 2+2*len(units))
+	out[0], out[1] = 0xFF, 0xFE
+	for _, u := range units {
+		out = append(out, byte(u), byte(u>>8))
+	}
+	return out
+}
+
+// windowsUserID names the account the task belongs to, as DOMAIN\user.
+func windowsUserID(env config.Env) string {
+	if runtime.GOOS == "windows" {
+		if u, err := user.Current(); err == nil && strings.TrimSpace(u.Username) != "" {
+			return u.Username
+		}
+	}
+	name := strings.TrimSpace(env.Getenv("USERNAME"))
+	if name == "" {
+		return ""
+	}
+	if domain := strings.TrimSpace(env.Getenv("USERDOMAIN")); domain != "" {
+		return domain + `\` + name
+	}
+	return name
+}
+
+// windowsTask asks Task Scheduler about the Maestria task. OK is false when it does not exist.
+func windowsTask(ctx context.Context, c resolvedContext) CmdResult {
+	return c.runner(ctx, []string{"schtasks", "/Query", "/TN", WindowsTaskName, "/FO", "LIST"})
+}
+
+func errNoWindowsTask() error {
+	return serviceErrorf(`the %s task does not exist in Task Scheduler. Run "maestria service install" first`, WindowsTaskName)
 }
 
 // Install writes the platform service unit/plist/task files and registers the service.
@@ -646,15 +696,19 @@ func Install(ctx context.Context, opts Options) (InstallResult, error) {
 	case "windows":
 		script := WindowsServiceScriptPath(c.configDir)
 		taskXML := WindowsTaskXMLPath(c.configDir)
+		userID := windowsUserID(c.env)
+		if userID == "" {
+			return InstallResult{}, serviceErrorf("cannot tell which Windows user to install the service for (USERNAME is not set)")
+		}
 		if err := os.WriteFile(script, []byte(RenderWindowsServiceScript(c.binaryPath, c.mode, c.configDir, c.env)), 0o600); err != nil {
 			return InstallResult{}, err
 		}
-		if err := os.WriteFile(taskXML, []byte(RenderWindowsTaskXML(script, c.configDir)), 0o600); err != nil {
+		if err := os.WriteFile(taskXML, EncodeWindowsTaskXML(RenderWindowsTaskXML(script, c.configDir, userID)), 0o600); err != nil {
 			return InstallResult{}, err
 		}
 		res := c.runner(ctx, []string{"schtasks", "/Create", "/TN", WindowsTaskName, "/XML", taskXML, "/F"})
 		if !res.OK {
-			return InstallResult{}, serviceErrorf("schtasks /Create failed: %s", firstErr(res.Stderr, "unknown error"))
+			return InstallResult{}, serviceErrorf("schtasks /Create failed: %s", firstErr(res.Stderr, firstErr(res.Stdout, "unknown error")))
 		}
 		return InstallResult{UnitPath: script, LogDir: logDir, Mode: c.mode}, nil
 
@@ -706,6 +760,9 @@ func Start(ctx context.Context, opts Options) error {
 		return nil
 
 	case "windows":
+		if !windowsTask(ctx, c).OK {
+			return errNoWindowsTask()
+		}
 		if run := c.runner(ctx, []string{"schtasks", "/Run", "/TN", WindowsTaskName}); !run.OK {
 			return serviceErrorf("schtasks /Run failed: %s", firstErr(run.Stderr, "unknown error"))
 		}
@@ -791,6 +848,9 @@ func Restart(ctx context.Context, opts Options) error {
 		return nil
 
 	case "windows":
+		if !windowsTask(ctx, c).OK {
+			return errNoWindowsTask()
+		}
 		_ = c.runner(ctx, []string{"schtasks", "/End", "/TN", WindowsTaskName})
 		if run := c.runner(ctx, []string{"schtasks", "/Run", "/TN", WindowsTaskName}); !run.OK {
 			return serviceErrorf("schtasks /Run failed: %s", firstErr(run.Stderr, "unknown error"))
@@ -884,15 +944,17 @@ func Status(ctx context.Context, opts Options) (StatusReport, error) {
 		}, nil
 
 	case "windows":
-		probe := c.runner(ctx, []string{"schtasks", "/Query", "/TN", WindowsTaskName, "/FO", "LIST"})
+		// The task, not the wrapper script, is what runs the panel. A panel that answers is only
+		// counted as the service's when the task exists: "Status" is translated on some systems.
+		probe := windowsTask(ctx, c)
 		loaded := probe.OK
-		running := (loaded && isWindowsTaskRunning(probe.Stdout)) || srv.Reachable
+		running := loaded && (isWindowsTaskRunning(probe.Stdout) || srv.Reachable)
 		return StatusReport{
 			Platform:  "windows",
 			Manager:   "task-scheduler",
 			UnitPath:  unit,
 			LogDir:    logDir,
-			Installed: installed,
+			Installed: loaded,
 			Loaded:    loaded,
 			Running:   running,
 			Server:    srv,
