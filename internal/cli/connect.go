@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -423,7 +424,70 @@ const devicesUsage = `Usage:
   maestria devices reject <code>     Refuse it
   maestria devices list              Approved devices
   maestria devices revoke <id>       End a device for good
+  maestria devices limits [--days N] [--idle-days N]
+                                     Show or set how long an approval lasts (0 = no limit, the default)
 `
+
+// approvalTerm says how long an approved device may send commands, after "send commands".
+func approvalTerm(days, idleDays int) string {
+	switch {
+	case days > 0 && idleDays > 0:
+		return fmt.Sprintf("for %d %s, or until it goes unused for %d %s", days, plural(days, "day", "days"), idleDays, plural(idleDays, "day", "days"))
+	case days > 0:
+		return fmt.Sprintf("for %d %s", days, plural(days, "day", "days"))
+	case idleDays > 0:
+		return fmt.Sprintf("until it goes unused for %d %s", idleDays, plural(idleDays, "day", "days"))
+	}
+	return `until you revoke it ("maestria devices revoke")`
+}
+
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
+}
+
+// devicesLimits shows or sets relay.approvalAbsoluteDays and relay.idleDays.
+func devicesLimits(args []string, env *Env, dir string, cfg *config.Config) error {
+	parsed, err := parseFlexArgs(args, flagSpec{Strings: map[string]bool{"days": true, "idle-days": true}})
+	if err != nil || len(parsed.Pos) > 0 {
+		return usagef("%s", devicesUsage)
+	}
+	days, idle := cfg.Relay.ApprovalAbsoluteDays, cfg.Relay.IdleDays
+	if !parsed.HasString("days") && !parsed.HasString("idle-days") {
+		fmt.Fprintf(env.Stdout, "An approved browser may send commands %s.\n", approvalTerm(days, idle))
+		fmt.Fprintf(env.Stdout, "Approval length: %s\nIdle limit:      %s\n", limitText(days), limitText(idle))
+		fmt.Fprintln(env.Stdout, "Change with: maestria devices limits --days N --idle-days N (0 = no limit)")
+		return nil
+	}
+	for _, f := range []struct {
+		name string
+		dst  *int
+	}{{"days", &days}, {"idle-days", &idle}} {
+		if !parsed.HasString(f.name) {
+			continue
+		}
+		n, err := strconv.Atoi(strings.TrimSpace(parsed.String(f.name)))
+		if err != nil || n < 0 || n > config.MaxRelayLimitDays {
+			return usagef("--%s must be a number of days from 0 (no limit) to %d", f.name, config.MaxRelayLimitDays)
+		}
+		*f.dst = n
+	}
+	if err := config.SaveRelayLimits(dir, days, idle, env.Config); err != nil {
+		return err
+	}
+	fmt.Fprintf(env.Stdout, "Saved. An approved browser may send commands %s.\n", approvalTerm(days, idle))
+	fmt.Fprintln(env.Stdout, "Restart to apply: maestria service restart (or restart maestria serve / connect).")
+	return nil
+}
+
+func limitText(days int) string {
+	if days == 0 {
+		return "no limit"
+	}
+	return fmt.Sprintf("%d %s", days, plural(days, "day", "days"))
+}
 
 func cmdDevices(args []string, env *Env) error {
 	if len(args) == 0 {
@@ -433,6 +497,9 @@ func cmdDevices(args []string, env *Env) error {
 	cfg, err := config.Load(dir, env.Config)
 	if err != nil {
 		return err
+	}
+	if args[0] == "limits" {
+		return devicesLimits(args[1:], env, dir, cfg)
 	}
 	db, err := store.Open(dir)
 	if err != nil {
@@ -500,7 +567,7 @@ func cmdDevices(args []string, env *Env) error {
 			"Key fingerprint:                  " + p.Fingerprint + "  (the pairing page shows the same one)",
 			"Offered at:                       " + time.UnixMilli(p.CreatedAt).Format("2006-01-02 15:04:05") + " (" + env.now().Sub(time.UnixMilli(p.CreatedAt)).Round(time.Second).String() + " ago)",
 			"Code:                             " + relay.FormatPairCode(p.Code),
-			fmt.Sprintf("It will be able to send commands for %d days (%d if unused). That includes prompting your agents and answering their Y/n questions,", cfg.Relay.ApprovalAbsoluteDays, cfg.Relay.IdleDays),
+			fmt.Sprintf("It will be able to send commands %s. That includes prompting your agents and answering their Y/n questions,", approvalTerm(cfg.Relay.ApprovalAbsoluteDays, cfg.Relay.IdleDays)),
 			"which can make an agent run commands. Only approve a pairing you started yourself, from a browser you control.",
 		}
 		if err := env.requireHuman(in, action, details, log); err != nil {
@@ -510,8 +577,8 @@ func cmdDevices(args []string, env *Env) error {
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(env.Stdout, "Approved %q (key %s). It may send commands for %d days, or until it has been idle %d.\n",
-			termsafe.Clean(d.Label, 80), d.Fingerprint(), cfg.Relay.ApprovalAbsoluteDays, cfg.Relay.IdleDays)
+		fmt.Fprintf(env.Stdout, "Approved %q (key %s). It may send commands %s.\n",
+			termsafe.Clean(d.Label, 80), d.Fingerprint(), approvalTerm(cfg.Relay.ApprovalAbsoluteDays, cfg.Relay.IdleDays))
 		return nil
 	case "list":
 		list, err := dm.List()

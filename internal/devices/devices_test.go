@@ -171,8 +171,43 @@ func TestNonceCacheFailsClosed(t *testing.T) {
 	}
 }
 
+// The limits a machine may set with "maestria devices limits" (the default is none).
+const (
+	limitAbsoluteDays = 14
+	limitIdleDays     = 3
+)
+
+// With the default policy an approval has no end: months unused, it still works, and the
+// devices list shows it active. Only revocation ends it.
+func TestNoLimitByDefault(t *testing.T) {
+	m, c := newManager(t)
+	b := relaytest.NewBrowser(t)
+	pair(t, m, b)
+	b.Now = c.now
+	c.advance(400 * 24 * time.Hour)
+	if _, code := m.Verify(cid, fromSigned(b.Sign(t, cid, "GET", "/api/inbox", "", nil))); code != "" {
+		t.Fatalf("an approval without limits ended: %q", code)
+	}
+	if code := m.Revalidate(b.DeviceID); code != "" {
+		t.Fatalf("revalidate: %q", code)
+	}
+	list, err := m.List()
+	if err != nil || len(list) != 1 || list[0].State != "active" {
+		t.Fatalf("list: %+v %v", list, err)
+	}
+	if err := m.Revoke(b.DeviceID); err != nil {
+		t.Fatal(err)
+	}
+	if _, code := m.Verify(cid, fromSigned(b.Sign(t, cid, "GET", "/api/inbox", "", nil))); code != relay.ErrDeviceRevoked {
+		t.Fatalf("revoked: %q", code)
+	}
+}
+
 func TestRevokedExpiredAndIdle(t *testing.T) {
 	m, c := newManager(t)
+	m.policy = func() Policy {
+		return Policy{Enabled: true, Absolute: limitAbsoluteDays * 24 * time.Hour, Idle: limitIdleDays * 24 * time.Hour, RatePerMinute: 120}
+	}
 	b := relaytest.NewBrowser(t)
 	pair(t, m, b)
 	b.Now = c.now
@@ -185,7 +220,7 @@ func TestRevokedExpiredAndIdle(t *testing.T) {
 	}
 
 	// Idle: no use for longer than the idle limit.
-	c.advance(DefaultIdleDays*24*time.Hour + time.Minute)
+	c.advance(limitIdleDays*24*time.Hour + time.Minute)
 	if got := use(); got != relay.ErrIdleExpired {
 		t.Fatalf("idle: %q", got)
 	}
@@ -199,7 +234,7 @@ func TestRevokedExpiredAndIdle(t *testing.T) {
 	}
 
 	// Absolute: in use every day, but approval is older than the absolute limit.
-	for i := 0; i < DefaultAbsoluteDays-1; i++ {
+	for i := 0; i < limitAbsoluteDays-1; i++ {
 		c.advance(24 * time.Hour)
 		if got := use(); got != "" {
 			t.Fatalf("day %d: %q", i, got)

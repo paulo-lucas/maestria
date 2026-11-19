@@ -152,7 +152,7 @@ This is the most important step, and the one that makes hosted mode safe. **Ever
 
    It shows the browser's name, key, time and code again, and asks you to **type a short random word** it prints (for example `bakomi`). That proves a person is at the terminal. It will not work from a script, and no option skips it.
 
-   **What you should see:** `Approved "Safari on iPhone" (key a1b2 c3d4 e5f6 0718). It may send commands for 14 days, or until it has been idle 3.`
+   **What you should see:** `Approved "Safari on iPhone" (key a1b2 c3d4 e5f6 0718). It may send commands until you revoke it ("maestria devices revoke").`
 
 5. The browser changes to **Approved** and shows your workspaces.
 
@@ -170,20 +170,17 @@ The code lasts 5 minutes. If it runs out, start again from the web app.
 
 ### Staying signed in
 
-An approved browser keeps working for **14 days** in total, and stops sooner if it is unused for **3 days**. Then it asks you to approve again (same steps). You can change both numbers on the machine, in `config.json`:
+An approved browser keeps working **until you revoke it** (`maestria devices list`, then `maestria devices revoke <id>`). If you would rather approve again from time to time, set limits on the machine:
 
-```json
-{
-  "relay": {
-    "enabled": true,
-    "approvalAbsoluteDays": 14,
-    "idleDays": 3,
-    "ratePerMinute": 120
-  }
-}
+```sh
+maestria devices limits                          # show them
+maestria devices limits --days 14 --idle-days 3  # 14 days in total, or 3 days unused
+maestria devices limits --days 0 --idle-days 0   # no limit again (the default)
 ```
 
-These limits are set **on the machine**, never from the web, so a hacked server cannot loosen them.
+Restart Maestria after a change (`maestria service restart`). When a limit runs out, the browser asks you to approve it again (same steps). The command writes `approvalAbsoluteDays` and `idleDays` in the `relay` section of `config.json`, where 0 is no limit.
+
+These limits are set **on the machine**, never from the web, so a hacked server cannot loosen them. A lost phone or a browser you no longer use stays approved until you revoke it, so revoke it as soon as you can, or use the kill switch.
 
 ## 4. Use it
 

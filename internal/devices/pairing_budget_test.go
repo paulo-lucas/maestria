@@ -195,7 +195,8 @@ func TestPairingShowsFingerprintAndCleanLabel(t *testing.T) {
 
 func TestDefaultPolicyLifetimes(t *testing.T) {
 	p := DefaultPolicy()
-	if p.Absolute != 14*24*time.Hour || p.Idle != 3*24*time.Hour {
+	if p.Absolute != 0 || p.Idle != 0 { // no limit
+
 		t.Fatalf("unexpected default lifetimes: %+v", p)
 	}
 	// The config file defaults (what the connector really runs with) are the same numbers.

@@ -853,8 +853,11 @@
       var last = Math.max.apply(null, g.machines.map(function (m) { return m.lastUsedAt || 0; }));
       if (active.length && pol) {
         var oldest = Math.min.apply(null, active.map(function (m) { return m.approvedAt; }));
-        var left = oldest + pol.approvalAbsoluteDays * 86400e3 - Date.now();
-        meta += ' · ' + (g.id === me ? 'active now' : 'active ' + (relTime(last) || 'recently') + ' ago') + ' · approval ends in ' + Math.max(0, Math.round(left / 86400e3)) + ' days';
+        meta += ' · ' + (g.id === me ? 'active now' : 'active ' + (relTime(last) || 'recently') + ' ago');
+        if (pol.approvalAbsoluteDays > 0) {
+          var left = oldest + pol.approvalAbsoluteDays * 86400e3 - Date.now();
+          meta += ' · approval ends in ' + Math.max(0, Math.round(left / 86400e3)) + ' days';
+        }
       } else if (expired) {
         meta += ' · last active ' + (last ? new Date(last).toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'never');
       }
@@ -871,10 +874,10 @@
       var p = firstPol.p;
       var same = ready.filter(function (c) { var q = policies[c.id] && policies[c.id].policy; return q && JSON.stringify(q) === JSON.stringify(p); }).map(function (c) { return c.name; });
       var diff = ready.filter(function (c) { var q = policies[c.id] && policies[c.id].policy; return q && JSON.stringify(q) !== JSON.stringify(p); });
-      polHtml = '<div class="card"><div class="setting"><dl class="kv"><dt>Approval length</dt><dd>' + p.approvalAbsoluteDays + ' ' + plural(p.approvalAbsoluteDays, 'day', 'days') + '</dd><dt>Idle sign-out</dt><dd>after ' + p.idleDays + ' ' + plural(p.idleDays, 'day', 'days') + '</dd>' +
+      polHtml = '<div class="card"><div class="setting"><dl class="kv"><dt>Approval length</dt><dd>' + (p.approvalAbsoluteDays > 0 ? p.approvalAbsoluteDays + ' ' + plural(p.approvalAbsoluteDays, 'day', 'days') : 'until revoked') + '</dd><dt>Idle sign-out</dt><dd>' + (p.idleDays > 0 ? 'after ' + p.idleDays + ' ' + plural(p.idleDays, 'day', 'days') : 'never') + '</dd>' +
         '<dt>Allowed commands</dt><dd>prompt the Maestro, answer tasks and Y/n, pause and resume, standby settings, revoke devices</dd><dt>Rate limit</dt><dd>' + p.ratePerMinute + ' requests per minute per device</dd></dl></div>' +
-        '<div class="setting"><p class="setting__desc">These are set on each machine, not here, so a compromised website can’t loosen them. To change them, edit the <code>relay</code> section of <code>config.json</code> on the machine.</p>' +
-        '' + cmdBlock('maestria devices list') + '' +
+        '<div class="setting"><p class="setting__desc">These are set on each machine, not here, so a compromised website can’t loosen them. To see them, run this on the machine; add <code>--days N</code> and <code>--idle-days N</code> to change them (0 is no limit).</p>' +
+        '' + cmdBlock('maestria devices limits') + '' +
         '<p class="field__hint">Showing ' + esc(firstPol.name) + '.' + (same.length > 1 ? ' ' + esc(same.filter(function (n) { return n !== firstPol.name; }).join(', ')) + ' ' + plural(same.length - 1, 'reports', 'report') + ' the same policy.' : '') + (diff.length ? ' ' + esc(diff.map(function (c) { return c.name; }).join(', ')) + ' ' + plural(diff.length, 'has', 'have') + ' a different policy.' : '') + '</p></div></div>';
     } else {
       polHtml = '<div class="card"><div class="setting"><p class="setting__desc">No machine is reachable with this browser yet, so there is no policy to show.</p></div></div>';

@@ -82,7 +82,7 @@ Be clear-eyed about this. In hosted mode the server operator ships the code of t
 - **Get its own key approved when you start a pairing.** Pairing asks you to compare a code and then confirm on your machine. The page that shows you the code is also served by the server, so a hostile page can pair a key it holds and show you the matching code. You would approve a key you think is your browser's.
 - **See what you look at** (chat, tasks, docs, the audit log) while it passes through, and show you altered answers. Responses are not signed by your machine, so it could show you a harmless Y/n prompt while the real one is different. Read the full prompt text, and prefer to approve important prompts where you can see them on the machine.
 
-What your machine still enforces whatever the server does: only requests signed by an approved key run; only the allowlisted routes; a rate limit; approvals that expire (14 days, 3 idle by default); a pairing attempt budget (see below); the kill switch; and a local audit log of every change and every pairing.
+What your machine still enforces whatever the server does: only requests signed by an approved key run; only the allowlisted routes; a rate limit; approvals that end when you revoke them, or after limits you set (`maestria devices limits`, none by default); a pairing attempt budget (see below); the kill switch; and a local audit log of every change and every pairing.
 
 **If you do not trust the operator, do not use a server you do not control.** Run [your own hosted server](deploy-cloud.md), or use local mode, where the page comes from your own machine and none of this applies.
 
@@ -142,7 +142,7 @@ Through the relay, the web app can read the panel's pages and data, answer tasks
 | An AI agent on your machine approves a device, links a cloud or lifts the kill switch | Those commands need an interactive terminal and a random word typed back, and are audited. Not a lock against an agent with a real terminal. |
 | A stranger exhausts memory with sign-in attempts | Password checks are rate limited per address and globally, and at most 2 run at once. |
 | A stranger locks you out | Visitor addresses are used behind a tunnel that reports them (Cloudflare). Behind an HTTP tunnel or proxy that does not, strangers share one "tunnel" bucket and can lock out other tunnel visitors, but not you at the machine (loopback Host, no proxy header). **Raw TCP forwards (`ssh -R`, `ngrok tcp`, `socat`) cannot be told apart from you at the machine**, and neither can a proxy that rewrites the Host to `127.0.0.1` and adds no header at all. Use an HTTP tunnel (Cloudflare Tunnel), or a proxy that adds `X-Forwarded-For`. |
-| Stolen phone or browser | Revoke the device on the machine, or use the kill switch. Approvals expire (14 days, or 3 idle). |
+| Stolen phone or browser | Revoke the device on the machine, or use the kill switch. An approval has no end by default; set one with `maestria devices limits`. |
 | Leaked link code | Lasts 10 minutes, works once, needs confirmation at your machine. |
 | Leaked connector credential | It only lets a machine connect. It cannot sign for a user. Revoke it in the web app. |
 | Flooding | Limits on message size, requests in flight, per-device rate and cache size. |

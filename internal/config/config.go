@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/paulo-lucas/maestria/internal/privfile"
@@ -81,8 +82,10 @@ type Relay struct {
 	// Enabled lets `maestria connect` serve relayed requests at all.
 	Enabled bool `json:"enabled"`
 	// ApprovalAbsoluteDays is how long a device stays approved, then it must be approved again.
+	// 0 (the default) is no limit: it stays approved until revoked.
 	ApprovalAbsoluteDays int `json:"approvalAbsoluteDays"`
-	// IdleDays is how long a device may stay unused before it must be approved again.
+	// IdleDays is how long a device may stay unused before it must be approved again. 0 (the
+	// default) is no limit.
 	IdleDays int `json:"idleDays"`
 	// RatePerMinute limits relayed requests per device (writes count double).
 	RatePerMinute int `json:"ratePerMinute"`
@@ -243,7 +246,7 @@ func Defaults(configDir string, env Env) (*Config, error) {
 			WakeOnReset:        true,
 		},
 		Tunnel:  Tunnel{StopCommand: []string{}, StartCommand: []string{}, StatusCommand: []string{}},
-		Relay:   Relay{Enabled: true, ApprovalAbsoluteDays: 14, IdleDays: 3, RatePerMinute: 120},
+		Relay:   Relay{Enabled: true, RatePerMinute: 120}, // no approval or idle limit
 		Updates: Updates{Check: true},
 	}, nil
 }
@@ -490,8 +493,8 @@ func Parse(data []byte, configDir string, env Env) (*Config, error) {
 			dst    *int
 			lo, hi int
 		}{
-			{"approvalAbsoluteDays", &cfg.Relay.ApprovalAbsoluteDays, 1, 365},
-			{"idleDays", &cfg.Relay.IdleDays, 1, 365},
+			{"approvalAbsoluteDays", &cfg.Relay.ApprovalAbsoluteDays, 0, MaxRelayLimitDays},
+			{"idleDays", &cfg.Relay.IdleDays, 0, MaxRelayLimitDays},
 			{"ratePerMinute", &cfg.Relay.RatePerMinute, 1, 6000},
 		} {
 			if v, ok := o[f.key]; ok {
@@ -709,6 +712,40 @@ func SaveStandby(configDir string, s Standby, env Env) error {
 		return err
 	}
 	top["standby"] = rawStandby
+	out, err := json.MarshalIndent(top, "", "  ")
+	if err != nil {
+		return err
+	}
+	return SaveRaw(configDir, append(out, '\n'), env)
+}
+
+// MaxRelayLimitDays is the longest approval or idle limit config.json accepts, in days.
+const MaxRelayLimitDays = 3650
+
+// SaveRelayLimits sets "relay.approvalAbsoluteDays" and "relay.idleDays" in config.json (0 is no
+// limit) while preserving every other key.
+func SaveRelayLimits(configDir string, approvalDays, idleDays int, env Env) error {
+	top, _, err := loadTopMap(configDir)
+	if err != nil {
+		return err
+	}
+	relay := obj{}
+	if raw, ok := top["relay"]; ok {
+		if relay, err = decodeObj(raw, "relay"); err != nil {
+			return err
+		}
+	}
+	for key, v := range map[string]int{"approvalAbsoluteDays": approvalDays, "idleDays": idleDays} {
+		if v < 0 || v > MaxRelayLimitDays {
+			return errorf("config: relay.%s must be between 0 and %d", key, MaxRelayLimitDays)
+		}
+		relay[key] = json.RawMessage(strconv.Itoa(v))
+	}
+	raw, err := json.Marshal(relay)
+	if err != nil {
+		return err
+	}
+	top["relay"] = raw
 	out, err := json.MarshalIndent(top, "", "  ")
 	if err != nil {
 		return err

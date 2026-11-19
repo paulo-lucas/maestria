@@ -92,7 +92,7 @@ func (m *Manager) Revalidate(id string) string {
 	}
 	p := m.policy()
 	now := m.now().UnixMilli()
-	if dev.State == "expired" || now-dev.ApprovedAt >= p.Absolute.Milliseconds() {
+	if dev.State == "expired" || (p.Absolute > 0 && now-dev.ApprovedAt >= p.Absolute.Milliseconds()) {
 		return relay.ErrApprovalExpired
 	}
 	// An open stream is use: only the absolute limit and revocation end it.
@@ -100,17 +100,14 @@ func (m *Manager) Revalidate(id string) string {
 }
 
 func (m *Manager) policyCheck(dev *Device, now time.Time) string {
-	p := m.policy()
-	ms := now.UnixMilli()
-	switch {
-	case dev.State == "expired", ms-dev.ApprovedAt >= p.Absolute.Milliseconds():
-		m.markExpired(dev.ID)
-		return relay.ErrApprovalExpired
-	case ms-dev.LastUsedAt >= p.Idle.Milliseconds():
-		m.markExpired(dev.ID)
-		return relay.ErrIdleExpired
+	code := relay.ErrApprovalExpired
+	if dev.State != "expired" {
+		code = m.policy().expiry(dev.ApprovedAt, dev.LastUsedAt, now.UnixMilli())
 	}
-	return ""
+	if code != "" {
+		m.markExpired(dev.ID)
+	}
+	return code
 }
 
 func (m *Manager) markExpired(id string) {

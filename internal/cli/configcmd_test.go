@@ -61,3 +61,36 @@ func TestInitAllowHostFlag(t *testing.T) {
 		}
 	}
 }
+
+// Approvals have no limit by default; "devices limits" shows and sets them in config.json,
+// keeping the rest of the relay section, and refuses what config.json would refuse.
+func TestDevicesLimits(t *testing.T) {
+	f := newFixture(t)
+	env := f.env("")
+
+	if code := f.run(env, "devices", "limits"); code != 0 || !strings.Contains(f.out.String(), `until you revoke it`) || !strings.Contains(f.out.String(), "Approval length: no limit") {
+		t.Fatalf("default limits: code=%d out=%q err=%q", code, f.out.String(), f.errOut.String())
+	}
+	if err := config.SaveRaw(f.dir, []byte(`{"relay":{"ratePerMinute":60}}`), env.Config); err != nil {
+		t.Fatal(err)
+	}
+	if code := f.run(env, "devices", "limits", "--days", "14", "--idle-days", "3"); code != 0 || !strings.Contains(f.out.String(), "for 14 days, or until it goes unused for 3 days") {
+		t.Fatalf("set limits: code=%d out=%q err=%q", code, f.out.String(), f.errOut.String())
+	}
+	cfg, err := config.Load(f.dir, env.Config)
+	if err != nil || cfg.Relay.ApprovalAbsoluteDays != 14 || cfg.Relay.IdleDays != 3 || cfg.Relay.RatePerMinute != 60 {
+		t.Fatalf("relay = %+v err=%v", cfg.Relay, err)
+	}
+	// One flag changes one limit.
+	if code := f.run(env, "devices", "limits", "--idle-days", "0"); code != 0 || !strings.Contains(f.out.String(), "may send commands for 14 days.") {
+		t.Fatalf("clear idle: code=%d out=%q err=%q", code, f.out.String(), f.errOut.String())
+	}
+	for _, bad := range [][]string{{"--days", "-1"}, {"--days", "x"}, {"--idle-days", "3651"}, {"extra"}} {
+		if code := f.run(env, append([]string{"devices", "limits"}, bad...)...); code == 0 {
+			t.Errorf("devices limits %v should fail", bad)
+		}
+	}
+	if cfg, _ := config.Load(f.dir, env.Config); cfg.Relay.ApprovalAbsoluteDays != 14 || cfg.Relay.IdleDays != 0 {
+		t.Errorf("a refused change was saved: %+v", cfg.Relay)
+	}
+}

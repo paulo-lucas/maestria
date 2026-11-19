@@ -199,7 +199,14 @@ func TestConnectorRefusesWhatItShould(t *testing.T) {
 		want("route "+rt[0]+" "+rt[1], n.send(br, sign(rt[0], rt[1], "", nil)), 403, relay.ErrRouteForbidden)
 	}
 
-	// Expired approval: absolute (14 days) and idle (3 days), then re-approval fixes it.
+	// Expired approval. There is no limit by default; set 14 days absolute and 3 idle on the
+	// machine (the connector reads them at start), then re-approval fixes each expiry.
+	if c, out := n.cli("", "devices", "limits", "--days", "14", "--idle-days", "3"); c != 0 {
+		t.Fatalf("devices limits: %d %s", c, out)
+	}
+	n.stop()
+	n.start()
+	n.waitOnline(f.b)
 	clock.advance(4 * 24 * time.Hour)
 	want("idle", n.send(br, sign("GET", "/api/workspaces", "", nil)), 403, relay.ErrIdleExpired)
 	f.b.pair(br, dev, n)

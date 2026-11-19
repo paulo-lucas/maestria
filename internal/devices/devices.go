@@ -18,7 +18,8 @@ import (
 	"github.com/paulo-lucas/maestria/internal/termsafe"
 )
 
-// Policy is the connector's session policy for relayed requests.
+// Policy is the connector's session policy for relayed requests. A zero Absolute or Idle is no
+// limit.
 type Policy struct {
 	Enabled       bool
 	Absolute      time.Duration
@@ -26,18 +27,34 @@ type Policy struct {
 	RatePerMinute int
 }
 
-// DefaultPolicy is 14 days absolute, 3 days idle, 120 requests per minute. Approving a browser
-// takes one command and a typed word on the machine, so asking again every two weeks costs little,
-// and it bounds how long a mistaken approval can be abused.
+// DefaultPolicy keeps an approved browser until it is revoked (no absolute or idle limit), at 120
+// requests per minute. Revocation, the kill switch and the audit log still apply; a machine that
+// wants approvals to end sets limits with "maestria devices limits".
 func DefaultPolicy() Policy {
 	return Policy{Enabled: true, Absolute: DefaultAbsoluteDays * 24 * time.Hour, Idle: DefaultIdleDays * 24 * time.Hour, RatePerMinute: 120}
 }
 
-// Default session lifetimes of an approved device, in days (the config defaults use the same).
+// Default session lifetimes of an approved device, in days; 0 is no limit (the config defaults
+// use the same).
 const (
-	DefaultAbsoluteDays = 14
-	DefaultIdleDays     = 3
+	DefaultAbsoluteDays = 0
+	DefaultIdleDays     = 0
 )
+
+// MaxLimitDays is the longest limit that can be set, in days.
+const MaxLimitDays = 3650
+
+// expiry tells whether a device approved at approvedAt and last used at lastUsed (epoch ms) is
+// past this policy at now: relay.ErrApprovalExpired, relay.ErrIdleExpired, or "".
+func (p Policy) expiry(approvedAt, lastUsed, now int64) string {
+	switch {
+	case p.Absolute > 0 && now-approvedAt >= p.Absolute.Milliseconds():
+		return relay.ErrApprovalExpired
+	case p.Idle > 0 && now-lastUsed >= p.Idle.Milliseconds():
+		return relay.ErrIdleExpired
+	}
+	return ""
+}
 
 // PairingTTL is how long a pairing waits for local approval.
 const PairingTTL = 5 * time.Minute
@@ -572,7 +589,7 @@ func (m *Manager) List() ([]Device, error) {
 			return nil, err
 		}
 		d.RevokedAt = revoked.Int64
-		if d.State == "active" && (now-d.ApprovedAt >= p.Absolute.Milliseconds() || now-d.LastUsedAt >= p.Idle.Milliseconds()) {
+		if d.State == "active" && p.expiry(d.ApprovedAt, d.LastUsedAt, now) != "" {
 			d.State = "expired"
 		}
 		out = append(out, d)
