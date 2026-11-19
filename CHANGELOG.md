@@ -4,6 +4,12 @@ All notable changes to Maestria are listed here. The format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-11-18
+
+### Changed
+
+- **No console window on Windows.** The background service used to keep a console window open for as long as the panel ran. It now runs without a window (through `conhost.exe --headless`, Windows 10 version 1809 or later). **After updating,** run `maestria service install` and then `maestria service restart`.
+
 ## [0.1.6] - 2026-11-18
 
 ### Fixed

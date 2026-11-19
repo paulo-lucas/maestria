@@ -615,8 +615,10 @@ func RenderWindowsTaskXML(scriptPath, configDir, userID string) string {
 		`  </Settings>`,
 		`  <Actions Context="Author">`,
 		`    <Exec>`,
-		`      <Command>cmd.exe</Command>`,
-		fmt.Sprintf(`      <Arguments>/c "%s"</Arguments>`, xmlEscape(scriptPath)),
+		// A console program started at logon gets a console window that stays open while the
+		// panel runs. conhost --headless hosts the console without one (Windows 10 1809+).
+		`      <Command>conhost.exe</Command>`,
+		fmt.Sprintf(`      <Arguments>--headless cmd.exe /c "%s"</Arguments>`, xmlEscape(scriptPath)),
 		fmt.Sprintf(`      <WorkingDirectory>%s</WorkingDirectory>`, xmlEscape(configDir)),
 		`    </Exec>`,
 		`  </Actions>`,

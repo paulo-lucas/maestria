@@ -128,8 +128,8 @@ func TestRenderWindowsServiceScriptAndTaskXML(t *testing.T) {
 		"<Principal id=\"Author\">\r\n      <UserId>DESKTOP-1\\a&amp;b</UserId>",
 		`<RunLevel>LeastPrivilege</RunLevel>`,
 		`<ExecutionTimeLimit>PT0S</ExecutionTimeLimit>`,
-		`<Command>cmd.exe</Command>`,
-		`<Arguments>/c "C:\Users\alice\AppData\Roaming\maestria\maestria-service.cmd"</Arguments>`,
+		`<Command>conhost.exe</Command>`,
+		`<Arguments>--headless cmd.exe /c "C:\Users\alice\AppData\Roaming\maestria\maestria-service.cmd"</Arguments>`,
 		`<WorkingDirectory>C:\Users\alice\AppData\Roaming\maestria</WorkingDirectory>`,
 	} {
 		if !strings.Contains(taskXML, want) {
